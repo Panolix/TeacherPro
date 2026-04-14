@@ -12,7 +12,9 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   <img src="public/icon.png" width="150" alt="TeacherPro Logo">
 </p>
 
-*(Add a UI screenshot of your app here!)*
+<p align="center">
+  <img src="public/screenshot.png" alt="TeacherPro Editor Screenshot" width="800">
+</p>
 
 ---
 
