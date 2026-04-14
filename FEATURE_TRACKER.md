@@ -12,7 +12,7 @@ Update this file whenever behavior changes in editor, sidebar, calendar, mindmap
 ### Vault and Data Layer
 
 - Local-first vault selection and persistence.
-- Auto-creates core folders: Lesson Plans, Mindmaps, Materials, Exports.
+- Auto-creates core folders: Lesson Plans, Mindmaps, Materials, Exports, Trash.
 - Reads/writes lessons and mindmaps as JSON.
 - Material tree loading with folder/file ordering.
 
@@ -35,6 +35,8 @@ Primary implementation:
 - Double-click material insertion is intentionally limited to active lesson-plan editing and no longer force-switches views.
 - Material links render as custom inline nodes with hover actions and context menu.
 - Lesson editor typography is slightly reduced (content and table-header scale) to improve readability in smaller windows.
+- Debounced autosave (including metadata fields) with invalid date guard for planned date.
+- Lesson action buttons (Preview, Print, Export, Save) are icon-first by default and can optionally show labels via settings.
 
 Primary implementation:
 
@@ -45,8 +47,15 @@ Primary implementation:
 
 - Sectioned sidebar for lesson plans, mindmaps, materials.
 - New lesson and new mindmap actions.
+- Search inputs for lesson plans and mindmaps with live filtering.
+- Sidebar search fields are optional/on-demand and opened from section-level magnifier toggles (Lesson Plans, Mindmaps, Materials, Trash).
+- Lesson and mindmap search now includes indexed JSON content (TipTap text + metadata for lessons, node labels/material paths for mindmaps), not only filenames.
+- Material search supports both file/folder names and relative paths (including nested entries).
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
+- Lesson context menu includes duplicate action.
+- Trash section in sidebar supports search, restore, preview (files), reveal, and permanent delete actions.
+- Trash preview for deleted lesson/mindmap JSON is rendered to resemble in-app document/mindmap views rather than raw JSON text.
 - Material preview modal supports PDF, image, and text.
 - Material open in system default app and reveal in Finder.
 - Material double-click insertion now queues only while the lesson editor is active, preventing accidental inserts from calendar/mindmap views.
@@ -60,10 +69,11 @@ Primary implementation:
 ### Weekly Calendar
 
 - Weekly navigation (Mon-Sun).
+- One-click "Today" jump to the current week.
 - Day cards with lesson listing by date.
 - Create lesson directly for a selected day.
-- Select/unselect lessons for bulk delete.
-- Day-level delete-all action.
+- Select/unselect lessons for bulk move-to-trash.
+- Day-level move-all-to-trash action.
 
 Primary implementation:
 
@@ -79,6 +89,7 @@ Primary implementation:
 - Mindmap material drop supports drag-end coordinate fallback for WebView cases where drop events are swallowed.
 - Material nodes support preview, open in default app, and reveal in file manager.
 - Save and create-new mindmap actions.
+- Mindmap action buttons (Preview, Print, Export, Save) follow the shared icon-first toolbar mode with optional labels.
 - Mindmap workspace typography is slightly reduced (header/actions/node label scale) for denser layouts on smaller screens.
 
 Primary implementation:
@@ -119,10 +130,11 @@ Primary implementation:
 - `initVault()` loads persisted vault/settings.
 - `openVault()` chooses and persists vault path.
 - `refreshVault()` syncs folders and file trees.
-- `createNewLesson(plannedDate?)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?)`.
+- `createNewLesson(plannedDate?)`, `duplicateLesson(fileName)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?)`.
 - `createNewMindmap()`, `openMindmap(fileName)`, `saveActiveMindmap(nodes, edges)`.
+- Search indexing runs during vault refresh to keep lesson/mindmap content queries local and fast.
 - `addMaterialFiles()`, `addMaterialDirectory()`, `renameMaterialEntry(...)`, `deleteMaterialEntry(...)`.
-- `setThemeMode(mode)`, `setAccentColor(color)`, `setDebugMode(enabled)`.
+- `setThemeMode(mode)`, `setAccentColor(color)`, `setDebugMode(enabled)`, `setShowActionButtonLabels(enabled)`.
 - `logDebug(source, action, detail?)` and `clearDebugEvents()`.
 
 ### Lesson Editor (`src/components/Editor.tsx`)
@@ -132,6 +144,7 @@ Primary implementation:
 - `insertDroppedMaterial(dataTransfer, clientX?, clientY?)` resolves payload and executes insertion.
 - `handleMaterialDrop(...)` and native/window drop handlers coordinate drag/drop flow.
 - Row-targeted material insertion computes the current table row and uses the final media/material cell when available.
+- Autosave runs in the background while manual save remains available from the toolbar.
 - `createLessonPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
 ### Material Link Extension (`src/components/extensions/MaterialLink.tsx`)
@@ -144,8 +157,10 @@ Primary implementation:
 ### Sidebar (`src/components/Sidebar.tsx`)
 
 - `handleDragStart(...)` and `handleDragEnd(...)` emit drag payload and fallback drop info.
+- `handleDuplicateFromMenu()` duplicates lesson plans from context menu.
 - `handlePreviewFromMenu()`, `handleOpenFromMenu()`, `handleRevealFromMenu()`.
 - `renderMaterialEntries(...)` renders recursive tree.
+- `renderTrashEntries(...)` renders trash tree with restore/permanent-delete operations.
 
 ### Mindmap (`src/components/MindmapView.tsx`)
 
@@ -166,7 +181,10 @@ Primary implementation:
 
 - Desktop-first dark UI with optional light mode.
 - Accent color system with four choices (blue, emerald, rose, amber).
+- Action toolbar text labels are optional; icon-only mode is the default for denser layouts.
 - Sidebar sections are collapsible and preserve state.
+- Deletion UX is now soft-delete semantics; lessons, mindmaps, and materials are moved to `Trash` rather than permanently removed.
+- Trash recovery is available in-app via sidebar context menu (Restore), with optional permanent deletion for cleanup.
 - Editor uses explicit table structure for lesson planning consistency.
 - Material links are visual chips inside lesson content to reduce plain-path clutter.
 - Preview modals use centered overlays with explicit close controls.

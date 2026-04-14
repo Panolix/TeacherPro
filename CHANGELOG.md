@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.1.0] - 2026-04-14
+### Added
+- Content-aware sidebar search for Lesson Plans and Mindmaps using indexed document data (not only file names).
+- Dedicated Material and Trash search support, including nested path matching.
+- In-app Trash management with restore and permanent delete actions for soft-deleted items.
+- Rendered Trash preview modes for deleted lesson and mindmap JSON files to resemble in-app views.
+- Optional, section-level search toggles in sidebar headers (magnifier button opens/hides search fields on demand).
+- Lesson duplication from context menu for faster recurring class workflows.
+- Calendar "Today" quick-jump button for instant return to current week.
+- Editor autosave for lesson body and metadata, while keeping manual save available.
+- Shared toolbar preference for icon-first action buttons with optional text labels.
+
+### Changed
+- Delete flows now use soft-delete semantics by default and move items into Vault Trash.
+- Editor and Mindmap top action rows now default to compact icon-first controls.
+- Sidebar search UX is now cleaner by hiding search fields until requested.
+
+### Removed
+- Recent lessons sidebar block was removed to reduce visual clutter and keep navigation focused.
+
+### Fixed
+- Trash context actions no longer expose confusing "Open" behavior for deleted entries.
+- Trash file previews now provide useful rendered output instead of raw JSON where applicable.
+
 ## [1.0.3] - 2026-04-14
 ### Added
 - **Intelligent Mindmap PDF Scaling**: PDF exports for Mindmaps now dynamically calculate the total bounding box of all nodes and automatically expand the PDF canvas. Your mindmaps will no longer be cropped or distorted by your zoom/pan level, maintaining an infinite, perfectly-sized wrap-around.

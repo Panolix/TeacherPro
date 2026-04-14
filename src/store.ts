@@ -62,7 +62,7 @@ export interface DebugEventEntry {
 
 export type ThemeMode = "dark" | "light";
 export type AccentColor = "blue" | "emerald" | "rose" | "amber";
-export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials";
+export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials" | "trash";
 
 interface UISettings {
   themeMode: ThemeMode;
@@ -71,6 +71,7 @@ interface UISettings {
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
   defaultTeacherName: string;
+  showActionButtonLabels: boolean;
 }
 
 interface AppState {
@@ -79,12 +80,17 @@ interface AppState {
   lessonPlans: DirEntry[];
   mindmaps: DirEntry[];
   materials: MaterialEntry[];
+  trashEntries: MaterialEntry[];
+  lessonSearchIndex: Record<string, string>;
+  mindmapSearchIndex: Record<string, string>;
+  isSearchIndexing: boolean;
   themeMode: ThemeMode;
   accentColor: AccentColor;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
   defaultTeacherName: string;
+  showActionButtonLabels: boolean;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
   pendingMaterialDrop: PendingMaterialDropRef | null;
@@ -102,6 +108,7 @@ interface AppState {
   toggleSectionCollapsed: (section: SidebarSectionKey) => void;
   setDebugMode: (enabled: boolean) => void;
   setDefaultTeacherName: (name: string) => void;
+  setShowActionButtonLabels: (enabled: boolean) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
@@ -110,6 +117,7 @@ interface AppState {
   openVault: () => Promise<void>;
   refreshVault: () => Promise<void>;
   createNewLesson: (plannedDate?: Date) => Promise<void>;
+  duplicateLesson: (fileName: string) => Promise<void>;
   deleteLesson: (fileName: string) => Promise<void>;
   renameLesson: (oldFileName: string, newName: string) => Promise<void>;
   saveActiveLesson: (content: any, metadata?: Partial<LessonMetadata>) => Promise<void>;
@@ -123,6 +131,8 @@ interface AppState {
   addMaterialDirectory: () => Promise<string | null>;
   deleteMaterialEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
   renameMaterialEntry: (relativePath: string, newName: string) => Promise<void>;
+  restoreTrashEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
+  permanentlyDeleteTrashEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
 }
 
 const STORE_KEY = "teacherpro-settings.json";
@@ -135,10 +145,162 @@ const DEFAULT_UI_SETTINGS: UISettings = {
     lessonPlans: false,
     mindmaps: false,
     materials: false,
+    trash: false,
   },
   debugMode: false,
   defaultTeacherName: "",
+  showActionButtonLabels: false,
 };
+
+function createTrashName(originalName: string): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  return `${stamp}-${originalName}`;
+}
+
+function stripTrashNamePrefix(trashName: string, section: "Lesson Plans" | "Mindmaps" | "Materials"): string {
+  const withoutTimestamp = trashName.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/, "");
+  if (section !== "Materials") {
+    return withoutTimestamp;
+  }
+  return withoutTimestamp.replace(/^(file|folder)-/, "");
+}
+
+function pruneEmptyTrashSections(entries: MaterialEntry[]): MaterialEntry[] {
+  const sectionNames = new Set(["Lesson Plans", "Mindmaps", "Materials"]);
+  return entries.filter((entry) => !sectionNames.has(entry.name) || entry.children.length > 0);
+}
+
+function collectTipTapText(node: unknown, chunks: string[]): void {
+  if (!node || typeof node !== "object") {
+    return;
+  }
+
+  const candidate = node as { text?: unknown; content?: unknown };
+  if (typeof candidate.text === "string" && candidate.text.trim()) {
+    chunks.push(candidate.text.trim());
+  }
+
+  if (Array.isArray(candidate.content)) {
+    for (const child of candidate.content) {
+      collectTipTapText(child, chunks);
+    }
+  }
+}
+
+function buildLessonSearchText(rawLesson: unknown): string {
+  const chunks: string[] = [];
+
+  if (rawLesson && typeof rawLesson === "object") {
+    const lesson = rawLesson as {
+      metadata?: {
+        teacher?: unknown;
+        subject?: unknown;
+        plannedFor?: unknown;
+      };
+      content?: unknown;
+    };
+
+    const metadata = lesson.metadata;
+    if (metadata) {
+      if (typeof metadata.teacher === "string" && metadata.teacher.trim()) {
+        chunks.push(metadata.teacher.trim());
+      }
+      if (typeof metadata.subject === "string" && metadata.subject.trim()) {
+        chunks.push(metadata.subject.trim());
+      }
+      if (typeof metadata.plannedFor === "string" && metadata.plannedFor.trim()) {
+        chunks.push(metadata.plannedFor.trim());
+      }
+    }
+
+    collectTipTapText(lesson.content ?? lesson, chunks);
+  }
+
+  return chunks.join(" ").toLowerCase();
+}
+
+function buildMindmapSearchText(rawMindmap: unknown): string {
+  if (!rawMindmap || typeof rawMindmap !== "object") {
+    return "";
+  }
+
+  const chunks: string[] = [];
+  const mindmap = rawMindmap as {
+    nodes?: Array<{ data?: { label?: unknown; materialPath?: unknown; fileName?: unknown } }>;
+    edges?: Array<{ label?: unknown }>;
+  };
+
+  for (const node of mindmap.nodes || []) {
+    const label = node?.data?.label;
+    if (typeof label === "string" && label.trim()) {
+      chunks.push(label.trim());
+    }
+
+    const materialPath = node?.data?.materialPath;
+    if (typeof materialPath === "string" && materialPath.trim()) {
+      chunks.push(materialPath.trim());
+    }
+
+    const fileName = node?.data?.fileName;
+    if (typeof fileName === "string" && fileName.trim()) {
+      chunks.push(fileName.trim());
+    }
+  }
+
+  for (const edge of mindmap.edges || []) {
+    if (typeof edge?.label === "string" && edge.label.trim()) {
+      chunks.push(edge.label.trim());
+    }
+  }
+
+  return chunks.join(" ").toLowerCase();
+}
+
+async function buildLessonSearchIndex(vaultPath: string, lessonEntries: DirEntry[]): Promise<Record<string, string>> {
+  const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+  const pairs = await Promise.all(
+    lessonEntries
+      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
+      .map(async (entry) => {
+        const fileName = entry.name!;
+        const filePath = await join(lessonPlansFolder, fileName);
+
+        try {
+          const text = await readTextFile(filePath);
+          const parsed = JSON.parse(text) as unknown;
+          return [fileName, buildLessonSearchText(parsed)] as const;
+        } catch {
+          return [fileName, ""] as const;
+        }
+      }),
+  );
+
+  return Object.fromEntries(pairs);
+}
+
+async function buildMindmapSearchIndex(vaultPath: string, mindmapEntries: DirEntry[]): Promise<Record<string, string>> {
+  const mindmapsFolder = await join(vaultPath, "Mindmaps");
+  const pairs = await Promise.all(
+    mindmapEntries
+      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
+      .map(async (entry) => {
+        const fileName = entry.name!;
+        const filePath = await join(mindmapsFolder, fileName);
+
+        try {
+          const text = await readTextFile(filePath);
+          const parsed = JSON.parse(text) as unknown;
+          return [fileName, buildMindmapSearchText(parsed)] as const;
+        } catch {
+          return [fileName, ""] as const;
+        }
+      }),
+  );
+
+  return Object.fromEntries(pairs);
+}
+
+let searchIndexBuildVersion = 0;
 
 async function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
   const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
@@ -240,18 +402,37 @@ async function copyDirectoryRecursive(sourceDir: string, destinationDir: string)
   }
 }
 
+async function movePathToTrash(
+  vaultPath: string,
+  sourcePath: string,
+  trashSection: "Lesson Plans" | "Mindmaps" | "Materials",
+  originalName: string,
+): Promise<void> {
+  const trashRoot = await join(vaultPath, "Trash", trashSection);
+  await mkdir(trashRoot, { recursive: true });
+
+  const trashName = createTrashName(originalName);
+  const trashTargetPath = await ensureUniqueTargetPath(trashRoot, trashName);
+  await rename(sourcePath, trashTargetPath);
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   vaultPath: null,
   lessonPlans: [],
   mindmaps: [],
   materials: [],
+  trashEntries: [],
+  lessonSearchIndex: {},
+  mindmapSearchIndex: {},
+  isSearchIndexing: false,
   themeMode: DEFAULT_UI_SETTINGS.themeMode,
   accentColor: DEFAULT_UI_SETTINGS.accentColor,
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
   defaultTeacherName: DEFAULT_UI_SETTINGS.defaultTeacherName,
+  showActionButtonLabels: DEFAULT_UI_SETTINGS.showActionButtonLabels,
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
@@ -278,6 +459,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
           debugMode: savedSettings.debugMode ?? DEFAULT_UI_SETTINGS.debugMode,
           defaultTeacherName: savedSettings.defaultTeacherName ?? DEFAULT_UI_SETTINGS.defaultTeacherName,
+          showActionButtonLabels:
+            savedSettings.showActionButtonLabels ?? DEFAULT_UI_SETTINGS.showActionButtonLabels,
         });
       }
       
@@ -321,6 +504,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDefaultTeacherName: (name) => {
     set({ defaultTeacherName: name });
     void persistUiSettings({ defaultTeacherName: name });
+  },
+  setShowActionButtonLabels: (enabled) => {
+    set({ showActionButtonLabels: enabled });
+    void persistUiSettings({ showActionButtonLabels: enabled });
   },
   logDebug: (source, action, detail) => {
     const { debugMode } = get();
@@ -376,7 +563,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { vaultPath } = get();
     if (!vaultPath) return;
 
-    const folders = ["Lesson Plans", "Mindmaps", "Materials", "Exports"];
+    const folders = ["Lesson Plans", "Mindmaps", "Materials", "Exports", "Trash"];
     
     try {
       // Ensure directory structure
@@ -399,14 +586,46 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const materialsPath = await join(vaultPath, "Materials");
       const materialTree = await readMaterialTree(materialsPath);
+
+      const trashPath = await join(vaultPath, "Trash");
+      const trashTree = pruneEmptyTrashSections(await readMaterialTree(trashPath));
+
+      const buildVersion = ++searchIndexBuildVersion;
       
       set({ 
         lessonPlans: lpFiltered,
         mindmaps: mmFiltered,
-        materials: materialTree 
+        materials: materialTree,
+        trashEntries: trashTree,
+        isSearchIndexing: true,
       });
+
+      void (async () => {
+        try {
+          const [nextLessonIndex, nextMindmapIndex] = await Promise.all([
+            buildLessonSearchIndex(vaultPath, lpFiltered),
+            buildMindmapSearchIndex(vaultPath, mmFiltered),
+          ]);
+
+          if (buildVersion !== searchIndexBuildVersion) {
+            return;
+          }
+
+          set({
+            lessonSearchIndex: nextLessonIndex,
+            mindmapSearchIndex: nextMindmapIndex,
+            isSearchIndexing: false,
+          });
+        } catch (indexError) {
+          console.warn("Failed to build search index", indexError);
+          if (buildVersion === searchIndexBuildVersion) {
+            set({ isSearchIndexing: false });
+          }
+        }
+      })();
     } catch (error) {
       console.error("Failed to refresh vault contents:", error);
+      set({ isSearchIndexing: false });
     }
   },
 
@@ -438,11 +657,49 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
       
       await writeTextFile(filePath, JSON.stringify(initialContent, null, 2));
-      set({ activeFilePath: filePath, activeFileContent: initialContent, currentView: "editor" });
+      set({
+        activeFilePath: filePath,
+        activeFileContent: initialContent,
+        currentView: "editor",
+      });
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to create new lesson:", error);
       alert("Error creating lesson: " + String(error));
+    }
+  },
+
+  duplicateLesson: async (fileName: string) => {
+    const { vaultPath } = get();
+    if (!vaultPath) return;
+
+    try {
+      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+      const sourcePath = await join(lessonPlansFolder, fileName);
+      const sourceText = await readTextFile(sourcePath);
+
+      const stem = fileName.replace(/\.json$/i, "");
+      const duplicateBaseName = `${stem} (Copy).json`;
+      const destinationPath = await ensureUniqueTargetPath(lessonPlansFolder, duplicateBaseName);
+      const duplicatedFileName = extractBaseName(destinationPath);
+
+      let nextText = sourceText;
+      try {
+        const parsed = JSON.parse(sourceText) as Partial<LessonData>;
+        if (parsed && parsed.metadata) {
+          parsed.metadata.createdAt = new Date().toISOString();
+          nextText = JSON.stringify(parsed, null, 2);
+        }
+      } catch {
+        // Keep original content for legacy/non-standard files.
+      }
+
+      await writeTextFile(destinationPath, nextText);
+      await get().refreshVault();
+      await get().openLesson(duplicatedFileName);
+    } catch (error) {
+      console.error("Failed to duplicate lesson:", error);
+      alert("Error duplicating lesson: " + String(error));
     }
   },
 
@@ -453,7 +710,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const filePath = await join(lessonPlansFolder, fileName);
-      await remove(filePath);
+      await movePathToTrash(vaultPath, filePath, "Lesson Plans", fileName);
 
       if (currentView === "editor" && activeFilePath?.endsWith(fileName)) {
         set({ activeFilePath: null, activeFileContent: null });
@@ -585,7 +842,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonData = rawContent as LessonData;
         }
 
-        set({ activeFilePath: filePath, activeFileContent: lessonData, currentView: "editor" });
+        set({
+          activeFilePath: filePath,
+          activeFileContent: lessonData,
+          currentView: "editor",
+        });
       }
     } catch (error) {
       console.error("Failed to open lesson:", error);
@@ -630,7 +891,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const mindmapsFolder = await join(vaultPath, "Mindmaps");
       const filePath = await join(mindmapsFolder, fileName);
-      await remove(filePath);
+      await movePathToTrash(vaultPath, filePath, "Mindmaps", fileName);
 
       if (currentView === "mindmap" && activeFilePath?.endsWith(fileName)) {
         set({ activeFilePath: null, activeMindmapContent: null });
@@ -788,7 +1049,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const pathSegments = relativePath.split("/").filter(Boolean);
       const targetPath = await join(vaultPath, "Materials", ...pathSegments);
-      await remove(targetPath, isDirectory ? { recursive: true } : undefined);
+      const entryName = pathSegments[pathSegments.length - 1] || "material";
+      const trashEntryName = isDirectory ? `folder-${entryName}` : `file-${entryName}`;
+      await movePathToTrash(vaultPath, targetPath, "Materials", trashEntryName);
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete material entry:", error);
@@ -829,5 +1092,51 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error("Failed to rename material entry:", error);
       alert("Error renaming material entry: " + String(error));
     }
-  }
+  },
+
+  restoreTrashEntry: async (relativePath: string, _isDirectory: boolean) => {
+    const { vaultPath } = get();
+    if (!vaultPath) return;
+
+    try {
+      const pathSegments = relativePath.split("/").filter(Boolean);
+      if (pathSegments.length < 2) {
+        alert("Could not restore this trash entry.");
+        return;
+      }
+
+      const section = pathSegments[0] as "Lesson Plans" | "Mindmaps" | "Materials";
+      if (!["Lesson Plans", "Mindmaps", "Materials"].includes(section)) {
+        alert("Unknown trash section.");
+        return;
+      }
+
+      const trashSourcePath = await join(vaultPath, "Trash", ...pathSegments);
+      const originalName = pathSegments[pathSegments.length - 1];
+      const restoredName = stripTrashNamePrefix(originalName, section);
+      const destinationRoot = await join(vaultPath, section);
+      const destinationPath = await ensureUniqueTargetPath(destinationRoot, restoredName);
+
+      await rename(trashSourcePath, destinationPath);
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to restore trash entry:", error);
+      alert("Error restoring trash entry: " + String(error));
+    }
+  },
+
+  permanentlyDeleteTrashEntry: async (relativePath: string, isDirectory: boolean) => {
+    const { vaultPath } = get();
+    if (!vaultPath) return;
+
+    try {
+      const pathSegments = relativePath.split("/").filter(Boolean);
+      const trashTargetPath = await join(vaultPath, "Trash", ...pathSegments);
+      await remove(trashTargetPath, isDirectory ? { recursive: true } : undefined);
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to permanently delete trash entry:", error);
+      alert("Error deleting trash entry: " + String(error));
+    }
+  },
 }));

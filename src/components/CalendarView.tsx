@@ -12,6 +12,7 @@ export function CalendarView() {
   
   const nextWeek = () => setCurrentWeek(addDays(currentWeek, 7));
   const prevWeek = () => setCurrentWeek(addDays(currentWeek, -7));
+  const goToToday = () => setCurrentWeek(new Date());
 
   // Generate the 7 days of the week
   const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(start, i)), [start]);
@@ -47,7 +48,7 @@ export function CalendarView() {
     }
 
     const names = Array.from(selectedLessons);
-    const confirmed = confirm(`Delete ${names.length} selected lesson plan(s)?`);
+    const confirmed = confirm(`Move ${names.length} selected lesson plan(s) to Trash?`);
     if (!confirmed) {
       return;
     }
@@ -66,7 +67,7 @@ export function CalendarView() {
     }
 
     const dateLabel = format(date, "EEE, MMM d");
-    const confirmed = confirm(`Delete all ${lessons.length} lesson plan(s) for ${dateLabel}?`);
+    const confirmed = confirm(`Move all ${lessons.length} lesson plan(s) for ${dateLabel} to Trash?`);
     if (!confirmed) {
       return;
     }
@@ -97,6 +98,12 @@ export function CalendarView() {
           <button onClick={prevWeek} className="p-2 hover:bg-[#333] rounded-md text-gray-300">
             <ChevronLeft className="w-5 h-5" />
           </button>
+          <button
+            onClick={goToToday}
+            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#333] text-gray-100 hover:bg-[#3f3f3f] transition-colors"
+          >
+            Today
+          </button>
           <span className="font-semibold text-gray-200 min-w-[140px] text-center">
             {format(start, "MMM d")} - {format(addDays(start, 6), "MMM d, yyyy")}
           </span>
@@ -110,7 +117,7 @@ export function CalendarView() {
             disabled={selectedLessons.size === 0}
             className="flex items-center gap-2 rounded-md border border-[#5a2b2b] bg-[#3a1f1f] px-3 py-2 text-sm text-red-200 transition-colors hover:bg-[#4a2525] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Trash2 className="h-4 w-4" /> Delete Selected ({selectedLessons.size})
+            <Trash2 className="h-4 w-4" /> Move Selected to Trash ({selectedLessons.size})
           </button>
         </div>
       </div>
@@ -165,7 +172,7 @@ export function CalendarView() {
                             <button
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                if (confirm(`Delete lesson plan \"${title}\"?`)) {
+                                if (confirm(`Move lesson plan \"${title}\" to Trash?`)) {
                                   await deleteLesson(lessonName);
                                   setSelectedLessons((previous) => {
                                     const next = new Set(previous);
@@ -175,7 +182,7 @@ export function CalendarView() {
                                 }
                               }}
                               className="text-red-300 hover:text-red-200"
-                              title="Delete lesson"
+                              title="Move lesson to Trash"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>

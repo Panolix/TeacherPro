@@ -237,6 +237,7 @@ export function MindmapView() {
     createNewMindmap,
     vaultPath,
     themeMode,
+    showActionButtonLabels,
     draggedMaterial,
     setDraggedMaterial,
     pendingMaterialDrop,
@@ -1102,30 +1103,38 @@ export function MindmapView() {
         <div className="pointer-events-auto flex items-center gap-2 h-fit mt-1">
           <button
             onClick={handlePreviewPDF}
+            title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            <Eye className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Preview PDF"}
+            <Eye className="w-4 h-4" />
+            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Preview"}</span>}
           </button>
           <button
             onClick={handlePrintPDF}
+            title={isPdfBusy ? "Print or Save PDF (busy)" : "Print or Save PDF"}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Print / Save PDF"}
+            <Printer className="w-4 h-4" />
+            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Print"}</span>}
           </button>
           <button
             onClick={handleExportPDF}
+            title={isPdfBusy ? "Export PDF (busy)" : "Export PDF"}
             disabled={isPdfBusy}
-            className="bg-[#333] hover:bg-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
+            className="bg-[#333] hover:bg-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
-            <Download className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
+            <Download className="w-4 h-4" />
+            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Export"}</span>}
           </button>
           <button
             onClick={handleSave}
-            className="tp-accent-btn text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
+            title="Save Mindmap"
+            className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2"
           >
-            <Save className="w-4 h-4" /> Save Mindmap
+            <Save className="w-4 h-4" />
+            {showActionButtonLabels && <span>Save</span>}
           </button>
         </div>
       </div>

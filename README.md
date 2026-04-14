@@ -54,6 +54,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, and Unordered/Ordered lists.
 - **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, and resize them freely.
 - **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
+- **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
 - **Material Linking:** Drag and drop external files (PDFs, Word Docs, Images) directly into the editor to create clickable links. Double-clicking the link opens the file in your computer's default native application.
 
 ### 🧠 Mindmap Editor
@@ -64,7 +65,15 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### 📅 Weekly Calendar View
 - **Visual Scheduling:** See your upcoming week at a glance.
+- **Quick Reset to Current Week:** Use the built-in *Today* button to jump back instantly after browsing future/past weeks.
 - **Easy Access:** Click on any scheduled lesson directly from the calendar to instantly open it in the editor.
+
+### 🧭 Sidebar Productivity Tools
+- **Fast Search (On Demand):** Open per-section search fields from the magnifier icon when needed, then filter Lesson Plans and Mindmaps by file names and indexed document content.
+- **Material Search:** Find copied/imported materials quickly by file name or nested relative path.
+- **Duplicate Plan:** Right-click any lesson and duplicate it for recurring classes.
+- **Safe Deletion + Recovery:** Deleted lessons/mindmaps/materials are moved to the Vault's `Trash` folder, where you can restore items later or permanently delete them.
+- **Rendered Trash Preview:** Lesson plans and mindmaps inside Trash can be previewed in rendered form (not raw JSON) before restoring.
 
 ### 🖨️ Native Printing & PDF Export
 - **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
@@ -75,6 +84,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Accent Colors:** Personalize your workspace! The default theme is a soft TeacherPro blue (`#9fd2e4`), but you can change the accent color to match your preference.
 - **Dark & Light Modes:** Full support for dark and light environments. Automatically switches or can be forced via settings.
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
+- **Compact Action Buttons:** Save/Preview/Print/Export actions are icon-first by default, with an optional setting to show text labels.
 
 ---
 

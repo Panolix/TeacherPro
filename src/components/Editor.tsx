@@ -182,6 +182,7 @@ const MenuBar = ({
   onPrint,
   onExport,
   isPdfBusy,
+  showActionButtonLabels,
 }: {
   editor: any;
   onSave: () => void;
@@ -189,6 +190,7 @@ const MenuBar = ({
   onPrint: () => void;
   onExport: () => void;
   isPdfBusy: boolean;
+  showActionButtonLabels: boolean;
 }) => {
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
@@ -217,8 +219,9 @@ const MenuBar = ({
   const currentFontSize = editor.getAttributes('textStyle').fontSize || "12pt";
 
   return (
-    <div className="tp-editor-toolbar flex items-center justify-between border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl mb-4 print:hidden">
-      <div className="flex items-center gap-1 flex-wrap">
+    <div className="tp-editor-toolbar border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl mb-4 print:hidden">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap">
         <select
           value={currentFontSize}
           onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
@@ -323,36 +326,44 @@ const MenuBar = ({
         >
           <Redo className="w-4 h-4" />
         </button>
-      </div>
-
-      <div className="flex items-center gap-2">
+        </div>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
         <button
           onClick={onPreview}
+          title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
           disabled={isPdfBusy}
-          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors"
+          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
         >
-          <Eye className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Preview PDF"}
+          <Eye className="w-4 h-4" />
+          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Preview"}</span>}
         </button>
         <button
           onClick={onPrint}
+          title={isPdfBusy ? "Print or Save PDF (busy)" : "Print or Save PDF"}
           disabled={isPdfBusy}
-          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors"
+          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
         >
-          <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Print / Save PDF"}
+          <Printer className="w-4 h-4" />
+          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Print"}</span>}
         </button>
         <button
           onClick={onExport}
+          title={isPdfBusy ? "Export PDF (busy)" : "Export PDF"}
           disabled={isPdfBusy}
-          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#333] hover:bg-[#444] border-none rounded-md text-white font-medium shadow-sm transition-colors"
+          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#333] hover:bg-[#444] border-none rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
         >
-          <Download className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
+          <Download className="w-4 h-4" />
+          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Export"}</span>}
         </button>
         <button
           onClick={onSave}
-          className="tp-accent-btn flex items-center gap-2 px-4 py-1.5 text-sm border-none rounded-md text-white font-medium shadow-sm transition-colors"
+          title="Save Lesson Plan"
+          className="tp-accent-btn h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border-none rounded-md text-white font-medium shadow-sm transition-colors"
         >
-          <Save className="w-4 h-4" /> Save Lesson Plan
+          <Save className="w-4 h-4" />
+          {showActionButtonLabels && <span>Save</span>}
         </button>
+        </div>
       </div>
     </div>
   );
@@ -361,6 +372,7 @@ const MenuBar = ({
 export function Editor() {
   const {
     activeFileContent,
+    activeFilePath,
     saveActiveLesson,
     vaultPath,
     draggedMaterial,
@@ -368,6 +380,7 @@ export function Editor() {
     pendingMaterialDrop,
     setPendingMaterialDrop,
     logDebug,
+    showActionButtonLabels,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
@@ -379,9 +392,11 @@ export function Editor() {
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
+  const [editorRevision, setEditorRevision] = useState(0);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
   const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
+  const lastSavedSnapshotRef = useRef<string>("");
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
@@ -391,7 +406,11 @@ export function Editor() {
       formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
     );
     setPlannedCalendarMonth(selectedDate || new Date());
-  }, [activeFileContent?.metadata?.subject, activeFileContent?.metadata?.plannedFor]);
+  }, [
+    activeFileContent?.metadata?.subject,
+    activeFileContent?.metadata?.teacher,
+    activeFileContent?.metadata?.plannedFor,
+  ]);
 
   useEffect(() => {
     const closeMenu = () => setTableContextMenu(null);
@@ -482,6 +501,75 @@ export function Editor() {
     ],
     content: activeFileContent?.content || `<h2>New Lesson Plan</h2>`,
   });
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const handleContentUpdate = () => {
+      setEditorRevision((previous) => previous + 1);
+    };
+
+    editor.on("update", handleContentUpdate);
+
+    return () => {
+      editor.off("update", handleContentUpdate);
+    };
+  }, [editor]);
+
+  useEffect(() => {
+    if (!editor || !activeFilePath || !activeFileContent) {
+      return;
+    }
+
+    lastSavedSnapshotRef.current = JSON.stringify({
+      content: activeFileContent.content,
+      teacher: activeFileContent.metadata.teacher || "",
+      subject: activeFileContent.metadata.subject || "",
+      plannedFor: activeFileContent.metadata.plannedFor || null,
+    });
+  }, [editor, activeFilePath, activeFileContent]);
+
+  useEffect(() => {
+    if (!editor || !activeFilePath) {
+      return;
+    }
+
+    const autosaveTimer = window.setTimeout(async () => {
+      const parsedPlannedFor = parseEuropeanDateToIso(plannedForInput);
+      if (parsedPlannedFor === undefined) {
+        return;
+      }
+
+      const json = editor.getJSON();
+      const nextSnapshot = JSON.stringify({
+        content: json,
+        teacher,
+        subject,
+        plannedFor: parsedPlannedFor,
+      });
+
+      if (nextSnapshot === lastSavedSnapshotRef.current) {
+        return;
+      }
+
+      try {
+        await saveActiveLesson(json, {
+          teacher,
+          subject,
+          plannedFor: parsedPlannedFor,
+        });
+        lastSavedSnapshotRef.current = nextSnapshot;
+      } catch (error) {
+        console.error("Autosave failed:", error);
+      }
+    }, 1800);
+
+    return () => {
+      window.clearTimeout(autosaveTimer);
+    };
+  }, [editor, activeFilePath, editorRevision, teacher, subject, plannedForInput, saveActiveLesson]);
 
   const insertLessonTable = () => {
     if (!editor) return;
@@ -588,6 +676,12 @@ export function Editor() {
 
     const json = editor.getJSON();
     await saveActiveLesson(json, {
+      teacher,
+      subject,
+      plannedFor: parsedPlannedFor,
+    });
+    lastSavedSnapshotRef.current = JSON.stringify({
+      content: json,
       teacher,
       subject,
       plannedFor: parsedPlannedFor,
@@ -1216,6 +1310,7 @@ export function Editor() {
           onPrint={handlePrintPDF}
           onExport={handleExportPDF}
           isPdfBusy={isPdfBusy}
+          showActionButtonLabels={showActionButtonLabels}
         />
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
           {activeFileContent?.metadata && (

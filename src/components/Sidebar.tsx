@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   FolderOpen,
   Settings,
@@ -20,18 +20,22 @@ import {
   Bug,
   PanelTopClose,
   PanelTopOpen,
+  Search,
+  Copy,
+  RotateCcw,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { AccentColor, ThemeMode, useAppStore } from "../store";
+import { AccentColor, MaterialEntry, MindmapData, ThemeMode, useAppStore } from "../store";
 import { MiniCalendar } from "./MiniCalendar";
 
 type SidebarMenuTarget =
   | { kind: "lesson"; fileName: string }
   | { kind: "mindmap"; fileName: string }
-  | { kind: "material"; relativePath: string; isDirectory: boolean };
+  | { kind: "material"; relativePath: string; isDirectory: boolean }
+  | { kind: "trash"; relativePath: string; isDirectory: boolean };
 
 interface SidebarMenuState {
   x: number;
@@ -39,7 +43,34 @@ interface SidebarMenuState {
   target: SidebarMenuTarget;
 }
 
-type MaterialPreviewKind = "pdf" | "image" | "text" | "error";
+type MaterialPreviewKind = "pdf" | "image" | "text" | "error" | "lesson" | "mindmap";
+
+interface LessonPreviewData {
+  html: string;
+  teacher: string;
+  subject: string;
+  plannedFor: string;
+  createdAt: string;
+}
+
+interface MindmapPreviewNode {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  style: CSSProperties;
+}
+
+interface MindmapPreviewEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+interface MindmapPreviewData {
+  nodes: MindmapPreviewNode[];
+  edges: MindmapPreviewEdge[];
+}
 
 interface MaterialPreviewState {
   title: string;
@@ -48,6 +79,8 @@ interface MaterialPreviewState {
   text?: string;
   message?: string;
   blobUrl?: string;
+  lesson?: LessonPreviewData;
+  mindmap?: MindmapPreviewData;
 }
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; color: string }> = [
@@ -62,6 +95,317 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }
   { value: "light", label: "Light", icon: Sun },
 ];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatPreviewDate(isoValue: string | null | undefined): string {
+  if (!isoValue) return "-";
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+  return date.toLocaleDateString();
+}
+
+function renderTextWithMarks(text: string, marks: unknown): string {
+  let output = escapeHtml(text);
+
+  if (!Array.isArray(marks)) {
+    return output;
+  }
+
+  for (const mark of marks) {
+    if (!isRecord(mark) || typeof mark.type !== "string") {
+      continue;
+    }
+
+    if (mark.type === "bold") {
+      output = `<strong>${output}</strong>`;
+    } else if (mark.type === "italic") {
+      output = `<em>${output}</em>`;
+    } else if (mark.type === "strike") {
+      output = `<s>${output}</s>`;
+    } else if (mark.type === "code") {
+      output = `<code>${output}</code>`;
+    }
+  }
+
+  return output;
+}
+
+function renderTipTapNode(node: unknown): string {
+  if (!isRecord(node)) {
+    return "";
+  }
+
+  const type = typeof node.type === "string" ? node.type : "";
+  const attrs = isRecord(node.attrs) ? node.attrs : {};
+  const children = Array.isArray(node.content) ? node.content : [];
+  const renderedChildren = children.map((child) => renderTipTapNode(child)).join("");
+
+  if (type === "text") {
+    const text = typeof node.text === "string" ? node.text : "";
+    return renderTextWithMarks(text, node.marks);
+  }
+
+  if (type === "hardBreak") {
+    return "<br/>";
+  }
+
+  if (type === "materialLink") {
+    const label =
+      typeof attrs.label === "string"
+        ? attrs.label
+        : typeof attrs.fileName === "string"
+          ? attrs.fileName
+          : typeof attrs.path === "string"
+            ? attrs.path
+            : "Material";
+    return `<span class=\"tp-preview-material-chip\">${escapeHtml(label)}</span>`;
+  }
+
+  if (type === "doc") {
+    return renderedChildren;
+  }
+
+  if (type === "paragraph") {
+    return `<p>${renderedChildren || "<br/>"}</p>`;
+  }
+
+  if (type === "heading") {
+    const level = Number(attrs.level);
+    const safeLevel = Number.isFinite(level) && level >= 1 && level <= 3 ? level : 2;
+    return `<h${safeLevel}>${renderedChildren}</h${safeLevel}>`;
+  }
+
+  if (type === "bulletList") {
+    return `<ul>${renderedChildren}</ul>`;
+  }
+
+  if (type === "orderedList") {
+    return `<ol>${renderedChildren}</ol>`;
+  }
+
+  if (type === "listItem") {
+    return `<li>${renderedChildren || "<p></p>"}</li>`;
+  }
+
+  if (type === "blockquote") {
+    return `<blockquote>${renderedChildren}</blockquote>`;
+  }
+
+  if (type === "codeBlock") {
+    return `<pre><code>${renderedChildren}</code></pre>`;
+  }
+
+  if (type === "horizontalRule") {
+    return "<hr/>";
+  }
+
+  if (type === "table") {
+    return `<table>${renderedChildren}</table>`;
+  }
+
+  if (type === "tableRow") {
+    return `<tr>${renderedChildren}</tr>`;
+  }
+
+  if (type === "tableHeader") {
+    return `<th>${renderedChildren || ""}</th>`;
+  }
+
+  if (type === "tableCell") {
+    return `<td>${renderedChildren || ""}</td>`;
+  }
+
+  return renderedChildren;
+}
+
+function buildLessonPreview(raw: string): LessonPreviewData | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    const metadata = isRecord(parsed.metadata) ? parsed.metadata : {};
+    const maybeContent = "content" in parsed ? parsed.content : parsed;
+    const html = renderTipTapNode(maybeContent).trim() || "<p>(No content)</p>";
+
+    return {
+      html,
+      teacher: typeof metadata.teacher === "string" && metadata.teacher.trim() ? metadata.teacher : "-",
+      subject: typeof metadata.subject === "string" && metadata.subject.trim() ? metadata.subject : "-",
+      plannedFor: formatPreviewDate(typeof metadata.plannedFor === "string" ? metadata.plannedFor : null),
+      createdAt: formatPreviewDate(typeof metadata.createdAt === "string" ? metadata.createdAt : null),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildMindmapPreview(raw: string): MindmapPreviewData | null {
+  try {
+    const parsed = JSON.parse(raw) as MindmapData;
+    const rawNodes = Array.isArray(parsed.nodes) ? parsed.nodes : [];
+    const rawEdges = Array.isArray(parsed.edges) ? parsed.edges : [];
+
+    const nodes: MindmapPreviewNode[] = rawNodes
+      .map((node, index) => {
+        if (!isRecord(node)) {
+          return null;
+        }
+
+        const nodeId = typeof node.id === "string" && node.id ? node.id : `node-${index}`;
+        const data = isRecord(node.data) ? node.data : {};
+        const position = isRecord(node.position) ? node.position : {};
+        const styleInput = isRecord(node.style) ? node.style : {};
+
+        const style = Object.entries(styleInput).reduce<CSSProperties>((acc, [key, value]) => {
+          if (typeof value === "string" || typeof value === "number") {
+            (acc as Record<string, string | number>)[key] = value;
+          }
+          return acc;
+        }, {});
+
+        return {
+          id: nodeId,
+          label: typeof data.label === "string" && data.label.trim() ? data.label : "New Idea",
+          x: typeof position.x === "number" ? position.x : 0,
+          y: typeof position.y === "number" ? position.y : 0,
+          style,
+        };
+      })
+      .filter((node): node is MindmapPreviewNode => !!node);
+
+    const nodeIds = new Set(nodes.map((node) => node.id));
+
+    const edges: MindmapPreviewEdge[] = rawEdges
+      .map((edge, index) => {
+        if (!isRecord(edge)) {
+          return null;
+        }
+
+        const source = typeof edge.source === "string" ? edge.source : "";
+        const target = typeof edge.target === "string" ? edge.target : "";
+        if (!source || !target || !nodeIds.has(source) || !nodeIds.has(target)) {
+          return null;
+        }
+
+        return {
+          id: typeof edge.id === "string" && edge.id ? edge.id : `edge-${index}`,
+          source,
+          target,
+        };
+      })
+      .filter((edge): edge is MindmapPreviewEdge => !!edge);
+
+    return { nodes, edges };
+  } catch {
+    return null;
+  }
+}
+
+function MindmapStaticPreview({ data }: { data: MindmapPreviewData }) {
+  if (data.nodes.length === 0) {
+    return (
+      <div className="text-sm text-gray-400 border border-[#2d2d2d] rounded-md p-4 bg-[#101010]">
+        This mindmap has no nodes.
+      </div>
+    );
+  }
+
+  const NODE_WIDTH = 190;
+  const NODE_HEIGHT = 62;
+  const PADDING = 40;
+
+  const minX = Math.min(...data.nodes.map((node) => node.x));
+  const minY = Math.min(...data.nodes.map((node) => node.y));
+  const maxX = Math.max(...data.nodes.map((node) => node.x));
+  const maxY = Math.max(...data.nodes.map((node) => node.y));
+
+  const canvasWidth = Math.max(maxX - minX + NODE_WIDTH + PADDING * 2, 780);
+  const canvasHeight = Math.max(maxY - minY + NODE_HEIGHT + PADDING * 2, 440);
+
+  const positionedNodes = data.nodes.map((node) => ({
+    ...node,
+    left: node.x - minX + PADDING,
+    top: node.y - minY + PADDING,
+  }));
+
+  const nodeById = new Map(positionedNodes.map((node) => [node.id, node]));
+
+  return (
+    <div className="rounded-md border border-[#2d2d2d] bg-[#101010] overflow-auto">
+      <div className="relative" style={{ width: `${canvasWidth}px`, height: `${canvasHeight}px` }}>
+        <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
+          {data.edges.map((edge) => {
+            const source = nodeById.get(edge.source);
+            const target = nodeById.get(edge.target);
+            if (!source || !target) {
+              return null;
+            }
+
+            return (
+              <line
+                key={edge.id}
+                x1={source.left + NODE_WIDTH / 2}
+                y1={source.top + NODE_HEIGHT / 2}
+                x2={target.left + NODE_WIDTH / 2}
+                y2={target.top + NODE_HEIGHT / 2}
+                stroke="#5b6472"
+                strokeWidth={2}
+              />
+            );
+          })}
+        </svg>
+
+        {positionedNodes.map((node) => {
+          const nodeStyle: CSSProperties = {
+            position: "absolute",
+            left: `${node.left}px`,
+            top: `${node.top}px`,
+            width: `${NODE_WIDTH}px`,
+            minHeight: `${NODE_HEIGHT}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            borderRadius: "8px",
+            border: "1px solid #444",
+            background: "#2d2d2d",
+            color: "#e5e5e5",
+            padding: "10px 14px",
+            fontSize: "13px",
+            fontWeight: 600,
+            boxSizing: "border-box",
+            overflow: "hidden",
+            wordBreak: "break-word",
+            ...node.style,
+          };
+
+          return (
+            <div key={node.id} style={nodeStyle}>
+              {node.label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Sidebar() {
   const {
     sidebarOpen,
@@ -70,7 +414,11 @@ export function Sidebar() {
     vaultPath,
     lessonPlans,
     mindmaps,
+    lessonSearchIndex,
+    mindmapSearchIndex,
+    isSearchIndexing,
     createNewLesson,
+    duplicateLesson,
     openLesson,
     deleteLesson,
     renameLesson,
@@ -82,10 +430,13 @@ export function Sidebar() {
     renameMindmap,
     createNewMindmap,
     materials,
+    trashEntries,
     addMaterialFiles,
     addMaterialDirectory,
     deleteMaterialEntry,
     renameMaterialEntry,
+    restoreTrashEntry,
+    permanentlyDeleteTrashEntry,
     themeMode,
     accentColor,
     setThemeMode,
@@ -103,13 +454,26 @@ export function Sidebar() {
     clearDebugEvents,
     defaultTeacherName,
     setDefaultTeacherName,
+    showActionButtonLabels,
+    setShowActionButtonLabels,
   } = useAppStore();
 
   const [expandedMaterialFolders, setExpandedMaterialFolders] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<SidebarMenuState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
+  const [lessonSearch, setLessonSearch] = useState("");
+  const [mindmapSearch, setMindmapSearch] = useState("");
+  const [materialSearch, setMaterialSearch] = useState("");
+  const [trashSearch, setTrashSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState({
+    lessonPlans: false,
+    mindmaps: false,
+    materials: false,
+    trash: false,
+  });
   const materialPreviewRef = useRef<HTMLDivElement | null>(null);
+  const [expandedTrashFolders, setExpandedTrashFolders] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     return () => {
@@ -204,6 +568,13 @@ export function Sidebar() {
     }));
   };
 
+  const toggleTrashFolder = (relativePath: string) => {
+    setExpandedTrashFolders((previous) => ({
+      ...previous,
+      [relativePath]: !previous[relativePath],
+    }));
+  };
+
   const queueMaterialInsertAtCursor = (relativePath: string, isDirectory: boolean) => {
     if (currentView !== "editor" || !activeFilePath) {
       logDebug(
@@ -241,7 +612,11 @@ export function Sidebar() {
         ? target.isDirectory
           ? 4
           : 5
-        : 3;
+        : target.kind === "trash"
+          ? 5
+        : target.kind === "lesson"
+          ? 4
+          : 3;
     const estimatedHeight = estimatedItemCount * 36 + 12;
     const padding = 8;
 
@@ -278,7 +653,8 @@ export function Sidebar() {
     }
 
     try {
-      const absolutePath = await join(vaultPath, "Materials", ...target.relativePath.split("/").filter(Boolean));
+      const baseFolder = target.kind === "trash" ? "Trash" : "Materials";
+      const absolutePath = await join(vaultPath, baseFolder, ...target.relativePath.split("/").filter(Boolean));
       const isPresent = await exists(absolutePath);
       logDebug("sidebar", "open-check", `${target.relativePath} | exists=${String(isPresent)} | path=${absolutePath}`);
       if (!isPresent) {
@@ -295,13 +671,20 @@ export function Sidebar() {
   };
 
   const handleRevealFromMenu = async () => {
-    if (!contextMenu || contextMenu.target.kind !== "material" || !vaultPath) return;
+    if (
+      !contextMenu ||
+      (contextMenu.target.kind !== "material" && contextMenu.target.kind !== "trash") ||
+      !vaultPath
+    ) {
+      return;
+    }
 
     const target = contextMenu.target;
     setContextMenu(null);
 
     try {
-      const absolutePath = await join(vaultPath, "Materials", ...target.relativePath.split("/").filter(Boolean));
+      const baseFolder = target.kind === "trash" ? "Trash" : "Materials";
+      const absolutePath = await join(vaultPath, baseFolder, ...target.relativePath.split("/").filter(Boolean));
       const isPresent = await exists(absolutePath);
       logDebug("sidebar", "reveal-check", `${target.relativePath} | exists=${String(isPresent)} | path=${absolutePath}`);
       if (!isPresent) {
@@ -318,17 +701,24 @@ export function Sidebar() {
   };
 
   const handlePreviewFromMenu = async () => {
-    if (!contextMenu || contextMenu.target.kind !== "material" || !vaultPath) return;
+    if (
+      !contextMenu ||
+      (contextMenu.target.kind !== "material" && contextMenu.target.kind !== "trash") ||
+      !vaultPath
+    ) {
+      return;
+    }
 
     const target = contextMenu.target;
     setContextMenu(null);
 
     if (target.isDirectory) {
+      const locationLabel = target.kind === "trash" ? "Trash folder" : "Folder";
       logDebug("sidebar", "preview-skip", `${target.relativePath} is directory`);
       setPreviewState({
         title: target.relativePath,
         kind: "error",
-        message: "Folder preview is not available. Use Open or Reveal In File Manager.",
+        message: `${locationLabel} preview is not available. Use Reveal In File Manager.`,
       });
       return;
     }
@@ -337,7 +727,8 @@ export function Sidebar() {
     const extension = (fileName.split(".").pop() || "").toLowerCase();
 
     try {
-      const absolutePath = await join(vaultPath, "Materials", ...target.relativePath.split("/").filter(Boolean));
+      const baseFolder = target.kind === "trash" ? "Trash" : "Materials";
+      const absolutePath = await join(vaultPath, baseFolder, ...target.relativePath.split("/").filter(Boolean));
       const isPresent = await exists(absolutePath);
       logDebug("sidebar", "preview-check", `${target.relativePath} | exists=${String(isPresent)} | ext=${extension} | path=${absolutePath}`);
       if (!isPresent) {
@@ -347,6 +738,37 @@ export function Sidebar() {
           message: `Material path not found: ${target.relativePath}`,
         });
         return;
+      }
+
+      if (target.kind === "trash" && extension === "json") {
+        const section = target.relativePath.split("/").filter(Boolean)[0] || "";
+        const raw = await readTextFile(absolutePath);
+
+        if (section === "Lesson Plans") {
+          const lesson = buildLessonPreview(raw);
+          if (lesson) {
+            setPreviewState({
+              title: fileName,
+              kind: "lesson",
+              lesson,
+            });
+            logDebug("sidebar", "preview-lesson-rendered", target.relativePath);
+            return;
+          }
+        }
+
+        if (section === "Mindmaps") {
+          const mindmap = buildMindmapPreview(raw);
+          if (mindmap) {
+            setPreviewState({
+              title: fileName,
+              kind: "mindmap",
+              mindmap,
+            });
+            logDebug("sidebar", "preview-mindmap-rendered", target.relativePath);
+            return;
+          }
+        }
       }
 
       if (extension === "pdf") {
@@ -407,23 +829,47 @@ export function Sidebar() {
     setContextMenu(null);
 
     if (target.kind === "lesson") {
-      if (confirm(`Delete lesson plan \"${target.fileName}\"?`)) {
+      if (confirm(`Move lesson plan \"${target.fileName}\" to Trash?`)) {
         await deleteLesson(target.fileName);
       }
       return;
     }
 
     if (target.kind === "mindmap") {
-      if (confirm(`Delete mindmap \"${target.fileName}\"?`)) {
+      if (confirm(`Move mindmap \"${target.fileName}\" to Trash?`)) {
         await deleteMindmap(target.fileName);
       }
       return;
     }
 
+    if (target.kind === "trash") {
+      const label = target.isDirectory ? "folder" : "file";
+      if (confirm(`Permanently delete trash ${label} \"${target.relativePath}\"? This cannot be undone.`)) {
+        await permanentlyDeleteTrashEntry(target.relativePath, target.isDirectory);
+      }
+      return;
+    }
+
     const label = target.isDirectory ? "folder" : "file";
-    if (confirm(`Delete material ${label} \"${target.relativePath}\"?`)) {
+    if (confirm(`Move material ${label} \"${target.relativePath}\" to Trash?`)) {
       await deleteMaterialEntry(target.relativePath, target.isDirectory);
     }
+  };
+
+  const handleRestoreFromMenu = async () => {
+    if (!contextMenu || contextMenu.target.kind !== "trash") return;
+
+    const target = contextMenu.target;
+    setContextMenu(null);
+    await restoreTrashEntry(target.relativePath, target.isDirectory);
+  };
+
+  const handleDuplicateFromMenu = async () => {
+    if (!contextMenu || contextMenu.target.kind !== "lesson") return;
+
+    const target = contextMenu.target;
+    setContextMenu(null);
+    await duplicateLesson(target.fileName);
   };
 
   const handleRenameFromMenu = async () => {
@@ -448,13 +894,111 @@ export function Sidebar() {
       return;
     }
 
+    if (target.kind === "trash") {
+      return;
+    }
+
     const currentName = target.relativePath.split("/").pop() || target.relativePath;
     const nextName = prompt("Rename material item", currentName);
     if (!nextName) return;
     await renameMaterialEntry(target.relativePath, nextName);
   };
 
-  const visibleMaterials = useMemo(() => materials, [materials]);
+  const normalizedLessonSearch = lessonSearch.trim().toLowerCase();
+  const normalizedMindmapSearch = mindmapSearch.trim().toLowerCase();
+  const normalizedMaterialSearch = materialSearch.trim().toLowerCase();
+  const normalizedTrashSearch = trashSearch.trim().toLowerCase();
+
+  const filteredLessonPlans = useMemo(() => {
+    if (!normalizedLessonSearch) {
+      return lessonPlans;
+    }
+
+    const scored = lessonPlans
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => {
+        const name = entry.name || "";
+        const nameLower = name.toLowerCase();
+        const nameMatch = nameLower.includes(normalizedLessonSearch);
+        const contentMatch = (lessonSearchIndex[name] || "").includes(normalizedLessonSearch);
+        return { entry, nameMatch, contentMatch };
+      })
+      .filter((candidate) => candidate.nameMatch || candidate.contentMatch)
+      .sort((left, right) => {
+        const leftScore = (left.nameMatch ? 2 : 0) + (left.contentMatch ? 1 : 0);
+        const rightScore = (right.nameMatch ? 2 : 0) + (right.contentMatch ? 1 : 0);
+        if (leftScore !== rightScore) {
+          return rightScore - leftScore;
+        }
+        return (left.entry.name || "").localeCompare(right.entry.name || "");
+      });
+
+    return scored.map((candidate) => candidate.entry);
+  }, [lessonPlans, normalizedLessonSearch, lessonSearchIndex]);
+
+  const filteredMindmaps = useMemo(() => {
+    if (!normalizedMindmapSearch) {
+      return mindmaps;
+    }
+
+    const scored = mindmaps
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => {
+        const name = entry.name || "";
+        const nameLower = name.toLowerCase();
+        const nameMatch = nameLower.includes(normalizedMindmapSearch);
+        const contentMatch = (mindmapSearchIndex[name] || "").includes(normalizedMindmapSearch);
+        return { entry, nameMatch, contentMatch };
+      })
+      .filter((candidate) => candidate.nameMatch || candidate.contentMatch)
+      .sort((left, right) => {
+        const leftScore = (left.nameMatch ? 2 : 0) + (left.contentMatch ? 1 : 0);
+        const rightScore = (right.nameMatch ? 2 : 0) + (right.contentMatch ? 1 : 0);
+        if (leftScore !== rightScore) {
+          return rightScore - leftScore;
+        }
+        return (left.entry.name || "").localeCompare(right.entry.name || "");
+      });
+
+    return scored.map((candidate) => candidate.entry);
+  }, [mindmaps, normalizedMindmapSearch, mindmapSearchIndex]);
+
+  const filterTreeEntries = (entries: MaterialEntry[], query: string): MaterialEntry[] => {
+    if (!query) {
+      return entries;
+    }
+
+    const visit = (entry: MaterialEntry): MaterialEntry | null => {
+      const filteredChildren = entry.children
+        .map((child) => visit(child))
+        .filter((child): child is MaterialEntry => !!child);
+      const selfMatch =
+        entry.name.toLowerCase().includes(query) || entry.relativePath.toLowerCase().includes(query);
+
+      if (!selfMatch && filteredChildren.length === 0) {
+        return null;
+      }
+
+      return {
+        ...entry,
+        children: filteredChildren,
+      };
+    };
+
+    return entries
+      .map((entry) => visit(entry))
+      .filter((entry): entry is MaterialEntry => !!entry);
+  };
+
+  const visibleMaterials = useMemo(
+    () => filterTreeEntries(materials, normalizedMaterialSearch),
+    [materials, normalizedMaterialSearch],
+  );
+
+  const visibleTrashEntries = useMemo(
+    () => filterTreeEntries(trashEntries, normalizedTrashSearch),
+    [trashEntries, normalizedTrashSearch],
+  );
 
   const handleSettingsClick = () => {
     if (!sidebarOpen) {
@@ -477,6 +1021,27 @@ export function Sidebar() {
     } catch {
       alert("Could not copy to clipboard on this system.");
     }
+  };
+
+  const toggleSearchField = (section: "lessonPlans" | "mindmaps" | "materials" | "trash") => {
+    setSearchOpen((previous) => {
+      const nextOpen = !previous[section];
+      if (!nextOpen) {
+        if (section === "lessonPlans") {
+          setLessonSearch("");
+        } else if (section === "mindmaps") {
+          setMindmapSearch("");
+        } else if (section === "materials") {
+          setMaterialSearch("");
+        } else {
+          setTrashSearch("");
+        }
+      }
+      return {
+        ...previous,
+        [section]: nextOpen,
+      };
+    });
   };
 
   const renderSectionHeader = ({
@@ -506,7 +1071,7 @@ export function Sidebar() {
 
   const renderMaterialEntries = (entries: typeof materials, depth = 0) =>
     entries.map((entry) => {
-      const isExpanded = !!expandedMaterialFolders[entry.relativePath];
+      const isExpanded = !!normalizedMaterialSearch || !!expandedMaterialFolders[entry.relativePath];
       const hasChildren = entry.isDirectory && entry.children.length > 0;
 
       return (
@@ -515,7 +1080,7 @@ export function Sidebar() {
             draggable
             onDragStart={(event) => handleDragStart(event, entry.relativePath, entry.isDirectory)}
             onDragEnd={(event) => handleDragEnd(event, entry.relativePath, entry.isDirectory)}
-            onClick={() => entry.isDirectory && toggleFolder(entry.relativePath)}
+            onClick={() => entry.isDirectory && !normalizedMaterialSearch && toggleFolder(entry.relativePath)}
             onDoubleClick={() => queueMaterialInsertAtCursor(entry.relativePath, entry.isDirectory)}
             onContextMenu={(event) =>
               handleItemContextMenu(event, {
@@ -550,6 +1115,53 @@ export function Sidebar() {
 
           {entry.isDirectory && isExpanded && hasChildren && (
             <ul className="space-y-0.5">{renderMaterialEntries(entry.children, depth + 1)}</ul>
+          )}
+        </li>
+      );
+    });
+
+  const renderTrashEntries = (entries: MaterialEntry[], depth = 0) =>
+    entries.map((entry) => {
+      const isExpanded = !!normalizedTrashSearch || !!expandedTrashFolders[entry.relativePath];
+      const hasChildren = entry.isDirectory && entry.children.length > 0;
+
+      return (
+        <li key={`trash-${entry.relativePath}`}>
+          <button
+            onClick={() => entry.isDirectory && !normalizedTrashSearch && toggleTrashFolder(entry.relativePath)}
+            onContextMenu={(event) =>
+              handleItemContextMenu(event, {
+                kind: "trash",
+                relativePath: entry.relativePath,
+                isDirectory: entry.isDirectory,
+              })
+            }
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left truncate text-amber-200/80 hover:text-amber-100 hover:bg-[#2d2d2d]"
+            style={{ paddingLeft: `${8 + depth * 14}px` }}
+            title={entry.relativePath}
+          >
+            {entry.isDirectory ? (
+              <>
+                <ChevronRight
+                  className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                />
+                {isExpanded ? (
+                  <FolderOpen className="w-4 h-4 shrink-0 text-amber-300/70" />
+                ) : (
+                  <Folder className="w-4 h-4 shrink-0 text-amber-300/70" />
+                )}
+              </>
+            ) : (
+              <>
+                <span className="w-3.5 h-3.5 shrink-0" />
+                <File className="w-4 h-4 shrink-0 text-amber-300/70" />
+              </>
+            )}
+            <span className="truncate">{entry.name}</span>
+          </button>
+
+          {entry.isDirectory && isExpanded && hasChildren && (
+            <ul className="space-y-0.5">{renderTrashEntries(entry.children, depth + 1)}</ul>
           )}
         </li>
       );
@@ -653,15 +1265,42 @@ export function Sidebar() {
             collapsed: sectionCollapsed.lessonPlans,
             onToggle: () => toggleSectionCollapsed("lessonPlans"),
             actions: vaultPath ? (
-              <button onClick={() => createNewLesson()} className="hover:text-gray-300 p-1" title="New lesson plan">
-                <Plus className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => toggleSearchField("lessonPlans")}
+                  className={`p-1 rounded ${searchOpen.lessonPlans || !!normalizedLessonSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                  title={searchOpen.lessonPlans ? "Hide lesson search" : "Show lesson search"}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => createNewLesson()} className="hover:text-gray-300 p-1" title="New lesson plan">
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             ) : null,
             marginTop: "mt-4",
           })}
           {!sectionCollapsed.lessonPlans && (
             <ul className="space-y-1 px-2 mb-6">
-              {lessonPlans.map((entry, idx) => {
+              {(searchOpen.lessonPlans || !!normalizedLessonSearch) && (
+                <li className="px-1 pb-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={lessonSearch}
+                      onChange={(event) => setLessonSearch(event.target.value)}
+                      placeholder="Search lesson plans"
+                      autoFocus
+                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+                    />
+                  </div>
+                  {isSearchIndexing && normalizedLessonSearch && (
+                    <div className="text-[10px] text-gray-500 mt-1 px-1">Indexing lesson content...</div>
+                  )}
+                </li>
+              )}
+              {filteredLessonPlans.map((entry, idx) => {
                 const isActive = activeFilePath?.endsWith(entry.name);
                 return (
                   <li key={`lp-${idx}`}>
@@ -697,8 +1336,10 @@ export function Sidebar() {
                   </li>
                 );
               })}
-              {lessonPlans.length === 0 && (
-                <div className="px-2 py-2 text-sm text-gray-500 italic">No plans yet</div>
+              {filteredLessonPlans.length === 0 && (
+                <div className="px-2 py-2 text-sm text-gray-500 italic">
+                  {normalizedLessonSearch ? "No lesson matches" : "No plans yet"}
+                </div>
               )}
             </ul>
           )}
@@ -709,14 +1350,41 @@ export function Sidebar() {
             collapsed: sectionCollapsed.mindmaps,
             onToggle: () => toggleSectionCollapsed("mindmaps"),
             actions: vaultPath ? (
-              <button onClick={() => createNewMindmap()} className="hover:text-gray-300 p-1">
-                <Plus className="w-3 h-3" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => toggleSearchField("mindmaps")}
+                  className={`p-1 rounded ${searchOpen.mindmaps || !!normalizedMindmapSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                  title={searchOpen.mindmaps ? "Hide mindmap search" : "Show mindmap search"}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => createNewMindmap()} className="hover:text-gray-300 p-1">
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
             ) : null,
           })}
           {!sectionCollapsed.mindmaps && (
             <ul className="space-y-1 px-2">
-              {mindmaps.map((entry, idx) => {
+              {(searchOpen.mindmaps || !!normalizedMindmapSearch) && (
+                <li className="px-1 pb-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={mindmapSearch}
+                      onChange={(event) => setMindmapSearch(event.target.value)}
+                      placeholder="Search mindmaps"
+                      autoFocus
+                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+                    />
+                  </div>
+                  {isSearchIndexing && normalizedMindmapSearch && (
+                    <div className="text-[10px] text-gray-500 mt-1 px-1">Indexing mindmap content...</div>
+                  )}
+                </li>
+              )}
+              {filteredMindmaps.map((entry, idx) => {
                 const isActive = activeFilePath?.endsWith(entry.name);
                 return (
                   <li key={`mm-${idx}`}>
@@ -748,8 +1416,10 @@ export function Sidebar() {
                   </li>
                 );
               })}
-              {mindmaps.length === 0 && (
-                <div className="px-2 py-2 text-sm text-gray-500 italic">No mindmaps yet</div>
+              {filteredMindmaps.length === 0 && (
+                <div className="px-2 py-2 text-sm text-gray-500 italic">
+                  {normalizedMindmapSearch ? "No mindmap matches" : "No mindmaps yet"}
+                </div>
               )}
             </ul>
           )}
@@ -761,6 +1431,13 @@ export function Sidebar() {
             onToggle: () => toggleSectionCollapsed("materials"),
             actions: (
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => toggleSearchField("materials")}
+                  title={searchOpen.materials ? "Hide material search" : "Show material search"}
+                  className={`p-1 rounded ${searchOpen.materials || !!normalizedMaterialSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                >
+                  <Search className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => addMaterialFiles()}
                   title="Add files"
@@ -781,9 +1458,67 @@ export function Sidebar() {
           })}
           {!sectionCollapsed.materials && (
             <ul className="space-y-1 px-2 pb-8">
+              {(searchOpen.materials || !!normalizedMaterialSearch) && (
+                <li className="px-1 pb-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={materialSearch}
+                      onChange={(event) => setMaterialSearch(event.target.value)}
+                      placeholder="Search materials (name or path)"
+                      autoFocus
+                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+                    />
+                  </div>
+                </li>
+              )}
               {renderMaterialEntries(visibleMaterials)}
               {visibleMaterials.length === 0 && (
-                <div className="px-2 py-2 text-sm text-gray-500 italic">Empty folder</div>
+                <div className="px-2 py-2 text-sm text-gray-500 italic">
+                  {normalizedMaterialSearch ? "No material matches" : "Empty folder"}
+                </div>
+              )}
+            </ul>
+          )}
+
+          {renderSectionHeader({
+            title: "Trash",
+            collapsed: sectionCollapsed.trash,
+            onToggle: () => toggleSectionCollapsed("trash"),
+            actions: (
+              <button
+                onClick={() => toggleSearchField("trash")}
+                title={searchOpen.trash ? "Hide trash search" : "Show trash search"}
+                className={`p-1 rounded ${searchOpen.trash || !!normalizedTrashSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+            ),
+            marginTop: "mt-6",
+          })}
+          {!sectionCollapsed.trash && (
+            <ul className="space-y-1 px-2 pb-8">
+              {(searchOpen.trash || !!normalizedTrashSearch) && (
+                <li className="px-1 pb-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={trashSearch}
+                      onChange={(event) => setTrashSearch(event.target.value)}
+                      placeholder="Search trash"
+                      autoFocus
+                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+                    />
+                  </div>
+                </li>
+              )}
+              {renderTrashEntries(visibleTrashEntries)}
+              {visibleTrashEntries.length === 0 && (
+                <div className="px-2 py-2 text-sm text-gray-500 italic">
+                  {normalizedTrashSearch ? "No trash matches" : "Trash is empty"}
+                </div>
               )}
             </ul>
           )}
@@ -852,6 +1587,21 @@ export function Sidebar() {
               placeholder="e.g. John Doe"
               className="w-full bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
             />
+          </div>
+
+          <div className="mt-4">
+            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Toolbar Labels</div>
+            <button
+              onClick={() => setShowActionButtonLabels(!showActionButtonLabels)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors ${
+                showActionButtonLabels
+                  ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                  : "border-[#333] text-gray-300 hover:bg-[#222]"
+              }`}
+            >
+              <span>Show action button text</span>
+              <span className="text-xs uppercase tracking-wider">{showActionButtonLabels ? "On" : "Off"}</span>
+            </button>
           </div>
 
           <div>
@@ -943,14 +1693,16 @@ export function Sidebar() {
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
-          {contextMenu.target.kind !== "material" ? (
+          {(contextMenu.target.kind === "lesson" || contextMenu.target.kind === "mindmap") && (
             <button
               onClick={handleOpenFromMenu}
               className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
             >
               Open
             </button>
-          ) : (
+          )}
+
+          {contextMenu.target.kind === "material" && (
             <>
               {!contextMenu.target.isDirectory && (
                 <button
@@ -974,17 +1726,56 @@ export function Sidebar() {
               </button>
             </>
           )}
-          <button
-            onClick={handleRenameFromMenu}
-            className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
-          >
-            <Pencil className="w-3.5 h-3.5" /> Rename
-          </button>
+
+          {contextMenu.target.kind === "trash" && (
+            <>
+              <button
+                onClick={handleRestoreFromMenu}
+                className="w-full text-left px-3 py-2 text-sm text-emerald-300 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Restore
+              </button>
+              {!contextMenu.target.isDirectory && (
+                <button
+                  onClick={handlePreviewFromMenu}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
+                >
+                  Preview
+                </button>
+              )}
+              <button
+                onClick={handleRevealFromMenu}
+                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
+              >
+                Reveal In File Manager
+              </button>
+            </>
+          )}
+
+          {contextMenu.target.kind !== "trash" && (
+            <button
+              onClick={handleRenameFromMenu}
+              className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
+            >
+              <Pencil className="w-3.5 h-3.5" /> Rename
+            </button>
+          )}
+
+          {contextMenu.target.kind === "lesson" && (
+            <button
+              onClick={handleDuplicateFromMenu}
+              className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
+            >
+              <Copy className="w-3.5 h-3.5" /> Duplicate
+            </button>
+          )}
+
           <button
             onClick={handleDeleteFromMenu}
             className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
           >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
+            <Trash2 className="w-3.5 h-3.5" />
+            {contextMenu.target.kind === "trash" ? "Delete Permanently" : "Move to Trash"}
           </button>
         </div>
       )}
@@ -1029,6 +1820,40 @@ export function Sidebar() {
                 <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed bg-[#101010] border border-[#2d2d2d] rounded-md p-4">
                   {materialPreview.text || "(Empty file)"}
                 </pre>
+              )}
+
+              {materialPreview.kind === "lesson" && materialPreview.lesson && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                    <div className="bg-[#101010] border border-[#2d2d2d] rounded-md px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Teacher</div>
+                      <div className="text-sm text-gray-200 truncate">{materialPreview.lesson.teacher}</div>
+                    </div>
+                    <div className="bg-[#101010] border border-[#2d2d2d] rounded-md px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Subject</div>
+                      <div className="text-sm text-gray-200 truncate">{materialPreview.lesson.subject}</div>
+                    </div>
+                    <div className="bg-[#101010] border border-[#2d2d2d] rounded-md px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Planned For</div>
+                      <div className="text-sm text-gray-200 truncate">{materialPreview.lesson.plannedFor}</div>
+                    </div>
+                    <div className="bg-[#101010] border border-[#2d2d2d] rounded-md px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500">Created</div>
+                      <div className="text-sm text-gray-200 truncate">{materialPreview.lesson.createdAt}</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#121212] border border-[#2d2d2d] rounded-md p-4">
+                    <div
+                      className="ProseMirror"
+                      dangerouslySetInnerHTML={{ __html: materialPreview.lesson.html }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {materialPreview.kind === "mindmap" && materialPreview.mindmap && (
+                <MindmapStaticPreview data={materialPreview.mindmap} />
               )}
             </div>
           </div>
