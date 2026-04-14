@@ -41,15 +41,42 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 
 ---
 
-## ✨ Key Features
+## ✨ Features & Settings Guide
 
-- **Rich Lesson Plan Editor**: Write and structure your lessons using a full-featured markdown/rich-text editor powered by TipTap. Includes specialized features like custom data tables.
-- **Weekly Calendar Planner**: Drag, drop, and schedule your lessons directly onto a visual timeline.
-- **Interactive Mindmaps**: Brainstorm ideas and visualize curriculums with a drag-and-drop node-based mindmap editor.
-- **Material Management**: Link external files (PDFs, docs, images) directly into your lesson plans or mindmap nodes wrapper. Double-click to instantly open them in their native applications.
-- **Native PDF Exporting & Printing**: Seamlessly export your lesson plans or mindmaps to beautiful PDFs, or print them directly using your operating system's native Print Configuration Menu.
-- **Local-First & Private**: All data is saved inside a "Vault" folder natively on your own hard drive. No trackers, no cloud sync required.
-- **Customizable Themes**: Full Light/Dark mode support along with customizable UI accent colors.
+TeacherPro is packed with purpose-built tools designed to adapt to your teaching workflow. Here is a breakdown of what you can do:
+
+### 🗂️ The Vault System (Local-First)
+- **100% Local Storage:** First, you select a "Vault" folder anywhere on your computer. TeacherPro saves all your lessons, mindmaps, and materials directly into this folder. No cloud accounts, no sync issues.
+- **Portability:** Everything is saved as lightweight `.json` files. You can safely back up your Vault to a USB drive or cloud folder (like Google Drive or Dropbox) without breaking the app.
+- **Smart Breadcrumbs:** The top navigation bar intelligently displays your exact location relative to your Vault.
+
+### 📝 Lesson Plan Editor
+- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, and Unordered/Ordered lists.
+- **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, and resize them freely.
+- **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
+- **Material Linking:** Drag and drop external files (PDFs, Word Docs, Images) directly into the editor to create clickable links. Double-clicking the link opens the file in your computer's default native application.
+
+### 🧠 Mindmap Editor
+- **Infinite Canvas:** Build visual curriculums using a node-based interface (powered by React Flow).
+- **Drag-and-Drop Connectivity:** Create nodes, double-click to rename them, and drag connections between them to map out concepts.
+- **Material Nodes:** You can drag and drop external files directly onto the mindmap surface to create dedicated file nodes.
+- **Context Menus:** Right-click anywhere on the canvas or on specific nodes to access quick-actions (Delete, Add Node).
+
+### 📅 Weekly Calendar View
+- **Visual Scheduling:** See your upcoming week at a glance.
+- **Drag-and-Drop Planning:** Drag your unscheduled (or rescheduled) lesson plans from the sidebar directly onto a specific day of the week to instantly update their *Planned Date*.
+
+### 🖨️ Native Printing & PDF Export
+- **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
+- **Native OS Print Dialogs:** Built with a custom Rust backend, clicking "Print" seamlessly opens the native Windows, macOS, or Linux print dialogs, avoiding standard webview limitations.
+- **Export to PDF:** Save beautifully formatted PDF versions of your documents directly into your Vault's `Exports` folder.
+
+### ⚙️ UI & Customization
+- **Accent Colors:** Personalize your workspace! The default theme is a soft TeacherPro blue (`#9fd2e4`), but you can change the accent color to match your preference.
+- **Dark & Light Modes:** Full support for dark and light environments. Automatically switches or can be forced via settings.
+- **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
+
+---
 
 ## 🚀 Use Cases
 - **Teachers**: Plan your entire semester ahead of time, attaching the exact PDF worksheets or slideshows you need right next to the lesson structure. 
