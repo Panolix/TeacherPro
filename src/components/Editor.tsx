@@ -1020,9 +1020,12 @@ export function Editor() {
     const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
     clonedElement.classList.add("tp-export-light-clone");
 
-    const sourceRect = sourceElement.getBoundingClientRect();
-    const exportWidth = Math.max(sourceRect.width, sourceElement.scrollWidth, 900);
+    // Force A4 Landscape exact printable inner-width (~1062px at 96 DPI for 281mm printable area).
+    // This physically guarantees 12pt web font equals 12pt print font without responsive container stretching/shrinking.
+    const exportWidth = 1062;
     clonedElement.style.width = `${exportWidth}px`;
+    clonedElement.style.maxWidth = `${exportWidth}px`;
+    clonedElement.style.minWidth = `${exportWidth}px`;
 
     clonedElement
       .querySelectorAll<HTMLElement>(".lesson-export-input, .lesson-export-planned-input, .lesson-export-calendar-trigger, .lesson-export-calendar-popover")
