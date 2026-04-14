@@ -222,7 +222,6 @@ html[data-tp-theme="light"] .ProseMirror th {
 
 .lesson-export-editor .ProseMirror {
   overflow-x: visible;
-  min-width: max-content;
   padding-bottom: 8px;
 }
 
@@ -309,8 +308,9 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror table,
 .tp-export-light-clone .ProseMirror table {
   border-color: #d1d5db !important;
   background-color: #ffffff !important;
-  width: max-content !important;
+  width: 100% !important;
   min-width: 100% !important;
+  table-layout: fixed !important;
 }
 
 body.tp-exporting #lesson-plan-export-content .ProseMirror th,
@@ -351,6 +351,8 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror td,
   .ProseMirror table {
     border-color: #ccc !important;
     background-color: white !important;
+    width: 100% !important;
+    table-layout: fixed !important;
   }
 
   .ProseMirror th {
