@@ -42,7 +42,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
         let script = format!(
             "tell application \"Preview\"\n\
              activate\n\
-             print (POSIX file \"{}\")\n\
+             print (POSIX file \"{}\") with print dialog\n\
              end tell", path
         );
         
