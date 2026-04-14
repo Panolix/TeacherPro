@@ -5,7 +5,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "../../store";
 
 interface LinkContextMenuState {
@@ -24,6 +24,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<LinkContextMenuState | null>(null);
+  const previewModalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -47,13 +48,23 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     };
 
     window.addEventListener("click", closeMenu);
-    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", closeOnEscape, true);
 
     return () => {
       window.removeEventListener("click", closeMenu);
-      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [previewBlobUrl]);
+
+  useEffect(() => {
+    if (!previewOpen) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      previewModalRef.current?.focus();
+    });
+  }, [previewOpen]);
 
   const extension = useMemo(() => {
     const ext = fileName.split(".").pop();
@@ -119,7 +130,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
       await revealItemInDir(fullPath);
     } catch (error) {
       console.error("Failed to reveal file", error);
-      alert("Could not reveal this item in Finder.");
+      alert("Could not reveal this item in your file manager.");
     }
   };
 
@@ -234,7 +245,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
               void handleReveal();
             }}
             className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-[var(--tp-accent)] transition-colors"
-            title="Show in Finder"
+            title="Show in file manager"
           >
             <FolderOpen className="w-3.5 h-3.5" />
           </button>
@@ -279,7 +290,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
             }}
             className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
           >
-            Show In Finder
+            Show In File Manager
           </button>
           <button
             onClick={() => {
@@ -302,6 +313,8 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
           }}
         >
           <div
+            ref={previewModalRef}
+            tabIndex={-1}
             className="w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >

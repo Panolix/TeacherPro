@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   FolderOpen,
   Settings,
@@ -107,6 +107,7 @@ export function Sidebar() {
   const [contextMenu, setContextMenu] = useState<SidebarMenuState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
+  const materialPreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -135,13 +136,23 @@ export function Sidebar() {
     };
 
     window.addEventListener("click", closeMenu);
-    window.addEventListener("keydown", onEscape);
+    window.addEventListener("keydown", onEscape, true);
 
     return () => {
       window.removeEventListener("click", closeMenu);
-      window.removeEventListener("keydown", onEscape);
+      window.removeEventListener("keydown", onEscape, true);
     };
   }, []);
+
+  useEffect(() => {
+    if (!materialPreview) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      materialPreviewRef.current?.focus();
+    });
+  }, [materialPreview]);
 
   const handleDragStart = (e: React.DragEvent, relativePath: string, isDirectory: boolean) => {
     const payload = JSON.stringify({ relativePath, isDirectory });
@@ -189,6 +200,22 @@ export function Sidebar() {
       ...previous,
       [relativePath]: !previous[relativePath],
     }));
+  };
+
+  const queueMaterialInsertAtCursor = (relativePath: string, isDirectory: boolean) => {
+    setCurrentView("editor");
+    setPendingMaterialDrop({
+      relativePath,
+      isDirectory,
+      clientX: -1,
+      clientY: -1,
+    });
+    setDraggedMaterial(null);
+    logDebug(
+      "sidebar",
+      "double-click-queue",
+      `${relativePath} (${isDirectory ? "folder" : "file"})`,
+    );
   };
 
   const handleItemContextMenu = (
@@ -276,7 +303,7 @@ export function Sidebar() {
     } catch (error) {
       console.error("Failed to reveal material", error);
       logDebug("sidebar", "reveal-error", String(error));
-      alert("Could not reveal this item in Finder.");
+      alert("Could not reveal this item in your file manager.");
     }
   };
 
@@ -291,7 +318,7 @@ export function Sidebar() {
       setPreviewState({
         title: target.relativePath,
         kind: "error",
-        message: "Folder preview is not available. Use Open or Reveal In Finder.",
+        message: "Folder preview is not available. Use Open or Reveal In File Manager.",
       });
       return;
     }
@@ -479,6 +506,7 @@ export function Sidebar() {
             onDragStart={(event) => handleDragStart(event, entry.relativePath, entry.isDirectory)}
             onDragEnd={(event) => handleDragEnd(event, entry.relativePath, entry.isDirectory)}
             onClick={() => entry.isDirectory && toggleFolder(entry.relativePath)}
+            onDoubleClick={() => queueMaterialInsertAtCursor(entry.relativePath, entry.isDirectory)}
             onContextMenu={(event) =>
               handleItemContextMenu(event, {
                 kind: "material",
@@ -921,7 +949,7 @@ export function Sidebar() {
                 onClick={handleRevealFromMenu}
                 className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
               >
-                Reveal In Finder
+                Reveal In File Manager
               </button>
             </>
           )}
@@ -946,6 +974,8 @@ export function Sidebar() {
           onClick={() => setPreviewState(null)}
         >
           <div
+            ref={materialPreviewRef}
+            tabIndex={-1}
             className="w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >

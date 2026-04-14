@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
 import {
   createPdfBlobUrl,
-  printCurrentWindow,
+  printPdfBlobUrl,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -89,6 +89,19 @@ function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload
   }
 
   return { relativePath, itemType };
+}
+
+function hasTransferType(dataTransfer: DataTransfer, type: string): boolean {
+  return Array.from(dataTransfer.types || []).includes(type);
+}
+
+function hasMaterialDropData(dataTransfer: DataTransfer): boolean {
+  return (
+    hasTransferType(dataTransfer, "application/teacherpro-material") ||
+    hasTransferType(dataTransfer, "application/teacherpro-file") ||
+    hasTransferType(dataTransfer, "text/plain") ||
+    hasTransferType(dataTransfer, "text")
+  );
 }
 
 function formatIsoToEuropeanDate(isoString?: string | null): string {
@@ -348,6 +361,7 @@ export function Editor() {
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
+  const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
@@ -405,6 +419,27 @@ export function Editor() {
   useEffect(() => {
     return () => {
       revokePdfBlobUrl(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
+
+  useEffect(() => {
+    if (!pdfPreviewUrl) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPdfPreviewUrl(null);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape, true);
+    requestAnimationFrame(() => {
+      pdfPreviewRef.current?.focus();
+    });
+
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [pdfPreviewUrl]);
 
@@ -537,13 +572,7 @@ export function Editor() {
 
   const handleMaterialDragOver = useCallback(
     (event: React.DragEvent) => {
-      if (
-        draggedMaterial ||
-        event.dataTransfer.types.includes("application/teacherpro-material") ||
-        event.dataTransfer.types.includes("application/teacherpro-file") ||
-        event.dataTransfer.types.includes("text/plain") ||
-        event.dataTransfer.types.includes("text")
-      ) {
+      if (draggedMaterial || hasMaterialDropData(event.dataTransfer)) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
       }
@@ -562,14 +591,58 @@ export function Editor() {
       }
 
       const fileName = payload.relativePath.split("/").pop() || payload.relativePath;
-      const pos =
-        typeof clientX === "number" && typeof clientY === "number"
-          ? editor.view.posAtCoords({ left: clientX, top: clientY })
-          : null;
 
-      const targetPos = pos?.pos ?? editor.state.selection.from;
-      const resolvedPos = editor.state.doc.resolve(targetPos);
-      const isInsideTableCell = (() => {
+      const getCurrentRowMaterialCellInsertPos = (): number | null => {
+        const { selection, doc } = editor.state;
+        const $from = selection.$from;
+
+        let rowDepth = -1;
+        for (let depth = $from.depth; depth >= 0; depth -= 1) {
+          if ($from.node(depth).type.name === "tableRow") {
+            rowDepth = depth;
+            break;
+          }
+        }
+
+        if (rowDepth < 1) {
+          return null;
+        }
+
+        const tableDepth = rowDepth - 1;
+        if ($from.node(tableDepth).type.name !== "table") {
+          return null;
+        }
+
+        const tableNode = $from.node(tableDepth);
+        const rowIndex = $from.index(tableDepth);
+        const rowNode = tableNode.child(rowIndex);
+        if (!rowNode || rowNode.childCount === 0) {
+          return null;
+        }
+
+        const materialColumnIndex = rowNode.childCount - 1;
+        const tableStart = $from.start(tableDepth);
+        let rowStart = tableStart;
+        for (let currentRowIndex = 0; currentRowIndex < rowIndex; currentRowIndex += 1) {
+          rowStart += tableNode.child(currentRowIndex).nodeSize;
+        }
+
+        let cellStart = rowStart + 1;
+        for (let cellIndex = 0; cellIndex < materialColumnIndex; cellIndex += 1) {
+          cellStart += rowNode.child(cellIndex).nodeSize;
+        }
+
+        const cellNode = rowNode.child(materialColumnIndex);
+        const insertPos = cellStart + 1 + cellNode.content.size;
+        if (insertPos < 0 || insertPos > doc.content.size + 1) {
+          return null;
+        }
+
+        return insertPos;
+      };
+
+      const inferInsideTableCell = (pos: number): boolean => {
+        const resolvedPos = editor.state.doc.resolve(pos);
         for (let depth = resolvedPos.depth; depth > 0; depth -= 1) {
           const nodeName = resolvedPos.node(depth).type.name;
           if (nodeName === "tableCell" || nodeName === "tableHeader") {
@@ -577,7 +650,47 @@ export function Editor() {
           }
         }
         return false;
-      })();
+      };
+
+      let targetPos = editor.state.selection.from;
+      let isInsideTableCell = false;
+
+      const materialCellTargetPos = getCurrentRowMaterialCellInsertPos();
+      if (materialCellTargetPos !== null) {
+        targetPos = materialCellTargetPos;
+        isInsideTableCell = true;
+      }
+
+      if (materialCellTargetPos === null && typeof clientX === "number" && typeof clientY === "number") {
+        const pointerTarget = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+        const tableCellElement = pointerTarget?.closest("td,th");
+
+        if (tableCellElement && editor.view.dom.contains(tableCellElement)) {
+          const firstParagraph = tableCellElement.querySelector("p");
+          try {
+            if (firstParagraph) {
+              targetPos = editor.view.posAtDOM(firstParagraph, firstParagraph.childNodes.length);
+            } else {
+              targetPos = editor.view.posAtDOM(tableCellElement, 0);
+            }
+            isInsideTableCell = true;
+          } catch {
+            isInsideTableCell = false;
+          }
+        }
+
+        if (!isInsideTableCell) {
+          const coordsPos = editor.view.posAtCoords({ left: clientX, top: clientY });
+          if (coordsPos?.pos !== undefined) {
+            targetPos = coordsPos.pos;
+          }
+          isInsideTableCell = inferInsideTableCell(targetPos);
+        }
+      } else if (materialCellTargetPos === null) {
+        isInsideTableCell = inferInsideTableCell(targetPos);
+      }
+
+      editor.chain().focus().setTextSelection(targetPos).run();
 
       const materialNode = {
         type: "materialLink",
@@ -671,16 +784,21 @@ export function Editor() {
         return;
       }
 
-      const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
-      if (!didInsert) {
-        logDebug("editor", "drop-react-handler-skip", "insertDroppedMaterial returned false");
+      const isMaterialDrop = !!draggedMaterial || hasMaterialDropData(event.dataTransfer);
+      if (!isMaterialDrop) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
+
+      const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
+      if (!didInsert) {
+        logDebug("editor", "drop-react-handler-skip", "insertDroppedMaterial returned false");
+        return;
+      }
     },
-    [editor, insertDroppedMaterial, logDebug],
+    [draggedMaterial, editor, insertDroppedMaterial, logDebug],
   );
 
   useEffect(() => {
@@ -693,13 +811,7 @@ export function Editor() {
     const onNativeDragOver = (event: DragEvent) => {
       if (!event.dataTransfer) return;
 
-      if (
-        draggedMaterial ||
-        event.dataTransfer.types.includes("application/teacherpro-material") ||
-        event.dataTransfer.types.includes("application/teacherpro-file") ||
-        event.dataTransfer.types.includes("text/plain") ||
-        event.dataTransfer.types.includes("text")
-      ) {
+      if (draggedMaterial || hasMaterialDropData(event.dataTransfer)) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
       }
@@ -708,22 +820,27 @@ export function Editor() {
     const onNativeDrop = (event: DragEvent) => {
       if (!event.dataTransfer) return;
 
-      const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
-      if (!didInsert) {
-        logDebug("editor", "drop-native-handler-skip", "insertDroppedMaterial returned false");
+      const isMaterialDrop = !!draggedMaterial || hasMaterialDropData(event.dataTransfer);
+      if (!isMaterialDrop) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
+
+      const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
+      if (!didInsert) {
+        logDebug("editor", "drop-native-handler-skip", "insertDroppedMaterial returned false");
+        return;
+      }
     };
 
-    dom.addEventListener("dragover", onNativeDragOver);
-    dom.addEventListener("drop", onNativeDrop);
+    dom.addEventListener("dragover", onNativeDragOver, true);
+    dom.addEventListener("drop", onNativeDrop, true);
 
     return () => {
-      dom.removeEventListener("dragover", onNativeDragOver);
-      dom.removeEventListener("drop", onNativeDrop);
+      dom.removeEventListener("dragover", onNativeDragOver, true);
+      dom.removeEventListener("drop", onNativeDrop, true);
     };
   }, [draggedMaterial, editor, insertDroppedMaterial, logDebug]);
 
@@ -798,13 +915,35 @@ export function Editor() {
       return;
     }
 
+    const { clientX, clientY, relativePath, isDirectory } = pendingMaterialDrop;
+    const shouldInsertAtCursor = clientX < 0 || clientY < 0;
+
+    if (shouldInsertAtCursor) {
+      const didInsert = insertMaterialLinkAtSelection({
+        relativePath,
+        itemType: isDirectory ? "folder" : "file",
+      });
+
+      logDebug(
+        "editor",
+        didInsert ? "double-click-insert-success" : "double-click-insert-failed",
+        relativePath,
+      );
+
+      if (didInsert) {
+        setDraggedMaterial(null);
+      }
+
+      setPendingMaterialDrop(null);
+      return;
+    }
+
     const surface = editorSurfaceRef.current;
     if (!surface) {
       setPendingMaterialDrop(null);
       return;
     }
 
-    const { clientX, clientY, relativePath, isDirectory } = pendingMaterialDrop;
     const rect = surface.getBoundingClientRect();
     const isInsideSurface =
       clientX >= rect.left &&
@@ -841,20 +980,58 @@ export function Editor() {
   }, [editor, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
 
   const createLessonPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
-    const element = document.getElementById("lesson-plan-export-content");
-    if (!element) {
+    const sourceElement = document.getElementById("lesson-plan-export-content");
+    if (!sourceElement) {
       throw new Error("Could not find lesson content to export.");
     }
 
-    document.body.classList.add("tp-exporting");
+    const exportHost = document.createElement("div");
+    exportHost.style.position = "fixed";
+    exportHost.style.left = "-100000px";
+    exportHost.style.top = "0";
+    exportHost.style.pointerEvents = "none";
+    exportHost.style.opacity = "0";
+    exportHost.style.zIndex = "-1";
+
+    const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
+    clonedElement.classList.add("tp-export-light-clone");
+
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const exportWidth = Math.max(sourceRect.width, sourceElement.scrollWidth, 900);
+    clonedElement.style.width = `${exportWidth}px`;
+
+    clonedElement
+      .querySelectorAll<HTMLElement>(".lesson-export-input, .lesson-export-planned-input, .lesson-export-calendar-trigger, .lesson-export-calendar-popover")
+      .forEach((node) => {
+        node.style.display = "none";
+      });
+
+    const subjectText = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-text");
+    if (subjectText) {
+      subjectText.textContent = subject.trim() || "Not set";
+      subjectText.style.display = "inline";
+    }
+
+    const plannedText = clonedElement.querySelector<HTMLElement>(".lesson-export-planned-text");
+    if (plannedText) {
+      plannedText.textContent = plannedForInput.trim() || "Not set";
+      plannedText.style.display = "inline";
+    }
+
+    exportHost.appendChild(clonedElement);
+    document.body.appendChild(exportHost);
 
     try {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
+
       const normalizedSubject =
         subject.trim().replace(/[^a-zA-Z0-9\-\s_]/g, "").replace(/\s+/g, "-") || "lesson-plan";
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
       const fileName = `${normalizedSubject}-${stamp}.pdf`;
 
-      const pdfBytes = await renderElementToPdfBytes(element, {
+      const pdfBytes = await renderElementToPdfBytes(clonedElement, {
         orientation: "landscape",
         marginMm: 8,
         scale: 2,
@@ -864,7 +1041,7 @@ export function Editor() {
 
       return { pdfBytes, fileName };
     } finally {
-      document.body.classList.remove("tp-exporting");
+      exportHost.remove();
     }
   };
 
@@ -921,7 +1098,13 @@ export function Editor() {
     try {
       setTableContextMenu(null);
       setPlannedCalendarOpen(false);
-      await printCurrentWindow(["tp-exporting"]);
+      const { pdfBytes } = await createLessonPdf();
+      const printUrl = createPdfBlobUrl(pdfBytes);
+      try {
+        await printPdfBlobUrl(printUrl);
+      } finally {
+        revokePdfBlobUrl(printUrl);
+      }
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
       alert(`Print failed: ${String(error)}`);
@@ -1213,6 +1396,8 @@ export function Editor() {
               onClick={() => setPdfPreviewUrl(null)}
             >
               <div
+                ref={pdfPreviewRef}
+                tabIndex={-1}
                 className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
                 onClick={(event) => event.stopPropagation()}
               >

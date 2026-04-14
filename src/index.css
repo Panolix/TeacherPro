@@ -227,46 +227,58 @@ html[data-tp-theme="light"] .ProseMirror th {
 }
 
 /* Export-specific styles for clean lesson PDFs */
-body.tp-exporting #lesson-plan-export-content {
+body.tp-exporting #lesson-plan-export-content,
+.tp-export-light-clone {
   background: #ffffff !important;
   color: #111827 !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-meta {
+body.tp-exporting #lesson-plan-export-content .lesson-export-meta,
+.tp-export-light-clone .lesson-export-meta {
   border-bottom-color: #d1d5db !important;
 }
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-label,
-body.tp-exporting #lesson-plan-export-content .lesson-export-value {
+body.tp-exporting #lesson-plan-export-content .lesson-export-value,
+.tp-export-light-clone .lesson-export-label,
+.tp-export-light-clone .lesson-export-value {
   color: #111827 !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-input {
+body.tp-exporting #lesson-plan-export-content .lesson-export-input,
+.tp-export-light-clone .lesson-export-input {
   display: none !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-planned-input {
+body.tp-exporting #lesson-plan-export-content .lesson-export-planned-input,
+.tp-export-light-clone .lesson-export-planned-input {
   display: none !important;
 }
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-trigger,
-body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-popover {
+body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-popover,
+.tp-export-light-clone .lesson-export-calendar-trigger,
+.tp-export-light-clone .lesson-export-calendar-popover {
   display: none !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text {
+body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text,
+.tp-export-light-clone .lesson-export-subject-text {
   display: inline !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-planned-text {
+body.tp-exporting #lesson-plan-export-content .lesson-export-planned-text,
+.tp-export-light-clone .lesson-export-planned-text {
   display: inline !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .lesson-export-editor {
+body.tp-exporting #lesson-plan-export-content .lesson-export-editor,
+.tp-export-light-clone .lesson-export-editor {
   color: #111827 !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .ProseMirror {
+body.tp-exporting #lesson-plan-export-content .ProseMirror,
+.tp-export-light-clone .ProseMirror {
   color: #111827 !important;
 }
 
@@ -274,28 +286,45 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror h1,
 body.tp-exporting #lesson-plan-export-content .ProseMirror h2,
 body.tp-exporting #lesson-plan-export-content .ProseMirror h3,
 body.tp-exporting #lesson-plan-export-content .ProseMirror p,
-body.tp-exporting #lesson-plan-export-content .ProseMirror li {
+body.tp-exporting #lesson-plan-export-content .ProseMirror li,
+.tp-export-light-clone .ProseMirror h1,
+.tp-export-light-clone .ProseMirror h2,
+.tp-export-light-clone .ProseMirror h3,
+.tp-export-light-clone .ProseMirror p,
+.tp-export-light-clone .ProseMirror li {
   color: #111827 !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .ProseMirror table {
+body.tp-exporting #lesson-plan-export-content .ProseMirror table,
+.tp-export-light-clone .ProseMirror table {
   border-color: #d1d5db !important;
   background-color: #ffffff !important;
   width: max-content !important;
   min-width: 100% !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .ProseMirror th {
+body.tp-exporting #lesson-plan-export-content .ProseMirror th,
+.tp-export-light-clone .ProseMirror th {
   background-color: #f3f4f6 !important;
   color: #111827 !important;
   border-color: #d1d5db !important;
 }
 
-body.tp-exporting #lesson-plan-export-content .ProseMirror td {
+body.tp-exporting #lesson-plan-export-content .ProseMirror td,
+.tp-export-light-clone .ProseMirror td {
   border-color: #d1d5db !important;
 }
 
+.tp-mindmap-export-clone {
+  background: #ffffff !important;
+}
+
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
   body {
     background-color: white !important;
     color: black !important;

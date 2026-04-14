@@ -1,39 +1,63 @@
 # TeacherPro
 
-TeacherPro is a modern, sleek, local-first desktop application built specifically for educators. It provides a dedicated workspace to plan lessons, manage teaching materials, and create brainstorm mindmaps—all stored securely on your local file system, without subscription fees or bloated features.
+TeacherPro is a local-first desktop app for lesson planning. It combines a rich lesson editor, weekly calendar planning, material management, and mindmapping inside one Tauri app.
 
-## Features
+## Current Product Status
 
-- **Local Vault:** Your data stays on your machine. Choose any folder to act as your TeacherPro Vault.
-- **Lesson Plan Editor (Coming Soon):** A block-based rich text editor featuring customizable lesson plan tables (Time, Phase, Activity).
-- **Resource Linking (Coming Soon):** Seamlessly link PDFs, documents, and images from your Vault directly into your lesson plans.
-- **Mindmapping (Coming Soon):** Visual brainstorming boards built right into your workspace.
-- **PDF Export (Coming Soon):** One-click export of your lesson plans to professional PDFs.
+Implemented and actively used:
 
-## Technology Stack
+- Local vault setup and persistence.
+- Lesson plan editor with rich text, lesson table tools, and metadata fields.
+- Drag and drop material links from sidebar into lesson content.
+- Sidebar material actions: preview, open in default app, reveal in Finder, rename, delete.
+- Weekly calendar planner with per-day lesson creation and bulk delete actions.
+- Mindmap editor with node creation, linking, context menus, and color presets.
+- Lesson and mindmap PDF preview, print/save, and export.
+- Theme and accent customization plus debug console mode.
 
-- **Tauri v2** (Rust Backend / Desktop Shell)
-- **React 19** + **TypeScript** (Frontend)
-- **Vite** (Bundler)
-- **Tailwind CSS v4** (Styling)
-- **Zustand** (State Management)
+## Living Feature and Design Documentation
+
+Use [FEATURE_TRACKER.md](FEATURE_TRACKER.md) as the single source of truth for:
+
+- Feature inventory and status
+- Key function map by file
+- UI and UX design decisions
+- Recent change notes and known gaps
+
+When a major feature, workflow, or UI behavior changes, update `FEATURE_TRACKER.md` in the same PR/commit.
+
+## Tech Stack
+
+- Tauri v2 (Rust backend and desktop shell)
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS v4
+- Zustand
+- TipTap (lesson editor)
+- React Flow (mindmaps)
 
 ## Development
 
 ### Prerequisites
-- Node.js (v20+)
-- Rust (for Tauri backend)
-- System dependencies for Tauri (see [Tauri Prerequisites](https://v2.tauri.app/start/prerequisites/))
 
-### Setup & Run
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Run the development server and open the desktop app:
-   ```bash
-   npm run tauri dev
-   ```
+- Node.js v20+
+- Rust toolchain
+- Tauri system prerequisites: https://v2.tauri.app/start/prerequisites/
 
-## Architecture
-See `PROJECT_PLAN.md` for a detailed technical breakdown and implementation phases.
+### Commands
+
+```bash
+npm install
+npm run tauri dev
+```
+
+Build check:
+
+```bash
+npm run build
+```
+
+## Project Docs
+
+- [FEATURE_TRACKER.md](FEATURE_TRACKER.md): current features, function map, and UI decisions
+- [PROJECT_PLAN.md](PROJECT_PLAN.md): initial architecture and phased plan

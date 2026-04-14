@@ -105,7 +105,8 @@ export async function savePdfToVault({
 }
 
 export function createPdfBlobUrl(pdfBytes: Uint8Array): string {
-  return URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
+  const normalizedBytes = new Uint8Array(Array.from(pdfBytes));
+  return URL.createObjectURL(new Blob([normalizedBytes], { type: "application/pdf" }));
 }
 
 export function revokePdfBlobUrl(url: string | null): void {
@@ -120,35 +121,72 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const iframe = document.createElement("iframe");
     iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "0";
-    iframe.style.height = "0";
+    iframe.style.left = "-10000px";
+    iframe.style.top = "0";
+    iframe.style.width = "1px";
+    iframe.style.height = "1px";
     iframe.style.border = "0";
     iframe.style.opacity = "0";
     iframe.src = blobUrl;
 
-    const cleanup = () => {
+    let finished = false;
+
+    const complete = (error?: Error) => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
       iframe.remove();
+
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    };
+
+    const printFallbackTimer = window.setTimeout(() => complete(), 2800);
+    const timeoutTimer = window.setTimeout(
+      () => complete(new Error("Timed out while opening the print dialog.")),
+      9000,
+    );
+
+    const finishWithoutError = () => {
+      window.clearTimeout(printFallbackTimer);
+      window.clearTimeout(timeoutTimer);
+      complete();
+    };
+
+    const finishWithError = (error: unknown) => {
+      window.clearTimeout(printFallbackTimer);
+      window.clearTimeout(timeoutTimer);
+      if (error instanceof Error) {
+        complete(error);
+        return;
+      }
+      complete(new Error(String(error)));
     };
 
     iframe.onload = () => {
       try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-        setTimeout(() => {
-          cleanup();
-          resolve();
-        }, 600);
+        const frameWindow = iframe.contentWindow;
+        if (!frameWindow) {
+          finishWithError(new Error("Could not access PDF print window."));
+          return;
+        }
+
+        frameWindow.addEventListener("afterprint", finishWithoutError, { once: true });
+        frameWindow.focus();
+        frameWindow.print();
       } catch (error) {
-        cleanup();
-        reject(error);
+        finishWithError(error);
       }
     };
 
     iframe.onerror = () => {
-      cleanup();
-      reject(new Error("Could not load PDF for printing."));
+      finishWithError(new Error("Could not load PDF for printing."));
     };
 
     document.body.appendChild(iframe);
@@ -174,14 +212,13 @@ export async function printCurrentWindow(additionalBodyClassNames: string[] = []
     const onAfterPrint = () => complete();
     window.addEventListener("afterprint", onAfterPrint, { once: true });
 
-    requestAnimationFrame(() => {
-      try {
-        window.print();
-      } finally {
-        // Fallback for environments that don't emit afterprint reliably.
-        setTimeout(() => complete(), 1800);
-      }
-    });
+    try {
+      // Keep print call in the same click call stack as much as possible.
+      window.print();
+    } finally {
+      // Fallback for environments that don't emit afterprint reliably.
+      setTimeout(() => complete(), 1800);
+    }
   });
 
   additionalBodyClassNames.forEach((className) => body.classList.remove(className));

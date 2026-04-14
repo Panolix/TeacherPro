@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   ReactFlow,
   Controls,
@@ -15,10 +15,14 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
-import { Eye, Plus, Save, Printer, X } from "lucide-react";
+import { Eye, Plus, Save, Printer, X, FolderOpen, ExternalLink } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { join } from "@tauri-apps/api/path";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import {
   createPdfBlobUrl,
-  printCurrentWindow,
+  printPdfBlobUrl,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -40,10 +44,34 @@ interface NodeColorPreset {
   style: Record<string, string>;
 }
 
+interface MaterialDropPayload {
+  relativePath: string;
+  itemType: "file" | "folder";
+}
+
+type MaterialPreviewKind = "pdf" | "image" | "text" | "error";
+
+interface MaterialPreviewState {
+  title: string;
+  kind: MaterialPreviewKind;
+  src?: string;
+  text?: string;
+  message?: string;
+  blobUrl?: string;
+}
+
 const NODE_STYLE = {
   background: "#2d2d2d",
   color: "#e5e5e5",
   border: "1px solid #444",
+  borderRadius: "8px",
+  padding: "10px 20px",
+};
+
+const MATERIAL_NODE_STYLE = {
+  background: "#f8fafc",
+  color: "#111827",
+  border: "1px solid #94a3b8",
   borderRadius: "8px",
   padding: "10px 20px",
 };
@@ -96,6 +124,68 @@ function getNodeLabel(node: Node): string {
   return typeof label === "string" ? label : "New Idea";
 }
 
+function hasTransferType(dataTransfer: DataTransfer, type: string): boolean {
+  return Array.from(dataTransfer.types || []).includes(type);
+}
+
+function hasMaterialDropData(dataTransfer: DataTransfer): boolean {
+  return (
+    hasTransferType(dataTransfer, "application/teacherpro-material") ||
+    hasTransferType(dataTransfer, "application/teacherpro-file") ||
+    hasTransferType(dataTransfer, "text/plain") ||
+    hasTransferType(dataTransfer, "text")
+  );
+}
+
+function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload | null {
+  const structuredPayload = dataTransfer.getData("application/teacherpro-material");
+  let relativePath = "";
+  let itemType: "file" | "folder" = "file";
+
+  if (structuredPayload) {
+    try {
+      const parsed = JSON.parse(structuredPayload) as {
+        relativePath?: string;
+        isDirectory?: boolean;
+      };
+      relativePath = parsed.relativePath || "";
+      itemType = parsed.isDirectory ? "folder" : "file";
+    } catch {
+      relativePath = "";
+    }
+  }
+
+  if (!relativePath) {
+    relativePath = dataTransfer.getData("application/teacherpro-file");
+  }
+
+  if (!relativePath) {
+    relativePath = dataTransfer.getData("text/plain");
+  }
+
+  if (!relativePath) {
+    return null;
+  }
+
+  return { relativePath, itemType };
+}
+
+function getMaterialMetaFromNode(
+  node: Node | undefined,
+): { relativePath: string; itemType: "file" | "folder" } | null {
+  if (!node || !node.data) {
+    return null;
+  }
+
+  const relativePath = typeof node.data.materialPath === "string" ? node.data.materialPath : "";
+  if (!relativePath) {
+    return null;
+  }
+
+  const itemType = node.data.materialItemType === "folder" ? "folder" : "file";
+  return { relativePath, itemType };
+}
+
 function findAvailablePosition(
   preferred: { x: number; y: number } | undefined,
   existingNodes: Node[],
@@ -138,13 +228,36 @@ function findAvailablePosition(
 }
 
 export function MindmapView() {
-  const { activeMindmapContent, saveActiveMindmap, activeFilePath, createNewMindmap, vaultPath, themeMode } = useAppStore();
+  const {
+    activeMindmapContent,
+    saveActiveMindmap,
+    activeFilePath,
+    createNewMindmap,
+    vaultPath,
+    themeMode,
+    draggedMaterial,
+    setDraggedMaterial,
+    logDebug,
+  } = useAppStore();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node, Edge> | null>(null);
   const [isPdfBusy, setIsPdfBusy] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
+  const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
+  const materialPreviewRef = useRef<HTMLDivElement | null>(null);
+  const mindmapSurfaceRef = useRef<HTMLDivElement | null>(null);
+
+  const setMaterialPreviewState = useCallback((next: MaterialPreviewState | null) => {
+    setMaterialPreview((previous) => {
+      if (previous?.blobUrl) {
+        URL.revokeObjectURL(previous.blobUrl);
+      }
+      return next;
+    });
+  }, []);
 
   // Editing state for Tauri (since window.prompt is blocked)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -168,6 +281,7 @@ export function MindmapView() {
         setContextMenu(null);
         setEditingNodeId(null);
         setPdfPreviewUrl(null);
+        setMaterialPreviewState(null);
       }
     };
 
@@ -178,13 +292,52 @@ export function MindmapView() {
       window.removeEventListener("click", closeContextMenu);
       window.removeEventListener("keydown", onEscape);
     };
-  }, []);
+  }, [setMaterialPreviewState]);
 
   useEffect(() => {
     return () => {
       revokePdfBlobUrl(pdfPreviewUrl);
     };
   }, [pdfPreviewUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (materialPreview?.blobUrl) {
+        URL.revokeObjectURL(materialPreview.blobUrl);
+      }
+    };
+  }, [materialPreview]);
+
+  useEffect(() => {
+    if (!pdfPreviewUrl) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPdfPreviewUrl(null);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape, true);
+    requestAnimationFrame(() => {
+      pdfPreviewRef.current?.focus();
+    });
+
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [pdfPreviewUrl]);
+
+  useEffect(() => {
+    if (!materialPreview) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      materialPreviewRef.current?.focus();
+    });
+  }, [materialPreview]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -245,10 +398,238 @@ export function MindmapView() {
     addNodeAt();
   };
 
-  const onNodeDoubleClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    setEditingNodeId(node.id);
-    setEditValue(getNodeLabel(node));
-  }, []);
+  const resolveMaterialAbsolutePath = useCallback(
+    async (relativePath: string): Promise<string | null> => {
+      if (!vaultPath) {
+        return null;
+      }
+
+      return join(vaultPath, "Materials", ...relativePath.split("/").filter(Boolean));
+    },
+    [vaultPath],
+  );
+
+  const openMaterialItem = useCallback(
+    async (relativePath: string) => {
+      const absolutePath = await resolveMaterialAbsolutePath(relativePath);
+      if (!absolutePath) {
+        return;
+      }
+
+      const isPresent = await exists(absolutePath);
+      if (!isPresent) {
+        alert(`Material path not found: ${relativePath}`);
+        return;
+      }
+
+      await invoke("open_file_in_default_app", { path: absolutePath });
+    },
+    [resolveMaterialAbsolutePath],
+  );
+
+  const revealMaterialItem = useCallback(
+    async (relativePath: string) => {
+      const absolutePath = await resolveMaterialAbsolutePath(relativePath);
+      if (!absolutePath) {
+        return;
+      }
+
+      const isPresent = await exists(absolutePath);
+      if (!isPresent) {
+        alert(`Material path not found: ${relativePath}`);
+        return;
+      }
+
+      await revealItemInDir(absolutePath);
+    },
+    [resolveMaterialAbsolutePath],
+  );
+
+  const previewMaterialItem = useCallback(
+    async (relativePath: string, itemType: "file" | "folder") => {
+      const fileName = relativePath.split("/").pop() || relativePath;
+      if (itemType === "folder") {
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "error",
+          message: "Folder preview is not available. Use Open or Reveal In File Manager.",
+        });
+        return;
+      }
+
+      const extension = (fileName.split(".").pop() || "").toLowerCase();
+      const absolutePath = await resolveMaterialAbsolutePath(relativePath);
+      if (!absolutePath) {
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "error",
+          message: "Please open a vault first.",
+        });
+        return;
+      }
+
+      const isPresent = await exists(absolutePath);
+      if (!isPresent) {
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "error",
+          message: `Material path not found: ${relativePath}`,
+        });
+        return;
+      }
+
+      if (extension === "pdf") {
+        const bytes = await readFile(absolutePath);
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "pdf",
+          src: blobUrl,
+          blobUrl,
+        });
+        return;
+      }
+
+      if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "image",
+          src: convertFileSrc(absolutePath),
+        });
+        return;
+      }
+
+      if (["txt", "md", "json", "csv", "log", "js", "jsx", "ts", "tsx", "html", "css"].includes(extension)) {
+        const text = await readTextFile(absolutePath);
+        setMaterialPreviewState({
+          title: fileName,
+          kind: "text",
+          text,
+        });
+        return;
+      }
+
+      setMaterialPreviewState({
+        title: fileName,
+        kind: "error",
+        message: "Preview is not available for this file type.",
+      });
+    },
+    [resolveMaterialAbsolutePath, setMaterialPreviewState],
+  );
+
+  const addMaterialNodeAt = useCallback(
+    (
+      payload: MaterialDropPayload,
+      preferredPosition?: { x: number; y: number },
+      sourceNodeId?: string,
+    ) => {
+      const fileName = payload.relativePath.split("/").pop() || payload.relativePath;
+      const nodeId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      setNodes((existing) => {
+        const position = findAvailablePosition(preferredPosition, existing);
+        const nodeLabel = payload.itemType === "folder" ? `[Folder] ${fileName}` : `[Material] ${fileName}`;
+        const newNode: Node = {
+          id: nodeId,
+          data: {
+            label: nodeLabel,
+            materialPath: payload.relativePath,
+            materialItemType: payload.itemType,
+          },
+          position,
+          style: { ...MATERIAL_NODE_STYLE },
+        };
+
+        return existing.concat(newNode);
+      });
+
+      if (sourceNodeId) {
+        setEdges((existing) =>
+          addEdge(
+            {
+              id: `e-${sourceNodeId}-${nodeId}`,
+              source: sourceNodeId,
+              target: nodeId,
+              type: "smoothstep",
+              style: { stroke: "#666", strokeWidth: 1.5 },
+            },
+            existing,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
+  const handleMaterialDragOver = useCallback(
+    (event: React.DragEvent) => {
+      if (draggedMaterial || hasMaterialDropData(event.dataTransfer)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+      }
+    },
+    [draggedMaterial],
+  );
+
+  const handleMaterialDrop = useCallback(
+    (event: React.DragEvent) => {
+      if (!flowInstance) {
+        return;
+      }
+
+      const payload =
+        getMaterialDropPayload(event.dataTransfer) ||
+        (draggedMaterial
+          ? {
+              relativePath: draggedMaterial.relativePath,
+              itemType: draggedMaterial.isDirectory ? "folder" : "file",
+            }
+          : null);
+      if (!payload) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const flowPosition = flowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+      const targetElement = (event.target as HTMLElement | null)?.closest(".react-flow__node");
+      const sourceNodeId = targetElement?.getAttribute("data-id") || undefined;
+
+      const sourceNode = sourceNodeId ? nodes.find((node) => node.id === sourceNodeId) : undefined;
+      const preferredPosition = sourceNode
+        ? { x: sourceNode.position.x + 240, y: sourceNode.position.y }
+        : flowPosition;
+
+      addMaterialNodeAt(payload, preferredPosition, sourceNodeId);
+      setDraggedMaterial(null);
+      logDebug(
+        "mindmap",
+        sourceNodeId ? "material-drop-linked" : "material-drop-node",
+        `${payload.relativePath} -> ${sourceNodeId || "new"}`,
+      );
+    },
+    [addMaterialNodeAt, draggedMaterial, flowInstance, logDebug, nodes, setDraggedMaterial],
+  );
+
+  const onNodeDoubleClick = useCallback(
+    (_event: React.MouseEvent, node: Node) => {
+      const materialMeta = getMaterialMetaFromNode(node);
+      if (materialMeta) {
+        void previewMaterialItem(materialMeta.relativePath, materialMeta.itemType);
+        return;
+      }
+
+      setEditingNodeId(node.id);
+      setEditValue(getNodeLabel(node));
+    },
+    [previewMaterialItem],
+  );
 
   const saveEdit = () => {
     if (editingNodeId && editValue.trim() !== "") {
@@ -351,6 +732,13 @@ export function MindmapView() {
       return;
     }
 
+    const materialMeta = getMaterialMetaFromNode(node);
+    if (materialMeta) {
+      setContextMenu(null);
+      void previewMaterialItem(materialMeta.relativePath, materialMeta.itemType);
+      return;
+    }
+
     setEditingNodeId(node.id);
     setEditValue(getNodeLabel(node));
     setContextMenu(null);
@@ -381,6 +769,10 @@ export function MindmapView() {
           return node;
         }
 
+        if (getMaterialMetaFromNode(node)) {
+          return node;
+        }
+
         return {
           ...node,
           style: {
@@ -395,23 +787,93 @@ export function MindmapView() {
     setContextMenu(null);
   };
 
+  let contextNode: Node | undefined;
+  if (contextMenu && contextMenu.target.kind === "node") {
+    const { nodeId } = contextMenu.target;
+    contextNode = nodes.find((node) => node.id === nodeId);
+  }
+  const contextMaterialMeta = getMaterialMetaFromNode(contextNode);
+
+  const handlePreviewMaterialFromContextMenu = async () => {
+    if (!contextMaterialMeta) {
+      return;
+    }
+
+    setContextMenu(null);
+    await previewMaterialItem(contextMaterialMeta.relativePath, contextMaterialMeta.itemType);
+  };
+
+  const handleOpenMaterialFromContextMenu = async () => {
+    if (!contextMaterialMeta) {
+      return;
+    }
+
+    setContextMenu(null);
+    try {
+      await openMaterialItem(contextMaterialMeta.relativePath);
+    } catch (error) {
+      console.error("Failed to open mindmap material", error);
+      alert("Could not open this material item in the default app.");
+    }
+  };
+
+  const handleRevealMaterialFromContextMenu = async () => {
+    if (!contextMaterialMeta) {
+      return;
+    }
+
+    setContextMenu(null);
+    try {
+      await revealMaterialItem(contextMaterialMeta.relativePath);
+    } catch (error) {
+      console.error("Failed to reveal mindmap material", error);
+      alert("Could not reveal this item in your file manager.");
+    }
+  };
+
   const createMindmapPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
     setContextMenu(null);
     setEditingNodeId(null);
+    setMaterialPreviewState(null);
 
-    const element = document.getElementById("mindmap-export-surface");
-    if (!element) {
+    const sourceElement = mindmapSurfaceRef.current || document.getElementById("mindmap-export-surface");
+    if (!sourceElement) {
       throw new Error("Could not find mindmap canvas to export.");
     }
 
-    const controls = element.querySelector(".react-flow__controls") as HTMLElement | null;
-    const background = element.querySelector(".react-flow__background") as HTMLElement | null;
-    const previousControlsDisplay = controls?.style.display ?? "";
-    const previousBackgroundDisplay = background?.style.display ?? "";
+    const exportHost = document.createElement("div");
+    exportHost.style.position = "fixed";
+    exportHost.style.left = "-100000px";
+    exportHost.style.top = "0";
+    exportHost.style.pointerEvents = "none";
+    exportHost.style.opacity = "0";
+    exportHost.style.zIndex = "-1";
+
+    const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
+    clonedElement.classList.add("tp-mindmap-export-clone");
+
+    const sourceRect = sourceElement.getBoundingClientRect();
+    const exportWidth = Math.max(sourceRect.width, sourceElement.scrollWidth, 1100);
+    const exportHeight = Math.max(sourceRect.height, sourceElement.scrollHeight, 650);
+    clonedElement.style.width = `${exportWidth}px`;
+    clonedElement.style.height = `${exportHeight}px`;
+
+    clonedElement.querySelectorAll<HTMLElement>(".react-flow__controls, .react-flow__background").forEach((node) => {
+      node.style.display = "none";
+    });
+    clonedElement.querySelectorAll<HTMLElement>(".react-flow__node").forEach((node) => {
+      node.style.background = "#ffffff";
+      node.style.color = "#111827";
+      node.style.border = "1px solid #cbd5e1";
+    });
+
+    exportHost.appendChild(clonedElement);
+    document.body.appendChild(exportHost);
 
     try {
-      if (controls) controls.style.display = "none";
-      if (background) background.style.display = "none";
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+      });
 
       const baseName = (activeFilePath?.split(/[\/\\]/).pop() || "mindmap")
         .replace(/\.json$/i, "")
@@ -419,17 +881,16 @@ export function MindmapView() {
         .replace(/\s+/g, "-");
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
 
-      const pdfBytes = await renderElementToPdfBytes(element, {
+      const pdfBytes = await renderElementToPdfBytes(clonedElement, {
         orientation: "landscape",
         marginMm: 8,
         scale: 2,
-        backgroundColor: themeMode === "light" ? "#f8fafc" : "#121212",
+        backgroundColor: "#ffffff",
         multiPage: false,
       });
       return { pdfBytes, fileName: `${baseName}-${stamp}.pdf` };
     } finally {
-      if (controls) controls.style.display = previousControlsDisplay;
-      if (background) background.style.display = previousBackgroundDisplay;
+      exportHost.remove();
     }
   };
 
@@ -486,7 +947,13 @@ export function MindmapView() {
     try {
       setContextMenu(null);
       setEditingNodeId(null);
-      await printCurrentWindow();
+      const { pdfBytes } = await createMindmapPdf();
+      const printUrl = createPdfBlobUrl(pdfBytes);
+      try {
+        await printPdfBlobUrl(printUrl);
+      } finally {
+        revokePdfBlobUrl(printUrl);
+      }
     } catch (error) {
       console.error("Mindmap PDF print failed:", error);
       alert(`Print failed: ${String(error)}`);
@@ -524,7 +991,7 @@ export function MindmapView() {
           <div>
             <h1 className="text-2xl font-bold text-gray-100 pointer-events-auto">Mindmap Workspace</h1>
             <p className="text-gray-400 text-sm pointer-events-auto mt-1">
-              Right-click to add, rename, and delete nodes.
+              Right-click nodes for actions. Drop materials to create linked file nodes.
             </p>
           </div>
           <button
@@ -610,27 +1077,58 @@ export function MindmapView() {
 
           {contextMenu.target.kind === "node" && (
             <>
-              <button
-                onClick={handleRenameFromContextMenu}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
-              >
-                Rename Node
-              </button>
+              {contextMaterialMeta ? (
+                <>
+                  <button
+                    onClick={() => {
+                      void handlePreviewMaterialFromContextMenu();
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
+                  >
+                    Preview Material
+                  </button>
+                  <button
+                    onClick={() => {
+                      void handleOpenMaterialFromContextMenu();
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Open
+                  </button>
+                  <button
+                    onClick={() => {
+                      void handleRevealMaterialFromContextMenu();
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" /> Reveal In File Manager
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleRenameFromContextMenu}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
+                  >
+                    Rename Node
+                  </button>
 
-              <div className="px-2 py-2">
-                <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Node Color</div>
-                <div className="grid grid-cols-4 gap-2">
-                  {NODE_COLOR_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      title={preset.label}
-                      onClick={() => handleApplyNodeColor(preset)}
-                      className="h-6 rounded border border-[#444] hover:scale-[1.06] transition-transform"
-                      style={{ backgroundColor: preset.style.background }}
-                    />
-                  ))}
-                </div>
-              </div>
+                  <div className="px-2 py-2">
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Node Color</div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {NODE_COLOR_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          title={preset.label}
+                          onClick={() => handleApplyNodeColor(preset)}
+                          className="h-6 rounded border border-[#444] hover:scale-[1.06] transition-transform"
+                          style={{ backgroundColor: preset.style.background }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
               <button
                 onClick={handleDeleteFromContextMenu}
@@ -643,12 +1141,68 @@ export function MindmapView() {
         </div>
       )}
 
+      {materialPreview && (
+        <div
+          className="fixed inset-0 z-[79] bg-black/60 flex items-center justify-center p-6"
+          onClick={() => setMaterialPreviewState(null)}
+        >
+          <div
+            ref={materialPreviewRef}
+            tabIndex={-1}
+            className="w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="h-11 border-b border-[#333] px-4 flex items-center justify-between">
+              <div className="text-sm text-gray-200 font-medium truncate">{materialPreview.title}</div>
+              <button
+                onClick={() => setMaterialPreviewState(null)}
+                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 h-[calc(88vh-44px)] overflow-auto">
+              {materialPreview.kind === "error" && (
+                <div className="text-sm text-red-300">{materialPreview.message}</div>
+              )}
+
+              {materialPreview.kind === "pdf" && materialPreview.src && (
+                <iframe
+                  src={materialPreview.src}
+                  className="w-full h-full min-h-[70vh] rounded-md bg-white"
+                  title={materialPreview.title}
+                />
+              )}
+
+              {materialPreview.kind === "image" && materialPreview.src && (
+                <div className="w-full h-full flex items-center justify-center">
+                  <img
+                    src={materialPreview.src}
+                    alt={materialPreview.title}
+                    className="max-w-full max-h-[72vh] object-contain rounded-md"
+                  />
+                </div>
+              )}
+
+              {materialPreview.kind === "text" && (
+                <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed bg-[#101010] border border-[#2d2d2d] rounded-md p-4">
+                  {materialPreview.text || "(Empty file)"}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {pdfPreviewUrl && (
         <div
           className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden"
           onClick={() => setPdfPreviewUrl(null)}
         >
           <div
+            ref={pdfPreviewRef}
+            tabIndex={-1}
             className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
@@ -674,7 +1228,13 @@ export function MindmapView() {
         </div>
       )}
 
-      <div id="mindmap-export-surface" className="flex-1">
+      <div
+        id="mindmap-export-surface"
+        ref={mindmapSurfaceRef}
+        className="flex-1"
+        onDragOver={handleMaterialDragOver}
+        onDrop={handleMaterialDrop}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
