@@ -132,11 +132,11 @@ html[data-tp-theme="light"] .ProseMirror th {
   outline: none;
   min-height: 50vh;
   color: #f8f8f8;
-  font-size: 1.05rem;
+  font-size: 0.98rem;
 }
 
 .ProseMirror h2 {
-  font-size: 1.8rem;
+  font-size: 1.6rem;
   font-weight: 700;
   margin-top: 1.5rem;
   margin-bottom: 1rem;
@@ -194,10 +194,14 @@ html[data-tp-theme="light"] .ProseMirror th {
   text-align: left;
   background-color: var(--color-panel);
   color: #e5e5e5;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 2px solid var(--color-border);
+}
+
+.tp-mindmap .react-flow__node {
+  font-size: 13px;
 }
 
 .ProseMirror td > p {
@@ -219,6 +223,11 @@ html[data-tp-theme="light"] .ProseMirror th {
 .lesson-export-editor .ProseMirror {
   overflow-x: auto;
   padding-bottom: 8px;
+}
+
+.lesson-export-editor {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .lesson-export-editor .ProseMirror table {

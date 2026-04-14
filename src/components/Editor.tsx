@@ -1100,10 +1100,21 @@ export function Editor() {
       setPlannedCalendarOpen(false);
       const { pdfBytes } = await createLessonPdf();
       const printUrl = createPdfBlobUrl(pdfBytes);
+      let keepForPreview = false;
       try {
         await printPdfBlobUrl(printUrl);
+      } catch (error) {
+        keepForPreview = true;
+        setPdfPreviewUrl((previous) => {
+          revokePdfBlobUrl(previous);
+          return printUrl;
+        });
+        alert("Could not open the print dialog automatically. The PDF preview was opened instead.");
+        console.error("Lesson PDF print dialog fallback to preview:", error);
       } finally {
-        revokePdfBlobUrl(printUrl);
+        if (!keepForPreview) {
+          revokePdfBlobUrl(printUrl);
+        }
       }
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
@@ -1290,7 +1301,7 @@ export function Editor() {
 
           <div
             ref={editorSurfaceRef}
-            className="px-8 pb-8 flex-1 print:p-0 lesson-export-editor"
+            className="px-8 pb-8 flex-1 print:p-0 lesson-export-editor overflow-x-auto"
             onDragOver={handleMaterialDragOver}
             onDrop={handleMaterialDrop}
             onContextMenu={handleTableContextMenu}

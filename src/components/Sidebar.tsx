@@ -203,7 +203,15 @@ export function Sidebar() {
   };
 
   const queueMaterialInsertAtCursor = (relativePath: string, isDirectory: boolean) => {
-    setCurrentView("editor");
+    if (currentView !== "editor" || !activeFilePath) {
+      logDebug(
+        "sidebar",
+        "double-click-ignored",
+        `${relativePath} (${isDirectory ? "folder" : "file"}) | view=${currentView}`,
+      );
+      return;
+    }
+
     setPendingMaterialDrop({
       relativePath,
       isDirectory,

@@ -32,7 +32,9 @@ Primary implementation:
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
 - Material drag/drop insertion into editor content with table-cell targeting.
 - Material drop and double-click insertion prioritize the active table row and insert into the row's final media/material cell.
+- Double-click material insertion is intentionally limited to active lesson-plan editing and no longer force-switches views.
 - Material links render as custom inline nodes with hover actions and context menu.
+- Lesson editor typography is slightly reduced (content and table-header scale) to improve readability in smaller windows.
 
 Primary implementation:
 
@@ -47,6 +49,7 @@ Primary implementation:
 - Context menu actions for lessons, mindmaps, and materials.
 - Material preview modal supports PDF, image, and text.
 - Material open in system default app and reveal in Finder.
+- Material double-click insertion now queues only while the lesson editor is active, preventing accidental inserts from calendar/mindmap views.
 
 Primary implementation:
 
@@ -73,8 +76,10 @@ Primary implementation:
 - Context menu actions for pane/node actions.
 - Node color presets (Slate, Blue, Emerald, Amber, Rose, Violet, Teal, Light).
 - Material drag/drop creates linked material nodes in the map.
+- Mindmap material drop supports drag-end coordinate fallback for WebView cases where drop events are swallowed.
 - Material nodes support preview, open in default app, and reveal in file manager.
 - Save and create-new mindmap actions.
+- Mindmap workspace typography is slightly reduced (header/actions/node label scale) for denser layouts on smaller screens.
 
 Primary implementation:
 
@@ -83,6 +88,7 @@ Primary implementation:
 ### PDF, Preview, and Print
 
 - Lesson and mindmap export to PDF bytes (A4, landscape option, multi-page support).
+- Mindmap PDF preview/export now preserves node color styling instead of normalizing nodes to white.
 - Preview modals for generated PDF blobs.
 - Print/Save flow prints generated PDF blobs via hidden iframe, keeping output consistent with preview/export.
 - Export-specific CSS hides editing controls from lesson exports.

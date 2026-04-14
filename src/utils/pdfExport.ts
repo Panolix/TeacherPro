@@ -147,20 +147,17 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
       resolve();
     };
 
-    const printFallbackTimer = window.setTimeout(() => complete(), 2800);
     const timeoutTimer = window.setTimeout(
       () => complete(new Error("Timed out while opening the print dialog.")),
       9000,
     );
 
     const finishWithoutError = () => {
-      window.clearTimeout(printFallbackTimer);
       window.clearTimeout(timeoutTimer);
       complete();
     };
 
     const finishWithError = (error: unknown) => {
-      window.clearTimeout(printFallbackTimer);
       window.clearTimeout(timeoutTimer);
       if (error instanceof Error) {
         complete(error);

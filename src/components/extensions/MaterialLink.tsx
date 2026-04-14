@@ -210,13 +210,19 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
       <div
         onContextMenu={handleContextMenu}
         className="flex items-center gap-3 px-3 py-2 bg-[#222] border border-[#333] rounded-lg group hover:border-[color:var(--tp-accent)] transition-all shadow-sm"
+        title={filePath || fileName}
       >
         {itemType === "folder" ? (
           <Folder className="w-4 h-4 text-[var(--tp-accent)]" />
         ) : (
           <File className="w-4 h-4 text-[var(--tp-accent)]" />
         )}
-        <span className="text-sm text-gray-200 font-medium truncate max-w-[200px]">{fileName}</span>
+        <span
+          className="text-sm text-gray-200 font-medium truncate max-w-[180px] sm:max-w-[260px]"
+          title={filePath || fileName}
+        >
+          {fileName}
+        </span>
 
         <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <button

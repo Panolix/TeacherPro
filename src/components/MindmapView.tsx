@@ -66,6 +66,7 @@ const NODE_STYLE = {
   border: "1px solid #444",
   borderRadius: "8px",
   padding: "10px 20px",
+  fontSize: "13px",
 };
 
 const MATERIAL_NODE_STYLE = {
@@ -74,6 +75,7 @@ const MATERIAL_NODE_STYLE = {
   border: "1px solid #94a3b8",
   borderRadius: "8px",
   padding: "10px 20px",
+  fontSize: "13px",
 };
 
 const NODE_COLOR_PRESETS: NodeColorPreset[] = [
@@ -237,6 +239,8 @@ export function MindmapView() {
     themeMode,
     draggedMaterial,
     setDraggedMaterial,
+    pendingMaterialDrop,
+    setPendingMaterialDrop,
     logDebug,
   } = useAppStore();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -608,14 +612,81 @@ export function MindmapView() {
 
       addMaterialNodeAt(payload, preferredPosition, sourceNodeId);
       setDraggedMaterial(null);
+      setPendingMaterialDrop(null);
       logDebug(
         "mindmap",
         sourceNodeId ? "material-drop-linked" : "material-drop-node",
         `${payload.relativePath} -> ${sourceNodeId || "new"}`,
       );
     },
-    [addMaterialNodeAt, draggedMaterial, flowInstance, logDebug, nodes, setDraggedMaterial],
+    [
+      addMaterialNodeAt,
+      draggedMaterial,
+      flowInstance,
+      logDebug,
+      nodes,
+      setDraggedMaterial,
+      setPendingMaterialDrop,
+    ],
   );
+
+  useEffect(() => {
+    if (!flowInstance || !pendingMaterialDrop) {
+      return;
+    }
+
+    const { clientX, clientY, relativePath, isDirectory } = pendingMaterialDrop;
+    const shouldInsertAtCursor = clientX < 0 || clientY < 0;
+
+    if (shouldInsertAtCursor) {
+      logDebug("mindmap", "drag-end-fallback-ignored-cursor", relativePath);
+      setPendingMaterialDrop(null);
+      return;
+    }
+
+    const surface = mindmapSurfaceRef.current;
+    if (!surface) {
+      setPendingMaterialDrop(null);
+      return;
+    }
+
+    const rect = surface.getBoundingClientRect();
+    const isInsideSurface =
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom;
+
+    if (!isInsideSurface) {
+      logDebug("mindmap", "drag-end-fallback-outside", `${relativePath} | x=${clientX},y=${clientY}`);
+      setPendingMaterialDrop(null);
+      return;
+    }
+
+    const flowPosition = flowInstance.screenToFlowPosition({
+      x: clientX,
+      y: clientY,
+    });
+
+    addMaterialNodeAt(
+      {
+        relativePath,
+        itemType: isDirectory ? "folder" : "file",
+      },
+      flowPosition,
+    );
+
+    logDebug("mindmap", "drag-end-fallback-success", `${relativePath} | x=${clientX},y=${clientY}`);
+    setDraggedMaterial(null);
+    setPendingMaterialDrop(null);
+  }, [
+    addMaterialNodeAt,
+    flowInstance,
+    logDebug,
+    pendingMaterialDrop,
+    setDraggedMaterial,
+    setPendingMaterialDrop,
+  ]);
 
   const onNodeDoubleClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -861,11 +932,6 @@ export function MindmapView() {
     clonedElement.querySelectorAll<HTMLElement>(".react-flow__controls, .react-flow__background").forEach((node) => {
       node.style.display = "none";
     });
-    clonedElement.querySelectorAll<HTMLElement>(".react-flow__node").forEach((node) => {
-      node.style.background = "#ffffff";
-      node.style.color = "#111827";
-      node.style.border = "1px solid #cbd5e1";
-    });
 
     exportHost.appendChild(clonedElement);
     document.body.appendChild(exportHost);
@@ -949,10 +1015,21 @@ export function MindmapView() {
       setEditingNodeId(null);
       const { pdfBytes } = await createMindmapPdf();
       const printUrl = createPdfBlobUrl(pdfBytes);
+      let keepForPreview = false;
       try {
         await printPdfBlobUrl(printUrl);
+      } catch (error) {
+        keepForPreview = true;
+        setPdfPreviewUrl((previous) => {
+          revokePdfBlobUrl(previous);
+          return printUrl;
+        });
+        alert("Could not open the print dialog automatically. The PDF preview was opened instead.");
+        console.error("Mindmap PDF print dialog fallback to preview:", error);
       } finally {
-        revokePdfBlobUrl(printUrl);
+        if (!keepForPreview) {
+          revokePdfBlobUrl(printUrl);
+        }
       }
     } catch (error) {
       console.error("Mindmap PDF print failed:", error);
@@ -989,14 +1066,14 @@ export function MindmapView() {
       <div className="absolute top-0 left-0 w-full p-4 z-10 pointer-events-none flex justify-between print:hidden">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-100 pointer-events-auto">Mindmap Workspace</h1>
-            <p className="text-gray-400 text-sm pointer-events-auto mt-1">
+            <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">Mindmap Workspace</h1>
+            <p className="text-gray-400 text-xs pointer-events-auto mt-1">
               Right-click nodes for actions. Drop materials to create linked file nodes.
             </p>
           </div>
           <button
             onClick={handleAddNode}
-            className="pointer-events-auto bg-[#2d2d2d] hover:bg-[#3d3d3d] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2 h-fit mt-1"
+            className="pointer-events-auto bg-[#2d2d2d] hover:bg-[#3d3d3d] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2 h-fit mt-1"
           >
             <Plus className="w-4 h-4" /> Add Node
           </button>
@@ -1005,27 +1082,27 @@ export function MindmapView() {
           <button
             onClick={handlePreviewPDF}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
           >
             <Eye className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Preview PDF"}
           </button>
           <button
             onClick={handlePrintPDF}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
           >
             <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Print / Save PDF"}
           </button>
           <button
             onClick={handleExportPDF}
             disabled={isPdfBusy}
-            className="bg-[#333] hover:bg-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+            className="bg-[#333] hover:bg-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
           >
             <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
           </button>
           <button
             onClick={handleSave}
-            className="tp-accent-btn text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+            className="tp-accent-btn text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2"
           >
             <Save className="w-4 h-4" /> Save Mindmap
           </button>
