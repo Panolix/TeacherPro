@@ -351,6 +351,7 @@ export function Editor() {
     logDebug,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
+  const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
   const [plannedForInput, setPlannedForInput] = useState(
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
@@ -365,6 +366,7 @@ export function Editor() {
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
+    setTeacher(activeFileContent?.metadata?.teacher || "");
     setPlannedForInput(formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor));
     const selectedDate = parseEuropeanDateToDate(
       formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
@@ -565,6 +567,7 @@ export function Editor() {
 
     const json = editor.getJSON();
     await saveActiveLesson(json, {
+      teacher,
       subject,
       plannedFor: parsedPlannedFor,
     });
@@ -1012,6 +1015,12 @@ export function Editor() {
       subjectText.style.display = "inline";
     }
 
+    const teacherText = clonedElement.querySelector<HTMLElement>(".lesson-export-teacher-text");
+    if (teacherText) {
+      teacherText.textContent = teacher.trim() || "Not set";
+      teacherText.style.display = "inline";
+    }
+
     const plannedText = clonedElement.querySelector<HTMLElement>(".lesson-export-planned-text");
     if (plannedText) {
       plannedText.textContent = plannedForInput.trim() || "Not set";
@@ -1190,7 +1199,14 @@ export function Editor() {
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-y-4 gap-x-6 text-sm text-gray-400 print:text-black">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Teacher:</span>
-                  <span className="print:text-black lesson-export-value">{activeFileContent.metadata.teacher}</span>
+                  <input
+                    type="text"
+                    value={teacher}
+                    onChange={(e) => setTeacher(e.target.value)}
+                    placeholder="Your Name"
+                    className="flex-1 min-w-[180px] bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                  />
+                  <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || "Not set"}</span>
                 </div>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Created:</span>

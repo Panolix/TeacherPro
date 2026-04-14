@@ -101,6 +101,8 @@ export function Sidebar() {
     debugEvents,
     logDebug,
     clearDebugEvents,
+    defaultTeacherName,
+    setDefaultTeacherName,
   } = useAppStore();
 
   const [expandedMaterialFolders, setExpandedMaterialFolders] = useState<Record<string, boolean>>({});
@@ -839,6 +841,17 @@ export function Sidebar() {
                 );
               })}
             </div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Teacher</div>
+            <input
+              type="text"
+              value={defaultTeacherName}
+              onChange={(e) => setDefaultTeacherName(e.target.value)}
+              placeholder="e.g. John Doe"
+              className="w-full bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
+            />
           </div>
 
           <div>

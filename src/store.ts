@@ -70,6 +70,7 @@ interface UISettings {
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
+  defaultTeacherName: string;
 }
 
 interface AppState {
@@ -83,6 +84,7 @@ interface AppState {
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
+  defaultTeacherName: string;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
   pendingMaterialDrop: PendingMaterialDropRef | null;
@@ -99,6 +101,7 @@ interface AppState {
   setCalendarCollapsed: (collapsed: boolean) => void;
   toggleSectionCollapsed: (section: SidebarSectionKey) => void;
   setDebugMode: (enabled: boolean) => void;
+  setDefaultTeacherName: (name: string) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
@@ -134,6 +137,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
     materials: false,
   },
   debugMode: false,
+  defaultTeacherName: "",
 };
 
 async function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
@@ -247,6 +251,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
+  defaultTeacherName: DEFAULT_UI_SETTINGS.defaultTeacherName,
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
@@ -272,6 +277,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             ...(savedSettings.sectionCollapsed || {}),
           },
           debugMode: savedSettings.debugMode ?? DEFAULT_UI_SETTINGS.debugMode,
+          defaultTeacherName: savedSettings.defaultTeacherName ?? DEFAULT_UI_SETTINGS.defaultTeacherName,
         });
       }
       
@@ -311,6 +317,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDebugMode: (enabled) => {
     set({ debugMode: enabled });
     void persistUiSettings({ debugMode: enabled });
+  },
+  setDefaultTeacherName: (name) => {
+    set({ defaultTeacherName: name });
+    void persistUiSettings({ defaultTeacherName: name });
   },
   logDebug: (source, action, detail) => {
     const { debugMode } = get();
@@ -405,6 +415,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!vaultPath) return;
 
     try {
+      const { defaultTeacherName } = get();
       const dateStr = plannedDate ? plannedDate.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
       const fileName = `Lesson-${dateStr}-${Date.now().toString().slice(-4)}.json`;
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
@@ -413,7 +424,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const initialContent: LessonData = {
         version: 1,
         metadata: {
-          teacher: "Panagiotis Smponias",
+          teacher: defaultTeacherName,
           createdAt: new Date().toISOString(),
           plannedFor: plannedDate ? plannedDate.toISOString() : null,
           subject: ""
@@ -557,12 +568,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (fileName.endsWith('.json')) {
         const rawContent = JSON.parse(text);
         let lessonData: LessonData;
+        const { defaultTeacherName } = get();
         
         if (rawContent.type === "doc" && !rawContent.version) {
           lessonData = {
             version: 1,
             metadata: {
-              teacher: "Panagiotis Smponias",
+              teacher: defaultTeacherName,
               createdAt: new Date().toISOString(),
               plannedFor: null,
               subject: ""

@@ -272,7 +272,9 @@ body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-popover,
 }
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text,
-.tp-export-light-clone .lesson-export-subject-text {
+.tp-export-light-clone .lesson-export-subject-text,
+body.tp-exporting #lesson-plan-export-content .lesson-export-teacher-text,
+.tp-export-light-clone .lesson-export-teacher-text {
   display: inline !important;
 }
 

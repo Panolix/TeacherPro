@@ -207,4 +207,5 @@ When adding or changing behavior:
 - Overrode lesson plan table cells with strict `overflow: hidden` and refactored the embedded `MaterialLink` Flexbox layout using `.flex-1.min-w-0.truncate` to aggressively truncate long file names, stopping them from widening `.ProseMirror` tables offscreen.
 - Executed aggressive high-fuzz ImageMagick floodfill passing on the source `Icon.png` to truly delete the residual textured square padding, generating pure-transparency Tauri macOS app icons.
 - Fixed PDF export table sizing bug where `min-width: max-content` forced columns to stretch to untruncated filename widths. Enforced `table-layout: fixed !important` and `width: 100% !important` for consistent spacing between app and PDF.
-- Set default window dimensions to 1100x800 (with minimum 800x600 constraints) to ensure the app doesn't start too small.
+- Set default window dimensions to 1100x800, enforce minimum 800x600 size, and default to `maximized: true` so the app always opens maximizing screen space.
+- Re-added the `Teacher: ` UI into the PDF export modal as an editable text input instead of purely removing it, allowing manual personalization.
