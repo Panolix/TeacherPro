@@ -22,7 +22,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
 import {
   createPdfBlobUrl,
-  printPdfBlobUrl,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -41,6 +40,7 @@ import {
   Save,
   Table as TableIcon,
   Printer,
+  Download,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -326,7 +326,7 @@ const MenuBar = ({
           disabled={isPdfBusy}
           className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#333] hover:bg-[#444] border-none rounded-md text-white font-medium shadow-sm transition-colors"
         >
-          <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
+          <Download className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
         </button>
         <button
           onClick={onSave}
@@ -1093,29 +1093,28 @@ export function Editor() {
   };
 
   const handlePrintPDF = async () => {
+    if (!vaultPath) {
+      alert("Please open a vault before printing.");
+      return;
+    }
+
     setIsPdfBusy(true);
 
     try {
       setTableContextMenu(null);
       setPlannedCalendarOpen(false);
-      const { pdfBytes } = await createLessonPdf();
-      const printUrl = createPdfBlobUrl(pdfBytes);
-      let keepForPreview = false;
-      try {
-        await printPdfBlobUrl(printUrl);
-      } catch (error) {
-        keepForPreview = true;
-        setPdfPreviewUrl((previous) => {
-          revokePdfBlobUrl(previous);
-          return printUrl;
-        });
-        alert("Could not open the print dialog automatically. The PDF preview was opened instead.");
-        console.error("Lesson PDF print dialog fallback to preview:", error);
-      } finally {
-        if (!keepForPreview) {
-          revokePdfBlobUrl(printUrl);
-        }
-      }
+
+      const { pdfBytes, fileName } = await createLessonPdf();
+      
+      const { tempDir, join } = await import("@tauri-apps/api/path");
+      const { writeFile } = await import("@tauri-apps/plugin-fs");
+      const { invoke } = await import("@tauri-apps/api/core");
+
+      const sysTempDir = await tempDir();
+      const tempPdfPath = await join(sysTempDir, fileName);
+
+      await writeFile(tempPdfPath, pdfBytes);
+      await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
       alert(`Print failed: ${String(error)}`);

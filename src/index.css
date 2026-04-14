@@ -173,8 +173,6 @@ html[data-tp-theme="light"] .ProseMirror th {
   table-layout: fixed;
   width: 100%;
   margin: 2rem 0;
-  overflow: hidden;
-  border-radius: 8px;
   border: 1px solid var(--color-border);
   background-color: var(--color-background);
 }
@@ -187,6 +185,8 @@ html[data-tp-theme="light"] .ProseMirror th {
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+  word-break: break-word;
+  overflow: hidden;
 }
 
 .ProseMirror th {
@@ -221,7 +221,8 @@ html[data-tp-theme="light"] .ProseMirror th {
 }
 
 .lesson-export-editor .ProseMirror {
-  overflow-x: auto;
+  overflow-x: visible;
+  min-width: max-content;
   padding-bottom: 8px;
 }
 
@@ -231,7 +232,7 @@ html[data-tp-theme="light"] .ProseMirror th {
 }
 
 .lesson-export-editor .ProseMirror table {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
 }
 

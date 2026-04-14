@@ -206,25 +206,25 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
   };
 
   return (
-    <NodeViewWrapper className="inline-block my-2 mx-1">
+    <NodeViewWrapper className="block max-w-full my-2 mx-1 overflow-hidden">
       <div
         onContextMenu={handleContextMenu}
-        className="flex items-center gap-3 px-3 py-2 bg-[#222] border border-[#333] rounded-lg group hover:border-[color:var(--tp-accent)] transition-all shadow-sm"
+        className="flex items-center gap-2 px-3 py-2 bg-[#222] border border-[#333] rounded-lg group hover:border-[color:var(--tp-accent)] transition-all shadow-sm max-w-full"
         title={filePath || fileName}
       >
         {itemType === "folder" ? (
-          <Folder className="w-4 h-4 text-[var(--tp-accent)]" />
+          <Folder className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
         ) : (
-          <File className="w-4 h-4 text-[var(--tp-accent)]" />
+          <File className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
         )}
         <span
-          className="text-sm text-gray-200 font-medium truncate max-w-[180px] sm:max-w-[260px]"
+          className="text-sm text-gray-200 font-medium truncate flex-1 min-w-0"
           title={filePath || fileName}
         >
           {fileName}
         </span>
 
-        <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => {
               closeContextMenu();

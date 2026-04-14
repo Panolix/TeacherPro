@@ -35,6 +35,43 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn print_pdf_file(path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let script = format!(
+            "tell application \"Preview\"\n\
+             activate\n\
+             print (POSIX file \"{}\")\n\
+             end tell", path
+        );
+        
+        Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .spawn()
+            .map_err(|error| format!("Failed to open print dialog: {error}"))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("powershell")
+            .args(["-Command", &format!("Start-Process -FilePath \"{}\" -Verb Print", path)])
+            .spawn()
+            .map_err(|error| format!("Failed to open print dialog: {error}"))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("lpr")
+            .arg(&path)
+            .spawn()
+            .map_err(|error| format!("Failed to print file: {error}"))?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -43,7 +80,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_file_in_default_app])
+        .invoke_handler(tauri::generate_handler![greet, open_file_in_default_app, print_pdf_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

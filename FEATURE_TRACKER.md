@@ -177,6 +177,7 @@ Primary implementation:
 
 - Native open command: `open_file_in_default_app(path)` in Rust backend.
 - Tauri capabilities include opener, dialog, fs, os, and store permissions with broad fs scope.
+- Runtime app branding uses `TeacherPro` (window/product title), while the Tauri identifier remains `com.pano.temp-app` for profile/store compatibility with existing local data.
 
 Primary implementation:
 
@@ -196,3 +197,12 @@ When adding or changing behavior:
 2. Add or revise function names in "Key Function Map".
 3. Record any new UI/UX decision.
 4. Add a note under "Known Gaps" if behavior is pending verification.
+
+### Recent Fixes
+- Fixed lesson plan layout by removing `overflow: hidden` from `.ProseMirror table` and enforcing `word-break: break-word`, resolving the issue where tables were completely clipped on the right edge.
+- Replaced iframe-based PDF print dialog (which fails natively on macOS WKWebView) with `printCurrentWindow` calling native `window.print()` combined with `@media print` CSS for reliable PDF/printer generation.
+- Recreated Tauri App icons to use native transparency instead of forcing a solid square bounding box background with ImageMagick floodfill, fixing the "non texture" dock issues.
+
+### UI/Icon Hotfixes
+- Overrode lesson plan table cells with strict `overflow: hidden` and refactored the embedded `MaterialLink` Flexbox layout using `.flex-1.min-w-0.truncate` to aggressively truncate long file names, stopping them from widening `.ProseMirror` tables offscreen.
+- Executed aggressive high-fuzz ImageMagick floodfill passing on the source `Icon.png` to truly delete the residual textured square padding, generating pure-transparency Tauri macOS app icons.
