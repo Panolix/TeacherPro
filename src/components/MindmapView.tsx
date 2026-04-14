@@ -950,7 +950,7 @@ export function MindmapView() {
     clonedElement.style.width = `${exportWidth}px`;
     clonedElement.style.height = `${exportHeight}px`;
 
-    clonedElement.querySelectorAll<HTMLElement>(".react-flow__controls, .react-flow__background").forEach((node) => {
+    clonedElement.querySelectorAll<HTMLElement>(".react-flow__controls, .react-flow__background, .react-flow__attribution, .react-flow__panel").forEach((node) => {
       node.style.display = "none";
     });
 
