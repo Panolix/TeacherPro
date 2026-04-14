@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.3] - 2026-04-14
+### Added
+- **Intelligent Mindmap PDF Scaling**: PDF exports for Mindmaps now dynamically calculate the total bounding box of all nodes and automatically expand the PDF canvas. Your mindmaps will no longer be cropped or distorted by your zoom/pan level, maintaining an infinite, perfectly-sized wrap-around.
+
+
 ## [1.0.2] - 2026-04-14
 ### Added
 - **Typography Controls**: New Font Size dropdown added to the ProseMirror formatting toolbar (10pt up to 24pt).

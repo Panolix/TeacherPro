@@ -219,3 +219,6 @@ When adding or changing behavior:
 - Editor wrapper expanded to `1800px` to naturally handle widescreen macOS monitors.
 - Table headers natively collapse internal `<p>` tag margins to remove ugly whitespace on PDF generation.
 - PDF generation engine natively forces an `1062px` width DOM-lock before taking `html2canvas` snapshots, perfectly scaling to 297mm A4 without squashing or stretching.
+
+### Intelligent Mindmap Auto-Scaling
+- Mindmap PDF generation triggers `autoFormat: true` deep into `jsPDF` using `@xyflow/react`'s `getNodesBounds` to dynamically scale the output canvas perfectly around all nodes, cleanly sidestepping current user viewport zoom or panning restrictions.
