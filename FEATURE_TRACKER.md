@@ -31,6 +31,7 @@ Primary implementation:
 - Metadata row: Teacher, Created, Planned For, Subject.
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
 - Material drag/drop insertion into editor content with table-cell targeting.
+- Material drop and double-click insertion prioritize the active table row and insert into the row's final media/material cell.
 - Material links render as custom inline nodes with hover actions and context menu.
 
 Primary implementation:
@@ -71,6 +72,8 @@ Primary implementation:
 - Double-click node label editing.
 - Context menu actions for pane/node actions.
 - Node color presets (Slate, Blue, Emerald, Amber, Rose, Violet, Teal, Light).
+- Material drag/drop creates linked material nodes in the map.
+- Material nodes support preview, open in default app, and reveal in file manager.
 - Save and create-new mindmap actions.
 
 Primary implementation:
@@ -81,7 +84,7 @@ Primary implementation:
 
 - Lesson and mindmap export to PDF bytes (A4, landscape option, multi-page support).
 - Preview modals for generated PDF blobs.
-- Print/Save flow via browser print dialog from app webview.
+- Print/Save flow prints generated PDF blobs via hidden iframe, keeping output consistent with preview/export.
 - Export-specific CSS hides editing controls from lesson exports.
 
 Primary implementation:
@@ -122,6 +125,7 @@ Primary implementation:
 - `insertMaterialLinkAtSelection(payload, clientX?, clientY?)` inserts dropped material links.
 - `insertDroppedMaterial(dataTransfer, clientX?, clientY?)` resolves payload and executes insertion.
 - `handleMaterialDrop(...)` and native/window drop handlers coordinate drag/drop flow.
+- Row-targeted material insertion computes the current table row and uses the final media/material cell when available.
 - `createLessonPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
 ### Material Link Extension (`src/components/extensions/MaterialLink.tsx`)
@@ -140,6 +144,8 @@ Primary implementation:
 ### Mindmap (`src/components/MindmapView.tsx`)
 
 - `addNodeAt(...)` and context-menu add helpers.
+- `handleMaterialDrop(...)` creates material-linked nodes from sidebar drags.
+- Material node actions: preview/open/reveal via double-click and context menu.
 - `applyNodeColor(nodeId, presetStyle)` applies selected node color preset.
 - `createMindmapPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
