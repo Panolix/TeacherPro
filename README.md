@@ -1,14 +1,18 @@
 # TeacherPro 🎓
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Panolix/TeacherPro/build-cross-platform.yml?branch=main)](https://github.com/Panolix/TeacherPro/actions)
+[![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/build-cross-platform.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#)
 
 TeacherPro is a local-first, privacy-focused desktop application designed specifically for educators, tutors, and teachers. It tightly integrates a rich-text lesson plan editor, a weekly calendar for scheduling, material/file management, and interactive mindmapping into one seamless workspace.
 
 Built with performance and cross-platform compatibility in mind using **Tauri**, **React**, **Tailwind CSS**, and **Rust**.
 
-![TeacherPro Preview](public/icon.png) *(Add a screenshot of your app here!)*
+<p align="center">
+  <img src="public/icon.png" width="150" alt="TeacherPro Logo">
+</p>
+
+*(Add a UI screenshot of your app here!)*
 
 ---
 
