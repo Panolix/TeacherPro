@@ -12,6 +12,7 @@ interface RenderPdfOptions {
   scale?: number;
   backgroundColor?: string;
   multiPage?: boolean;
+  autoFormat?: boolean;
 }
 
 interface SavePdfOptions {
@@ -31,6 +32,8 @@ export async function renderElementToPdfBytes(
     scale = 2,
     backgroundColor = "#ffffff",
     multiPage = true,
+    autoFormat = false,
+
   } = options;
 
   const canvas = await toCanvas(element, {
@@ -48,10 +51,18 @@ export async function renderElementToPdfBytes(
     },
   });
 
+  const pxToMm = 0.2645833333;
+  const pdfOptFormat: string | [number, number] = autoFormat
+    ? [
+        (canvas.width / scale) * pxToMm + marginMm * 2,
+        (canvas.height / scale) * pxToMm + marginMm * 2,
+      ]
+    : "a4";
+
   const pdf = new jsPDF({
     orientation,
     unit: "mm",
-    format: "a4",
+    format: pdfOptFormat as any,
   });
 
   const pageWidth = pdf.internal.pageSize.getWidth();

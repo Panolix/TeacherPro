@@ -10,6 +10,7 @@ import {
   Edge,
   Connection,
   ReactFlowInstance,
+  getNodesBounds,
   NodeChange,
   EdgeChange,
 } from "@xyflow/react";
@@ -922,9 +923,30 @@ export function MindmapView() {
     const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
     clonedElement.classList.add("tp-mindmap-export-clone");
 
-    const sourceRect = sourceElement.getBoundingClientRect();
-    const exportWidth = Math.max(sourceRect.width, sourceElement.scrollWidth, 1100);
-    const exportHeight = Math.max(sourceRect.height, sourceElement.scrollHeight, 650);
+    let exportWidth = 1100;
+    let exportHeight = 650;
+    
+    if (flowInstance && nodes.length > 0) {
+      
+      const bounds = getNodesBounds(flowInstance.getNodes());
+      const minPadding = 100;
+      
+      exportWidth = Math.max(bounds.width + minPadding * 2, 1100);
+      exportHeight = Math.max(bounds.height + minPadding * 2, 650);
+
+      const paddingX = (exportWidth - bounds.width) / 2;
+      const paddingY = (exportHeight - bounds.height) / 2;
+
+      const viewportNode = clonedElement.querySelector(".react-flow__viewport") as HTMLElement;
+      if (viewportNode) {
+        viewportNode.style.transform = `translate(${-bounds.x + paddingX}px, ${-bounds.y + paddingY}px) scale(1)`;
+      }
+    } else {
+      const sourceRect = sourceElement.getBoundingClientRect();
+      exportWidth = Math.max(sourceRect.width, sourceElement.scrollWidth, 1100);
+      exportHeight = Math.max(sourceRect.height, sourceElement.scrollHeight, 650);
+    }
+
     clonedElement.style.width = `${exportWidth}px`;
     clonedElement.style.height = `${exportHeight}px`;
 
@@ -952,6 +974,7 @@ export function MindmapView() {
         scale: 2,
         backgroundColor: "#ffffff",
         multiPage: false,
+        autoFormat: true,
       });
       return { pdfBytes, fileName: `${baseName}-${stamp}.pdf` };
     } finally {
