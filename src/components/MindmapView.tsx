@@ -1272,7 +1272,7 @@ export function MindmapView() {
 
       {pdfPreviewUrl && (
         <div
-          className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden"
+          className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden pdf-preview-modal"
           onClick={() => setPdfPreviewUrl(null)}
         >
           <div

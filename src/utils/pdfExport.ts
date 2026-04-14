@@ -37,6 +37,15 @@ export async function renderElementToPdfBytes(
     pixelRatio: scale,
     cacheBust: true,
     backgroundColor,
+    filter: (node: HTMLElement) => {
+      // Do not include the preview modal or other print-hidden UI elements
+      if (node.classList && typeof node.classList.contains === "function") {
+        if (node.classList.contains("print:hidden") || node.classList.contains("pdf-preview-modal")) {
+          return false;
+        }
+      }
+      return true;
+    },
   });
 
   const pdf = new jsPDF({

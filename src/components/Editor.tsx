@@ -1399,41 +1399,42 @@ export function Editor() {
               </button>
             </div>
           )}
-
-          {pdfPreviewUrl && (
-            <div
-              className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden"
-              onClick={() => setPdfPreviewUrl(null)}
-            >
-              <div
-                ref={pdfPreviewRef}
-                tabIndex={-1}
-                className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
-                  <div className="text-sm text-gray-200 font-medium">Lesson Plan PDF Preview</div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handlePrintPDF}
-                      className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
-                    >
-                      Print / Save PDF
-                    </button>
-                    <button
-                      onClick={() => setPdfPreviewUrl(null)}
-                      className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#232323]"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <iframe src={pdfPreviewUrl} title="Lesson Plan PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {pdfPreviewUrl && (
+        <div
+          className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden pdf-preview-modal"
+          onClick={() => setPdfPreviewUrl(null)}
+        >
+          <div
+            ref={pdfPreviewRef}
+            tabIndex={-1}
+            className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
+              <div className="text-sm text-gray-200 font-medium">Lesson Plan PDF Preview</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintPDF}
+                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
+                >
+                  Print / Save PDF
+                </button>
+                <button
+                  onClick={() => setPdfPreviewUrl(null)}
+                  className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#232323]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <iframe src={pdfPreviewUrl} title="Lesson Plan PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
