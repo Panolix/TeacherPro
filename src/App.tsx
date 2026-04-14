@@ -15,9 +15,11 @@ function App() {
   const { initVault, themeMode, accentColor } = useAppStore();
 
   useEffect(() => {
-    initVault().finally(() => {
-      getCurrentWindow().show();
-      getCurrentWindow().maximize();
+    initVault().finally(async () => {
+      const win = getCurrentWindow();
+      await win.maximize();
+      await win.show();
+      await win.setFocus();
     });
   }, []);
 

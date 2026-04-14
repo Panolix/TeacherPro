@@ -20,6 +20,8 @@ import {
 import { useAppStore } from "../store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { FontSize } from "./extensions/FontSize";
 import {
   createPdfBlobUrl,
   renderElementToPdfBytes,
@@ -211,9 +213,26 @@ const MenuBar = ({
     return null;
   }
 
+  const FONT_SIZES = ["8pt", "10pt", "11pt", "12pt", "14pt", "16pt", "18pt", "24pt"];
+  const currentFontSize = editor.getAttributes('textStyle').fontSize || "12pt";
+
   return (
     <div className="tp-editor-toolbar flex items-center justify-between border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl mb-4 print:hidden">
       <div className="flex items-center gap-1 flex-wrap">
+        <select
+          value={currentFontSize}
+          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
+          className="bg-[#2d2d2d] text-gray-200 border border-[#444] rounded px-2 py-1 text-sm outline-none focus:border-[var(--tp-accent)] cursor-pointer"
+        >
+          {FONT_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+        
+        <div className="w-px h-6 bg-[#333333] mx-1"></div>
+
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
@@ -448,6 +467,8 @@ export function Editor() {
   const editor = useEditor({
     extensions: [
       StarterKit,
+      TextStyle,
+      FontSize,
       Placeholder.configure({
         placeholder: "Start typing or add a lesson plan table...",
       }),

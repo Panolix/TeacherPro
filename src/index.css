@@ -127,26 +127,55 @@ html[data-tp-theme="light"] .ProseMirror th {
   color: #0f172a;
 }
 
-/* TipTap Editor Styles */
+/* In-App A4 Landscape Paper Container */
+#lesson-plan-container {
+  max-width: 1300px; /* ~A4 Landscape comfortable width */
+  margin: 0 auto;
+  border-radius: 4px;
+}
+
+.lesson-export-surface {
+  max-width: 1050px; /* Internal content width simulating margins */
+  margin: 0 auto;
+  border-radius: 4px;
+}
+
+/* TipTap Editor Styles - Standardized to A4 12pt Typography */
 .ProseMirror {
   outline: none;
   min-height: 50vh;
   color: #f8f8f8;
-  font-size: 0.98rem;
+  font-size: 12pt; /* True 12pt constraint like Word */
+}
+
+.ProseMirror h1 {
+  font-size: 18pt;
+  font-weight: 700;
+  margin-top: 14pt;
+  margin-bottom: 6pt;
+  color: #ffffff;
 }
 
 .ProseMirror h2 {
-  font-size: 1.6rem;
+  font-size: 14pt;
   font-weight: 700;
-  margin-top: 1.5rem;
-  margin-bottom: 1rem;
+  margin-top: 12pt;
+  margin-bottom: 6pt;
+  color: #ffffff;
+}
+
+.ProseMirror h3 {
+  font-size: 13pt;
+  font-weight: 700;
+  margin-top: 10pt;
+  margin-bottom: 4pt;
   color: #ffffff;
 }
 
 .ProseMirror p {
-  margin-top: 0.75rem;
-  margin-bottom: 0.75rem;
-  line-height: 1.7;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
 }
 
 .ProseMirror ul {
@@ -291,6 +320,43 @@ body.tp-exporting #lesson-plan-export-content .lesson-export-editor,
 body.tp-exporting #lesson-plan-export-content .ProseMirror,
 .tp-export-light-clone .ProseMirror {
   color: #111827 !important;
+  font-size: 12pt !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror h1,
+.tp-export-light-clone .ProseMirror h1 {
+  font-size: 16pt !important;
+  margin-top: 12pt !important;
+  margin-bottom: 8pt !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror h2,
+.tp-export-light-clone .ProseMirror h2 {
+  font-size: 14pt !important;
+  margin-top: 10pt !important;
+  margin-bottom: 6pt !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .title-header,
+.tp-export-light-clone .title-header {
+  font-size: 18pt !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-meta,
+.tp-export-light-clone .lesson-export-meta {
+  font-size: 11pt !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror th,
+body.tp-exporting #lesson-plan-export-content .ProseMirror td,
+.tp-export-light-clone .ProseMirror th,
+.tp-export-light-clone .ProseMirror td {
+  font-size: 11pt !important;
+}
+
+body.tp-exporting .tp-mindmap .react-flow__node,
+.tp-export-light-clone .react-flow__node {
+  font-size: 11pt !important;
 }
 
 body.tp-exporting #lesson-plan-export-content .ProseMirror h1,
