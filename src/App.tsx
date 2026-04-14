@@ -15,9 +15,20 @@ function App() {
   const { initVault, themeMode, accentColor } = useAppStore();
 
   useEffect(() => {
-    initVault().finally(() => {
-      const win = getCurrentWindow();
-      win.show().then(() => win.setFocus());
+    console.log("App mounted. Attempting to show window immediately...");
+    const win = getCurrentWindow();
+    
+    win.show().then(() => {
+      console.log("Window show() succeeded");
+      win.setFocus();
+    }).catch(err => {
+      console.error("Window show() failed:", err);
+    });
+
+    initVault().then(() => {
+      console.log("Vault initialized");
+    }).catch(err => {
+      console.error("Vault init failed:", err);
     });
   }, []);
 
