@@ -129,13 +129,15 @@ html[data-tp-theme="light"] .ProseMirror th {
 
 /* In-App A4 Landscape Paper Container */
 #lesson-plan-container {
-  max-width: 1300px; /* ~A4 Landscape comfortable width */
+  width: 100%;
+  max-width: 1800px; /* Much wider to use the full screen natively */
   margin: 0 auto;
   border-radius: 4px;
 }
 
 .lesson-export-surface {
-  max-width: 1050px; /* Internal content width simulating margins */
+  width: 100%;
+  max-width: 1600px; /* internal comfortable reading width */
   margin: 0 auto;
   border-radius: 4px;
 }
