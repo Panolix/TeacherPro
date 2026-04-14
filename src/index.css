@@ -11,12 +11,120 @@
   --color-hover: #2a2a2a;
 }
 
+:root {
+  --tp-accent: #2563eb;
+}
+
 @layer base {
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: ui-sans-serif, system-ui, sans-serif;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
+}
+
+.tp-accent-btn {
+  background-color: var(--tp-accent);
+}
+
+.tp-accent-btn:hover {
+  filter: brightness(0.95);
+}
+
+html[data-tp-theme="light"] body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-tp-theme="light"] .tp-app-shell {
+  background-color: #f8fafc !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar,
+html[data-tp-theme="light"] .tp-main-header,
+html[data-tp-theme="light"] .tp-editor-toolbar,
+html[data-tp-theme="light"] .tp-editor-surface,
+html[data-tp-theme="light"] .tp-main,
+html[data-tp-theme="light"] .tp-mindmap {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar,
+html[data-tp-theme="light"] .tp-main-header,
+html[data-tp-theme="light"] .tp-editor-surface {
+  border-color: #e2e8f0 !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar .text-gray-500 {
+  color: #64748b !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar .text-gray-400,
+html[data-tp-theme="light"] .tp-main .text-gray-400,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-400 {
+  color: #475569 !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar .text-gray-300,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-200,
+html[data-tp-theme="light"] .tp-main .text-gray-300,
+html[data-tp-theme="light"] .tp-main .text-gray-200,
+html[data-tp-theme="light"] .tp-main .text-gray-100,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-300,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-200,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-100 {
+  color: #0f172a !important;
+}
+
+html[data-tp-theme="light"] .tp-sidebar .bg-\[\#2d2d2d\],
+html[data-tp-theme="light"] .tp-main .bg-\[\#2d2d2d\],
+html[data-tp-theme="light"] .tp-mindmap .bg-\[\#2d2d2d\],
+html[data-tp-theme="light"] .tp-main .bg-\[\#333\],
+html[data-tp-theme="light"] .tp-editor-page .bg-\[\#222\],
+html[data-tp-theme="light"] .tp-editor-page .bg-\[\#1e1e1e\],
+html[data-tp-theme="light"] .tp-editor-page .bg-\[\#181818\],
+html[data-tp-theme="light"] .tp-editor-page .bg-\[\#121212\] {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html[data-tp-theme="light"] .tp-main .border-\[\#333333\],
+html[data-tp-theme="light"] .tp-main .border-\[\#2a2a2a\],
+html[data-tp-theme="light"] .tp-sidebar .border-\[\#333333\],
+html[data-tp-theme="light"] .tp-editor-page .border-\[\#333\],
+html[data-tp-theme="light"] .tp-editor-page .border-\[\#2a2a2a\],
+html[data-tp-theme="light"] .tp-mindmap .border-\[\#333\],
+html[data-tp-theme="light"] .tp-mindmap .border-\[\#444\] {
+  border-color: #e2e8f0 !important;
+}
+
+html[data-tp-theme="light"] .ProseMirror {
+  color: #0f172a;
+}
+
+html[data-tp-theme="light"] .ProseMirror h1,
+html[data-tp-theme="light"] .ProseMirror h2,
+html[data-tp-theme="light"] .ProseMirror h3,
+html[data-tp-theme="light"] .ProseMirror p,
+html[data-tp-theme="light"] .ProseMirror li {
+  color: #0f172a;
+}
+
+html[data-tp-theme="light"] .ProseMirror table {
+  border-color: #cbd5e1;
+  background-color: #ffffff;
+}
+
+html[data-tp-theme="light"] .ProseMirror th,
+html[data-tp-theme="light"] .ProseMirror td {
+  border-color: #cbd5e1;
+}
+
+html[data-tp-theme="light"] .ProseMirror th {
+  background-color: #f1f5f9;
+  color: #0f172a;
 }
 
 /* TipTap Editor Styles */
@@ -106,6 +214,80 @@
   bottom: 0;
   background: rgba(59, 130, 246, 0.15);
   pointer-events: none;
+}
+
+.lesson-export-editor .ProseMirror {
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.lesson-export-editor .ProseMirror table {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Export-specific styles for clean lesson PDFs */
+body.tp-exporting #lesson-plan-export-content {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-meta {
+  border-bottom-color: #d1d5db !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-label,
+body.tp-exporting #lesson-plan-export-content .lesson-export-value {
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-input {
+  display: none !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-planned-input {
+  display: none !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text {
+  display: inline !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-planned-text {
+  display: inline !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-editor {
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror {
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror h1,
+body.tp-exporting #lesson-plan-export-content .ProseMirror h2,
+body.tp-exporting #lesson-plan-export-content .ProseMirror h3,
+body.tp-exporting #lesson-plan-export-content .ProseMirror p,
+body.tp-exporting #lesson-plan-export-content .ProseMirror li {
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror table {
+  border-color: #d1d5db !important;
+  background-color: #ffffff !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror th {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .ProseMirror td {
+  border-color: #d1d5db !important;
 }
 
 @media print {

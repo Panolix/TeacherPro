@@ -13,9 +13,9 @@ export function MainContent() {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#1e1e1e] print:bg-white relative">
+    <div className="tp-main flex-1 flex flex-col h-full bg-[#1e1e1e] print:bg-white relative">
       {/* Top Title Bar */}
-      <header className="h-14 border-b border-[#333333] bg-[#191919] print:hidden flex items-center px-6">
+      <header className="tp-main-header h-14 border-b border-[#333333] bg-[#191919] print:hidden flex items-center px-6">
         <div className="flex items-center text-sm text-gray-500">
           <span>Vault</span>
           {vaultPath && (
@@ -63,7 +63,7 @@ export function MainContent() {
 
             <button
               onClick={openVault}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
+              className="tp-accent-btn text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
             >
               <FolderOpen className="w-5 h-5" />
               Select Vault Folder
@@ -81,7 +81,7 @@ export function MainContent() {
                      </p>
                      <button
                       onClick={() => createNewLesson()}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
+                      className="tp-accent-btn text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
                     >
                       <FilePlus className="w-5 h-5" />
                       Create New Lesson Plan

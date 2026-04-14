@@ -3,15 +3,31 @@ import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
 import { useAppStore } from "./store";
 
+const ACCENT_COLORS: Record<string, string> = {
+  blue: "#2563eb",
+  emerald: "#059669",
+  rose: "#e11d48",
+  amber: "#d97706",
+};
+
 function App() {
-  const { initVault } = useAppStore();
+  const { initVault, themeMode, accentColor } = useAppStore();
 
   useEffect(() => {
     initVault();
   }, []);
 
+  useEffect(() => {
+    document.documentElement.setAttribute("data-tp-theme", themeMode);
+  }, [themeMode]);
+
+  useEffect(() => {
+    const accent = ACCENT_COLORS[accentColor] || ACCENT_COLORS.blue;
+    document.documentElement.style.setProperty("--tp-accent", accent);
+  }, [accentColor]);
+
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#1e1e1e] text-slate-800">
+    <div className="tp-app-shell flex h-screen w-screen overflow-hidden bg-[#1e1e1e] text-slate-800">
       <Sidebar />
       <MainContent />
     </div>

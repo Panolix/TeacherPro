@@ -83,11 +83,18 @@ export function MiniCalendar() {
                 ${!isCurrentMonth ? "text-gray-600" : "text-gray-300"}
                 ${
                   isSelected
-                    ? "bg-blue-600 text-white font-bold"
+                    ? "text-white font-bold"
                     : "hover:bg-[#2d2d2d]"
                 }
-                ${isCurrentDay && !isSelected ? "border border-blue-500" : ""}
+                ${isCurrentDay && !isSelected ? "border" : ""}
               `}
+              style={
+                isSelected
+                  ? { backgroundColor: "var(--tp-accent)" }
+                  : isCurrentDay
+                    ? { borderColor: "var(--tp-accent)" }
+                    : undefined
+              }
             >
               {format(day, "d")}
             </button>
