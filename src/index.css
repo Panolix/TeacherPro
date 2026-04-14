@@ -364,3 +364,10 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror td,
   }
 }
 
+
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
