@@ -13,10 +13,11 @@
     "windows": [
       {
         "title": "TeacherPro",
-        "width": 1100,
-        "height": 800,
+        "width": 1400,
+        "height": 900,
         "minWidth": 800,
         "minHeight": 600,
+        "center": true,
         "visible": false
       }
     ],
