@@ -17,6 +17,7 @@ function App() {
   useEffect(() => {
     initVault().finally(() => {
       getCurrentWindow().show();
+      getCurrentWindow().maximize();
     });
   }, []);
 
