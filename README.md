@@ -1,7 +1,7 @@
 # TeacherPro 🎓
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
-[![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/build-cross-platform.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
+[![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/release.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#)
 
 TeacherPro is a local-first, privacy-focused desktop application designed specifically for educators, tutors, and teachers. It tightly integrates a rich-text lesson plan editor, a weekly calendar for scheduling, material/file management, and interactive mindmapping into one seamless workspace.
@@ -88,6 +88,18 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 ## 📦 Installation
 
 Pre-compiled, ready-to-run installers for **Windows**, **macOS**, and **Linux** are available in the [Releases](https://github.com/Panolix/TeacherPro/releases) tab.
+
+### 🍎 macOS Users: "App is damaged" Error
+Because TeacherPro is an open-source app and not currently signed with a paid Apple Developer certificate, macOS Gatekeeper may flag the downloaded app as "damaged" and tell you to move it to the trash. 
+
+To fix this and run the app safely:
+1. Move `TeacherPro.app` (from the downloaded `.dmg`) to your **Applications** folder.
+2. Open your Mac's **Terminal** app.
+3. Run the following command to remove the quarantine flag:
+   ```bash
+   xattr -cr /Applications/TeacherPro.app
+   ```
+4. You can now open TeacherPro normally!
 
 *(Note: Replace the link above with your actual GitHub repository URL once published!)*
 
