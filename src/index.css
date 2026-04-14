@@ -6,13 +6,13 @@
   --color-panel: #1e1e1e;
   --color-border: #3a3a3a;
   --color-muted: #a3a3a3;
-  --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
+  --color-accent: #9fd2e4;
+  --color-accent-hover: #8fc2d4;
   --color-hover: #2a2a2a;
 }
 
 :root {
-  --tp-accent: #2563eb;
+  --tp-accent: #9fd2e4;
 }
 
 @layer base {

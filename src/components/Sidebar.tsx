@@ -51,7 +51,7 @@ interface MaterialPreviewState {
 }
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; color: string }> = [
-  { value: "blue", label: "Blue", color: "#2563eb" },
+  { value: "blue", label: "Blue", color: "#9fd2e4" },
   { value: "emerald", label: "Emerald", color: "#059669" },
   { value: "rose", label: "Rose", color: "#e11d48" },
   { value: "amber", label: "Amber", color: "#d97706" },

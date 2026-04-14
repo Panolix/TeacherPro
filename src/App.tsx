@@ -4,7 +4,7 @@ import { MainContent } from "./components/MainContent";
 import { useAppStore } from "./store";
 
 const ACCENT_COLORS: Record<string, string> = {
-  blue: "#2563eb",
+  blue: "#9fd2e4",
   emerald: "#059669",
   rose: "#e11d48",
   amber: "#d97706",

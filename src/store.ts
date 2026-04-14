@@ -596,7 +596,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             id: '1',
             data: { label: 'New Brainstorm' },
             position: { x: 250, y: 150 },
-            style: { background: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold' }
+            style: { background: '#9fd2e4', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold' }
           }
         ],
         edges: []

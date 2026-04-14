@@ -86,7 +86,7 @@ const NODE_COLOR_PRESETS: NodeColorPreset[] = [
   {
     id: "blue",
     label: "Blue",
-    style: { background: "#2563eb", color: "#ffffff", border: "1px solid #1d4ed8" },
+    style: { background: "#9fd2e4", color: "#ffffff", border: "1px solid #7cb1c4" },
   },
   {
     id: "emerald",
