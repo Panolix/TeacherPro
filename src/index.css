@@ -235,7 +235,8 @@ html[data-tp-theme="light"] .ProseMirror th {
   font-size: 13px;
 }
 
-.ProseMirror td > p {
+.ProseMirror td > p,
+.ProseMirror th > p {
   margin: 0;
 }
 
