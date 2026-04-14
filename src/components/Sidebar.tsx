@@ -2,7 +2,6 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import {
   FolderOpen,
   Settings,
-  PenTool,
   File,
   Plus,
   PanelLeftClose,
@@ -555,10 +554,21 @@ export function Sidebar() {
             <li>
               <button
                 onClick={() => createNewLesson()}
-                  className="w-full flex items-center gap-3 px-2 py-2 text-sm text-[var(--tp-accent)] hover:opacity-90 hover:bg-[#2d2d2d] rounded-md transition-colors"
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm text-[var(--tp-accent)] hover:opacity-90 hover:bg-[#2d2d2d] rounded-md transition-colors"
               >
                 <Plus className="w-4 h-4 shrink-0" />
                 {sidebarOpen && <span>New Lesson Plan</span>}
+              </button>
+            </li>
+          )}
+          {vaultPath && (
+            <li>
+              <button
+                onClick={() => createNewMindmap()}
+                className="w-full flex items-center gap-3 px-2 py-2 text-sm text-[var(--tp-accent)] hover:opacity-90 hover:bg-[#2d2d2d] rounded-md transition-colors"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                {sidebarOpen && <span>New Mindmap</span>}
               </button>
             </li>
           )}
@@ -573,19 +583,6 @@ export function Sidebar() {
             >
               <Calendar className="w-4 h-4 shrink-0" />
               {sidebarOpen && <span>Calendar Weekly View</span>}
-            </button>
-          </li>
-          <li>
-            <button
-              onClick={() => setCurrentView("mindmap")}
-              className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
-                currentView === "mindmap"
-                  ? "bg-[#2d2d2d] text-white"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
-              }`}
-            >
-              <PenTool className="w-4 h-4 shrink-0" />
-              {sidebarOpen && <span>Mindmaps</span>}
             </button>
           </li>
         </ul>
@@ -617,6 +614,11 @@ export function Sidebar() {
             title: "Lesson Plans",
             collapsed: sectionCollapsed.lessonPlans,
             onToggle: () => toggleSectionCollapsed("lessonPlans"),
+            actions: vaultPath ? (
+              <button onClick={() => createNewLesson()} className="hover:text-gray-300 p-1" title="New lesson plan">
+                <Plus className="w-3 h-3" />
+              </button>
+            ) : null,
             marginTop: "mt-4",
           })}
           {!sectionCollapsed.lessonPlans && (

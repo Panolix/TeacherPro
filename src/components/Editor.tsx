@@ -22,7 +22,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
 import {
   createPdfBlobUrl,
-  printPdfBlobUrl,
+  printCurrentWindow,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -567,11 +567,6 @@ export function Editor() {
           ? editor.view.posAtCoords({ left: clientX, top: clientY })
           : null;
 
-      const chain = editor.chain().focus();
-      if (pos?.pos !== undefined) {
-        chain.setTextSelection(pos.pos);
-      }
-
       const targetPos = pos?.pos ?? editor.state.selection.from;
       const resolvedPos = editor.state.doc.resolve(targetPos);
       const isInsideTableCell = (() => {
@@ -593,18 +588,35 @@ export function Editor() {
         },
       };
 
-      const didInsert = chain
-        .insertContent(
-          isInsideTableCell
-            ? [materialNode, { type: "text", text: " " }]
-            : [
-                {
-                  type: "paragraph",
-                  content: [materialNode],
-                },
-                { type: "paragraph" },
-              ],
-        )
+      const inlineContent = [materialNode, { type: "text", text: " " }];
+      const blockContent = [
+        {
+          type: "paragraph",
+          content: [materialNode],
+        },
+        { type: "paragraph" },
+      ];
+
+      logDebug(
+        "editor",
+        "drop-target",
+        `pos=${targetPos} tableCell=${String(isInsideTableCell)} x=${String(clientX)} y=${String(clientY)}`,
+      );
+
+      const didInsertInline = editor
+        .chain()
+        .focus()
+        .insertContentAt(targetPos, inlineContent)
+        .run();
+
+      if (didInsertInline) {
+        return true;
+      }
+
+      const didInsert = editor
+        .chain()
+        .focus()
+        .insertContentAt(targetPos, isInsideTableCell ? inlineContent : blockContent)
         .run();
 
       if (!didInsert) {
@@ -828,19 +840,12 @@ export function Editor() {
     setPendingMaterialDrop(null);
   }, [editor, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
 
-  const handleExportPDF = async () => {
-    if (!vaultPath) {
-      alert("Please open a vault before exporting.");
-      return;
-    }
-
+  const createLessonPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
     const element = document.getElementById("lesson-plan-export-content");
     if (!element) {
-      alert("Could not find lesson content to export.");
-      return;
+      throw new Error("Could not find lesson content to export.");
     }
 
-    setIsExporting(true);
     document.body.classList.add("tp-exporting");
 
     try {
@@ -857,6 +862,23 @@ export function Editor() {
         multiPage: true,
       });
 
+      return { pdfBytes, fileName };
+    } finally {
+      document.body.classList.remove("tp-exporting");
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!vaultPath) {
+      alert("Please open a vault before exporting.");
+      return;
+    }
+
+    setIsPdfBusy(true);
+
+    try {
+      const { pdfBytes, fileName } = await createLessonPdf();
+
       const savedPath = await savePdfToVault({
         pdfBytes,
         fileName,
@@ -871,8 +893,40 @@ export function Editor() {
       console.error("Lesson PDF export failed:", error);
       alert(`Export failed: ${String(error)}`);
     } finally {
-      document.body.classList.remove("tp-exporting");
-      setIsExporting(false);
+      setIsPdfBusy(false);
+    }
+  };
+
+  const handlePreviewPDF = async () => {
+    setIsPdfBusy(true);
+
+    try {
+      const { pdfBytes } = await createLessonPdf();
+      const nextUrl = createPdfBlobUrl(pdfBytes);
+      setPdfPreviewUrl((previous) => {
+        revokePdfBlobUrl(previous);
+        return nextUrl;
+      });
+    } catch (error) {
+      console.error("Lesson PDF preview failed:", error);
+      alert(`Preview failed: ${String(error)}`);
+    } finally {
+      setIsPdfBusy(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    setIsPdfBusy(true);
+
+    try {
+      setTableContextMenu(null);
+      setPlannedCalendarOpen(false);
+      await printCurrentWindow(["tp-exporting"]);
+    } catch (error) {
+      console.error("Lesson PDF print failed:", error);
+      alert(`Print failed: ${String(error)}`);
+    } finally {
+      setIsPdfBusy(false);
     }
   };
 
@@ -929,7 +983,14 @@ export function Editor() {
       </div>
       
       <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-xl shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
-        <MenuBar editor={editor} onSave={handleSave} onExport={handleExportPDF} isExporting={isExporting} />
+        <MenuBar
+          editor={editor}
+          onSave={handleSave}
+          onPreview={handlePreviewPDF}
+          onPrint={handlePrintPDF}
+          onExport={handleExportPDF}
+          isPdfBusy={isPdfBusy}
+        />
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
           {activeFileContent?.metadata && (
             <div className="px-8 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
@@ -952,7 +1013,7 @@ export function Editor() {
                     placeholder="DD/MM/YYYY"
                     className="w-[220px] max-w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-white text-base outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input lesson-export-planned-input"
                   />
-                  <div className="relative" ref={plannedCalendarRef}>
+                  <div className="relative lesson-export-calendar-trigger" ref={plannedCalendarRef}>
                     <button
                       type="button"
                       onClick={() => {
@@ -968,7 +1029,7 @@ export function Editor() {
                     </button>
 
                     {plannedCalendarOpen && (
-                      <div className="absolute top-12 left-0 z-[72] w-[250px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3 shadow-2xl print:hidden">
+                      <div className="absolute top-12 left-0 z-[72] w-[250px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3 shadow-2xl print:hidden lesson-export-calendar-popover">
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-sm font-semibold text-gray-200">
                             {formatDateFn(plannedCalendarMonth, "MMM yyyy")}
@@ -1143,6 +1204,37 @@ export function Editor() {
               >
                 Toggle Header Column
               </button>
+            </div>
+          )}
+
+          {pdfPreviewUrl && (
+            <div
+              className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden"
+              onClick={() => setPdfPreviewUrl(null)}
+            >
+              <div
+                className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
+                  <div className="text-sm text-gray-200 font-medium">Lesson Plan PDF Preview</div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handlePrintPDF}
+                      className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
+                    >
+                      Print / Save PDF
+                    </button>
+                    <button
+                      onClick={() => setPdfPreviewUrl(null)}
+                      className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#232323]"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <iframe src={pdfPreviewUrl} title="Lesson Plan PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
+              </div>
             </div>
           )}
         </div>

@@ -15,8 +15,14 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
-import { Plus, Save, Printer, X } from "lucide-react";
-import { renderElementToPdfBytes, savePdfToVault } from "../utils/pdfExport";
+import { Eye, Plus, Save, Printer, X } from "lucide-react";
+import {
+  createPdfBlobUrl,
+  printCurrentWindow,
+  renderElementToPdfBytes,
+  revokePdfBlobUrl,
+  savePdfToVault,
+} from "../utils/pdfExport";
 
 type ContextTarget =
   | { kind: "pane"; position: { x: number; y: number } }
@@ -136,7 +142,8 @@ export function MindmapView() {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node, Edge> | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isPdfBusy, setIsPdfBusy] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   // Editing state for Tauri (since window.prompt is blocked)
@@ -160,6 +167,7 @@ export function MindmapView() {
       if (event.key === "Escape") {
         setContextMenu(null);
         setEditingNodeId(null);
+        setPdfPreviewUrl(null);
       }
     };
 
@@ -171,6 +179,12 @@ export function MindmapView() {
       window.removeEventListener("keydown", onEscape);
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      revokePdfBlobUrl(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -381,27 +395,19 @@ export function MindmapView() {
     setContextMenu(null);
   };
 
-  const handleExportPDF = async () => {
-    if (!vaultPath) {
-      alert("Please open a vault before exporting.");
-      return;
-    }
-
+  const createMindmapPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
     setContextMenu(null);
     setEditingNodeId(null);
 
     const element = document.getElementById("mindmap-export-surface");
     if (!element) {
-      alert("Could not find mindmap canvas to export.");
-      return;
+      throw new Error("Could not find mindmap canvas to export.");
     }
 
     const controls = element.querySelector(".react-flow__controls") as HTMLElement | null;
     const background = element.querySelector(".react-flow__background") as HTMLElement | null;
     const previousControlsDisplay = controls?.style.display ?? "";
     const previousBackgroundDisplay = background?.style.display ?? "";
-
-    setIsExporting(true);
 
     try {
       if (controls) controls.style.display = "none";
@@ -420,10 +426,27 @@ export function MindmapView() {
         backgroundColor: themeMode === "light" ? "#f8fafc" : "#121212",
         multiPage: false,
       });
+      return { pdfBytes, fileName: `${baseName}-${stamp}.pdf` };
+    } finally {
+      if (controls) controls.style.display = previousControlsDisplay;
+      if (background) background.style.display = previousBackgroundDisplay;
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!vaultPath) {
+      alert("Please open a vault before exporting.");
+      return;
+    }
+
+    setIsPdfBusy(true);
+
+    try {
+      const { pdfBytes, fileName } = await createMindmapPdf();
 
       const savedPath = await savePdfToVault({
         pdfBytes,
-        fileName: `${baseName}-${stamp}.pdf`,
+        fileName,
         vaultPath,
         dialogTitle: "Export Mindmap as PDF",
       });
@@ -435,9 +458,40 @@ export function MindmapView() {
       console.error("Mindmap PDF export failed:", error);
       alert(`Export failed: ${String(error)}`);
     } finally {
-      if (controls) controls.style.display = previousControlsDisplay;
-      if (background) background.style.display = previousBackgroundDisplay;
-      setIsExporting(false);
+      setIsPdfBusy(false);
+    }
+  };
+
+  const handlePreviewPDF = async () => {
+    setIsPdfBusy(true);
+
+    try {
+      const { pdfBytes } = await createMindmapPdf();
+      const nextUrl = createPdfBlobUrl(pdfBytes);
+      setPdfPreviewUrl((previous) => {
+        revokePdfBlobUrl(previous);
+        return nextUrl;
+      });
+    } catch (error) {
+      console.error("Mindmap PDF preview failed:", error);
+      alert(`Preview failed: ${String(error)}`);
+    } finally {
+      setIsPdfBusy(false);
+    }
+  };
+
+  const handlePrintPDF = async () => {
+    setIsPdfBusy(true);
+
+    try {
+      setContextMenu(null);
+      setEditingNodeId(null);
+      await printCurrentWindow();
+    } catch (error) {
+      console.error("Mindmap PDF print failed:", error);
+      alert(`Print failed: ${String(error)}`);
+    } finally {
+      setIsPdfBusy(false);
     }
   };
 
@@ -482,11 +536,25 @@ export function MindmapView() {
         </div>
         <div className="pointer-events-auto flex items-center gap-2 h-fit mt-1">
           <button
+            onClick={handlePreviewPDF}
+            disabled={isPdfBusy}
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <Eye className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Preview PDF"}
+          </button>
+          <button
+            onClick={handlePrintPDF}
+            disabled={isPdfBusy}
+            className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
+          >
+            <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Print / Save PDF"}
+          </button>
+          <button
             onClick={handleExportPDF}
-            disabled={isExporting}
+            disabled={isPdfBusy}
             className="bg-[#333] hover:bg-[#444] text-white px-4 py-1.5 rounded-md shadow-sm transition-colors text-sm font-medium flex items-center gap-2"
           >
-            <Printer className="w-4 h-4" /> {isExporting ? "Exporting..." : "Export PDF"}
+            <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
           </button>
           <button
             onClick={handleSave}
@@ -572,6 +640,37 @@ export function MindmapView() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {pdfPreviewUrl && (
+        <div
+          className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden"
+          onClick={() => setPdfPreviewUrl(null)}
+        >
+          <div
+            className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
+              <div className="text-sm text-gray-200 font-medium">Mindmap PDF Preview</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintPDF}
+                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
+                >
+                  Print / Save PDF
+                </button>
+                <button
+                  onClick={() => setPdfPreviewUrl(null)}
+                  className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#232323]"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <iframe src={pdfPreviewUrl} title="Mindmap PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
+          </div>
         </div>
       )}
 

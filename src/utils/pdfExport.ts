@@ -154,3 +154,35 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
     document.body.appendChild(iframe);
   });
 }
+
+export async function printCurrentWindow(additionalBodyClassNames: string[] = []): Promise<void> {
+  const { body } = document;
+  additionalBodyClassNames.forEach((className) => body.classList.add(className));
+
+  await new Promise<void>((resolve) => {
+    let finished = false;
+
+    const complete = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      window.removeEventListener("afterprint", onAfterPrint);
+      resolve();
+    };
+
+    const onAfterPrint = () => complete();
+    window.addEventListener("afterprint", onAfterPrint, { once: true });
+
+    requestAnimationFrame(() => {
+      try {
+        window.print();
+      } finally {
+        // Fallback for environments that don't emit afterprint reliably.
+        setTimeout(() => complete(), 1800);
+      }
+    });
+  });
+
+  additionalBodyClassNames.forEach((className) => body.classList.remove(className));
+}

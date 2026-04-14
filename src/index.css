@@ -249,6 +249,11 @@ body.tp-exporting #lesson-plan-export-content .lesson-export-planned-input {
   display: none !important;
 }
 
+body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-trigger,
+body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-popover {
+  display: none !important;
+}
+
 body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text {
   display: inline !important;
 }

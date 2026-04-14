@@ -6,7 +6,7 @@ import { useAppStore } from "../store";
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
-  const { lessonPlans, openLesson, deleteLesson } = useAppStore();
+  const { lessonPlans, openLesson, deleteLesson, createNewLesson } = useAppStore();
 
   const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   
@@ -188,7 +188,10 @@ export function CalendarView() {
               </div>
               <div className="p-2 border-t border-[#2a2a2a] bg-[#222]">
                  <div className="flex gap-2">
-                   <button className="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#333] rounded transition-colors">
+                   <button
+                     onClick={() => void createNewLesson(day)}
+                     className="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#333] rounded transition-colors"
+                   >
                       <Plus className="w-3 h-3" /> Add
                    </button>
                    <button
