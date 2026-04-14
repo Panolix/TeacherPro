@@ -59,8 +59,16 @@ export async function renderElementToPdfBytes(
   const printableWidth = pageWidth - marginMm * 2;
   const printableHeight = pageHeight - marginMm * 2;
 
-  const imageWidth = printableWidth;
-  const imageHeight = (canvas.height * imageWidth) / canvas.width;
+  // Automatically determine the exact logical width based on the cloned container's pixel width.
+  // By scaling everything according to the explicit pixel ratio we set, a font-size of 12pt natively becomes 12pt on physical A4 paper.
+  const logicalWidthPixels = element.clientWidth;
+  
+  // 1 millimeter is approximately 3.7795275591 pixels closely. 
+  // We want to calculate the imageWidth scale accurately so a physical A4 PDF understands how big the "pixels" are.
+  const pxToMmRatio = printableWidth / logicalWidthPixels;
+  
+  const imageWidth = printableWidth; // Takes up the whole printable area
+  const imageHeight = canvas.height * pxToMmRatio; // Height respects the exact scale mathematically without stretching.
   const imageData = canvas.toDataURL("image/png", 1.0);
 
   pdf.addImage(imageData, "PNG", marginMm, marginMm, imageWidth, imageHeight);
