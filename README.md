@@ -29,7 +29,7 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
     <td align="center" width="50%">
       <img src="public/screenshot3.png" alt="Weekly Calendar View">
       <br>
-      <b>📅 Weekly Calendar View</b><br>Drag & drop your lessons over the week.
+      <b>📅 Weekly Calendar View</b><br>See your upcoming week at a glance.
     </td>
     <td align="center" width="50%">
       <img src="public/screenshot4.png" alt="PDF Preview">
@@ -64,7 +64,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### 📅 Weekly Calendar View
 - **Visual Scheduling:** See your upcoming week at a glance.
-- **Drag-and-Drop Planning:** Drag your unscheduled (or rescheduled) lesson plans from the sidebar directly onto a specific day of the week to instantly update their *Planned Date*.
+- **Easy Access:** Click on any scheduled lesson directly from the calendar to instantly open it in the editor.
 
 ### 🖨️ Native Printing & PDF Export
 - **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
