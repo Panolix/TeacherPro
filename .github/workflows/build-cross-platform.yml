@@ -8,6 +8,8 @@ on:
 
 jobs:
   build-tauri:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +26,10 @@ jobs:
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Add universal OSX targets
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: install Linux dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -44,3 +50,4 @@ jobs:
           releaseBody: 'Download the installers for Windows, Mac, and Linux below.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}

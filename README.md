@@ -12,9 +12,32 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   <img src="public/icon.png" width="150" alt="TeacherPro Logo">
 </p>
 
-<p align="center">
-  <img src="public/screenshot.png" alt="TeacherPro Editor Screenshot" width="800">
-</p>
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="50%">
+      <img src="public/screenshot.png" alt="Lesson Plan Editor">
+      <br>
+      <b>📝 Lesson Plan Editor</b><br>Rich text and specialized data tables.
+    </td>
+    <td align="center" width="50%">
+      <img src="public/screenshot2.png" alt="Mindmap Editor">
+      <br>
+      <b>🧠 Mindmap Editor</b><br>Create fluid, visual curriculums.
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%">
+      <img src="public/screenshot3.png" alt="Weekly Calendar View">
+      <br>
+      <b>📅 Weekly Calendar View</b><br>Drag & drop your lessons over the week.
+    </td>
+    <td align="center" width="50%">
+      <img src="public/screenshot4.png" alt="PDF Preview">
+      <br>
+      <b>🖨️ PDF Preview & Print</b><br>Export flawless natively-styled sheets.
+    </td>
+  </tr>
+</table>
 
 ---
 
