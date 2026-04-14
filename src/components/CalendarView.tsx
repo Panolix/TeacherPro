@@ -1,11 +1,12 @@
 import { format, startOfWeek, addDays } from "date-fns";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square } from "lucide-react";
 import { useAppStore } from "../store";
 
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
-  const { lessonPlans, openLesson } = useAppStore();
+  const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
+  const { lessonPlans, openLesson, deleteLesson } = useAppStore();
 
   const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   
@@ -13,7 +14,12 @@ export function CalendarView() {
   const prevWeek = () => setCurrentWeek(addDays(currentWeek, -7));
 
   // Generate the 7 days of the week
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(start, i));
+  const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(start, i)), [start]);
+
+  useEffect(() => {
+    // Reset selection when changing week to avoid accidental cross-week deletes.
+    setSelectedLessons(new Set());
+  }, [start.getTime()]);
 
   // We could filter `lessonPlans` by date if we stored it in the filename,
   // but for a robust system we would actually load the JSONs. Since loading all JSONs
@@ -21,6 +27,63 @@ export function CalendarView() {
   const getLessonsForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
     return lessonPlans.filter(p => p.name && p.name.includes(dateStr));
+  };
+
+  const toggleSelectedLesson = (lessonName: string) => {
+    setSelectedLessons((previous) => {
+      const next = new Set(previous);
+      if (next.has(lessonName)) {
+        next.delete(lessonName);
+      } else {
+        next.add(lessonName);
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedLessons.size === 0) {
+      return;
+    }
+
+    const names = Array.from(selectedLessons);
+    const confirmed = confirm(`Delete ${names.length} selected lesson plan(s)?`);
+    if (!confirmed) {
+      return;
+    }
+
+    for (const name of names) {
+      await deleteLesson(name);
+    }
+
+    setSelectedLessons(new Set());
+  };
+
+  const handleDeleteAllForDate = async (date: Date) => {
+    const lessons = getLessonsForDate(date).filter((lesson) => !!lesson.name);
+    if (lessons.length === 0) {
+      return;
+    }
+
+    const dateLabel = format(date, "EEE, MMM d");
+    const confirmed = confirm(`Delete all ${lessons.length} lesson plan(s) for ${dateLabel}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    for (const lesson of lessons) {
+      await deleteLesson(lesson.name!);
+    }
+
+    setSelectedLessons((previous) => {
+      const next = new Set(previous);
+      for (const lesson of lessons) {
+        if (lesson.name) {
+          next.delete(lesson.name);
+        }
+      }
+      return next;
+    });
   };
 
   return (
@@ -41,6 +104,15 @@ export function CalendarView() {
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDeleteSelected}
+            disabled={selectedLessons.size === 0}
+            className="flex items-center gap-2 rounded-md border border-[#5a2b2b] bg-[#3a1f1f] px-3 py-2 text-sm text-red-200 transition-colors hover:bg-[#4a2525] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Trash2 className="h-4 w-4" /> Delete Selected ({selectedLessons.size})
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 grid grid-cols-7 gap-4 min-h-0">
@@ -59,22 +131,74 @@ export function CalendarView() {
                 ) : (
                   lessons.map((lesson, lIdx) => {
                     const title = lesson.name?.replace(`-${format(day, "yyyy-MM-dd")}-`, "").replace(".json", "") || "Lesson";
+                    const lessonName = lesson.name || "";
+                    const isSelected = lessonName ? selectedLessons.has(lessonName) : false;
                     return (
-                      <button
+                      <div
                         key={lIdx}
-                        onClick={() => openLesson(lesson.name!)}
-                        className="w-full text-left p-2 bg-[#2d2d2d] hover:bg-[#3a3a3a] border border-[#444] rounded-lg transition-colors group relative"
+                        className={`w-full p-2 border rounded-lg transition-colors ${
+                          isSelected
+                            ? "bg-[#2f2940] border-[var(--tp-accent)]"
+                            : "bg-[#2d2d2d] border-[#444]"
+                        }`}
                       >
-                        <div className="font-medium text-gray-200 text-sm truncate">{title}</div>
-                      </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (lessonName) {
+                                toggleSelectedLesson(lessonName);
+                              }
+                            }}
+                            className="text-gray-300 hover:text-white"
+                            title={isSelected ? "Unselect" : "Select"}
+                          >
+                            {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                          </button>
+                          <button
+                            onClick={() => lesson.name && openLesson(lesson.name)}
+                            className="min-w-0 flex-1 text-left hover:text-white"
+                          >
+                            <div className="font-medium text-gray-200 text-sm truncate">{title}</div>
+                          </button>
+                          {lessonName && (
+                            <button
+                              onClick={async (event) => {
+                                event.stopPropagation();
+                                if (confirm(`Delete lesson plan \"${title}\"?`)) {
+                                  await deleteLesson(lessonName);
+                                  setSelectedLessons((previous) => {
+                                    const next = new Set(previous);
+                                    next.delete(lessonName);
+                                    return next;
+                                  });
+                                }
+                              }}
+                              className="text-red-300 hover:text-red-200"
+                              title="Delete lesson"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )
                   })
                 )}
               </div>
               <div className="p-2 border-t border-[#2a2a2a] bg-[#222]">
-                 <button className="w-full flex items-center justify-center gap-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#333] rounded transition-colors">
-                    <Plus className="w-3 h-3" /> Add
-                 </button>
+                 <div className="flex gap-2">
+                   <button className="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#333] rounded transition-colors">
+                      <Plus className="w-3 h-3" /> Add
+                   </button>
+                   <button
+                     onClick={() => void handleDeleteAllForDate(day)}
+                     className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-[#3a2020] rounded transition-colors"
+                     title="Delete all lessons for this day"
+                   >
+                     <Trash2 className="w-3 h-3" /> All
+                   </button>
+                 </div>
               </div>
             </div>
           );

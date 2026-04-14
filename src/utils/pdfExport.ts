@@ -103,3 +103,54 @@ export async function savePdfToVault({
   await writeFile(selectedPath, pdfBytes);
   return selectedPath;
 }
+
+export function createPdfBlobUrl(pdfBytes: Uint8Array): string {
+  return URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
+}
+
+export function revokePdfBlobUrl(url: string | null): void {
+  if (!url) {
+    return;
+  }
+
+  URL.revokeObjectURL(url);
+}
+
+export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    iframe.style.opacity = "0";
+    iframe.src = blobUrl;
+
+    const cleanup = () => {
+      iframe.remove();
+    };
+
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          cleanup();
+          resolve();
+        }, 600);
+      } catch (error) {
+        cleanup();
+        reject(error);
+      }
+    };
+
+    iframe.onerror = () => {
+      cleanup();
+      reject(new Error("Could not load PDF for printing."));
+    };
+
+    document.body.appendChild(iframe);
+  });
+}

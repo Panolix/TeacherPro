@@ -5,10 +5,28 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import {
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format as formatDateFn,
+  isSameDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from "date-fns";
 import { useAppStore } from "../store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
-import { renderElementToPdfBytes, savePdfToVault } from "../utils/pdfExport";
+import {
+  createPdfBlobUrl,
+  printPdfBlobUrl,
+  renderElementToPdfBytes,
+  revokePdfBlobUrl,
+  savePdfToVault,
+} from "../utils/pdfExport";
 import {
   Bold,
   Italic,
@@ -24,6 +42,10 @@ import {
   Table as TableIcon,
   Printer,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  X,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -111,25 +133,19 @@ function parseEuropeanDateToIso(value: string): string | null | undefined {
   return parsed.toISOString();
 }
 
-function formatYmdToEuropeanDate(value: string): string {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) return "";
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
-
-function parseEuropeanDateToYmd(value: string): string | null | undefined {
+function parseEuropeanDateToDate(value: string): Date | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
   const match = trimmed.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
-  if (!match) return undefined;
+  if (!match) return null;
 
   const day = Number(match[1]);
   const month = Number(match[2]);
   const year = Number(match[3]);
 
   if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return undefined;
+    return null;
   }
 
   const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
@@ -138,22 +154,26 @@ function parseEuropeanDateToYmd(value: string): string | null | undefined {
     parsed.getMonth() !== month - 1 ||
     parsed.getDate() !== day
   ) {
-    return undefined;
+    return null;
   }
 
-  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return parsed;
 }
 
 const MenuBar = ({
   editor,
   onSave,
+  onPreview,
+  onPrint,
   onExport,
-  isExporting,
+  isPdfBusy,
 }: {
   editor: any;
   onSave: () => void;
+  onPreview: () => void;
+  onPrint: () => void;
   onExport: () => void;
-  isExporting: boolean;
+  isPdfBusy: boolean;
 }) => {
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
@@ -275,11 +295,25 @@ const MenuBar = ({
 
       <div className="flex items-center gap-2">
         <button
+          onClick={onPreview}
+          disabled={isPdfBusy}
+          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors"
+        >
+          <Eye className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Preview PDF"}
+        </button>
+        <button
+          onClick={onPrint}
+          disabled={isPdfBusy}
+          className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors"
+        >
+          <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Print / Save PDF"}
+        </button>
+        <button
           onClick={onExport}
-          disabled={isExporting}
+          disabled={isPdfBusy}
           className="flex items-center gap-2 px-4 py-1.5 text-sm bg-[#333] hover:bg-[#444] border-none rounded-md text-white font-medium shadow-sm transition-colors"
         >
-          <Printer className="w-4 h-4" /> {isExporting ? "Exporting..." : "Export PDF"}
+          <Printer className="w-4 h-4" /> {isPdfBusy ? "Working..." : "Export PDF"}
         </button>
         <button
           onClick={onSave}
@@ -307,14 +341,21 @@ export function Editor() {
   const [plannedForInput, setPlannedForInput] = useState(
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
-  const [isExporting, setIsExporting] = useState(false);
+  const [isPdfBusy, setIsPdfBusy] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
+  const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
+  const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
-  const plannedDatePickerRef = useRef<HTMLInputElement | null>(null);
+  const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
     setPlannedForInput(formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor));
+    const selectedDate = parseEuropeanDateToDate(
+      formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
+    );
+    setPlannedCalendarMonth(selectedDate || new Date());
   }, [activeFileContent?.metadata?.subject, activeFileContent?.metadata?.plannedFor]);
 
   useEffect(() => {
@@ -333,6 +374,39 @@ export function Editor() {
       window.removeEventListener("keydown", onEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!plannedCalendarOpen) {
+      return;
+    }
+
+    const closeOnOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!plannedCalendarRef.current?.contains(target)) {
+        setPlannedCalendarOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPlannedCalendarOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", closeOnOutside);
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", closeOnOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [plannedCalendarOpen]);
+
+  useEffect(() => {
+    return () => {
+      revokePdfBlobUrl(pdfPreviewUrl);
+    };
+  }, [pdfPreviewUrl]);
 
   const editor = useEditor({
     extensions: [
@@ -498,23 +572,39 @@ export function Editor() {
         chain.setTextSelection(pos.pos);
       }
 
+      const targetPos = pos?.pos ?? editor.state.selection.from;
+      const resolvedPos = editor.state.doc.resolve(targetPos);
+      const isInsideTableCell = (() => {
+        for (let depth = resolvedPos.depth; depth > 0; depth -= 1) {
+          const nodeName = resolvedPos.node(depth).type.name;
+          if (nodeName === "tableCell" || nodeName === "tableHeader") {
+            return true;
+          }
+        }
+        return false;
+      })();
+
+      const materialNode = {
+        type: "materialLink",
+        attrs: {
+          fileName,
+          filePath: payload.relativePath,
+          itemType: payload.itemType,
+        },
+      };
+
       const didInsert = chain
-        .insertContent([
-          {
-            type: "paragraph",
-            content: [
-              {
-                type: "materialLink",
-                attrs: {
-                  fileName,
-                  filePath: payload.relativePath,
-                  itemType: payload.itemType,
+        .insertContent(
+          isInsideTableCell
+            ? [materialNode, { type: "text", text: " " }]
+            : [
+                {
+                  type: "paragraph",
+                  content: [materialNode],
                 },
-              },
-            ],
-          },
-          { type: "paragraph" },
-        ])
+                { type: "paragraph" },
+              ],
+        )
         .run();
 
       if (!didInsert) {
@@ -793,7 +883,12 @@ export function Editor() {
     });
   };
 
-  const plannedForPickerValue = parseEuropeanDateToYmd(plannedForInput) || "";
+  const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
+  const monthStart = startOfMonth(plannedCalendarMonth);
+  const monthEnd = endOfMonth(monthStart);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
   const tableActionsEnabled = editor
     ? {
         addRowBefore: editor.can().addRowBefore(),
@@ -857,36 +952,79 @@ export function Editor() {
                     placeholder="DD/MM/YYYY"
                     className="w-[220px] max-w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-white text-base outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input lesson-export-planned-input"
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const picker = plannedDatePickerRef.current;
-                      if (!picker) return;
+                  <div className="relative" ref={plannedCalendarRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!plannedCalendarOpen) {
+                          setPlannedCalendarMonth(selectedPlannedDate || new Date());
+                        }
+                        setPlannedCalendarOpen((previous) => !previous);
+                      }}
+                      className="h-10 w-10 inline-flex items-center justify-center rounded-md border border-[#333] bg-[#222] text-gray-300 hover:text-white hover:border-[var(--tp-accent)] transition-colors print:hidden"
+                      title="Pick planned date"
+                    >
+                      <CalendarDays className="w-4 h-4" />
+                    </button>
 
-                      if (typeof picker.showPicker === "function") {
-                        picker.showPicker();
-                      } else {
-                        picker.focus();
-                        picker.click();
-                      }
-                    }}
-                    className="h-10 w-10 inline-flex items-center justify-center rounded-md border border-[#333] bg-[#222] text-gray-300 hover:text-white hover:border-[var(--tp-accent)] transition-colors print:hidden"
-                    title="Pick planned date"
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                  </button>
-                  <input
-                    ref={plannedDatePickerRef}
-                    type="date"
-                    value={plannedForPickerValue}
-                    onChange={(event) => {
-                      setPlannedForInput(formatYmdToEuropeanDate(event.target.value));
-                      event.currentTarget.blur();
-                    }}
-                    className="sr-only"
-                    tabIndex={-1}
-                    aria-hidden
-                  />
+                    {plannedCalendarOpen && (
+                      <div className="absolute top-12 left-0 z-[72] w-[250px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3 shadow-2xl print:hidden">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-semibold text-gray-200">
+                            {formatDateFn(plannedCalendarMonth, "MMM yyyy")}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setPlannedCalendarMonth((prev) => subMonths(prev, 1))}
+                              className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-[#2b2b2b]"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPlannedCalendarMonth((prev) => addMonths(prev, 1))}
+                              className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-[#2b2b2b]"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] text-gray-500">
+                          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) => (
+                            <span key={day}>{day}</span>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 text-xs">
+                          {calendarDays.map((day) => {
+                            const inCurrentMonth = isSameMonth(day, monthStart);
+                            const isSelected = !!selectedPlannedDate && isSameDay(day, selectedPlannedDate);
+
+                            return (
+                              <button
+                                key={day.toISOString()}
+                                type="button"
+                                onClick={() => {
+                                  setPlannedForInput(formatDateFn(day, "dd/MM/yyyy"));
+                                  setPlannedCalendarOpen(false);
+                                }}
+                                className={`h-7 rounded text-center transition-colors ${
+                                  inCurrentMonth
+                                    ? "text-gray-200 hover:bg-[#2d2d2d]"
+                                    : "text-gray-600 hover:bg-[#242424]"
+                                } ${isSelected ? "text-white font-semibold" : ""}`}
+                                style={isSelected ? { backgroundColor: "var(--tp-accent)" } : undefined}
+                              >
+                                {formatDateFn(day, "d")}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <span className="hidden print:text-black lesson-export-value lesson-export-planned-text">
                     {plannedForInput.trim() || "Not set"}
                   </span>

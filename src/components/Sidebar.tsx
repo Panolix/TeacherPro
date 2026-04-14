@@ -847,10 +847,19 @@ export function Sidebar() {
       )}
 
       {debugMode && sidebarOpen && (
-        <div className="absolute bottom-2 left-3 right-3 z-[55] rounded-lg border border-[#3a3a3a] bg-[#141414] p-2 shadow-xl">
+        <div className={`absolute ${settingsOpen ? "bottom-[18rem]" : "bottom-24"} left-3 right-3 z-[55] rounded-lg border border-[#3a3a3a] bg-[#141414] p-2 shadow-xl`}>
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-300">Debug Console</div>
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  logDebug("debug", "disabled", "Runtime diagnostics OFF");
+                  setDebugMode(false);
+                }}
+                className="text-[11px] text-amber-300 hover:text-amber-200"
+              >
+                Disable
+              </button>
               <button onClick={handleCopyDebugLog} className="text-[11px] text-gray-300 hover:text-white">Copy</button>
               <button
                 onClick={() => {
