@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Sidebar } from "./components/Sidebar";
 import { MainContent } from "./components/MainContent";
 import { useAppStore } from "./store";
@@ -14,7 +15,9 @@ function App() {
   const { initVault, themeMode, accentColor } = useAppStore();
 
   useEffect(() => {
-    initVault();
+    initVault().finally(() => {
+      getCurrentWindow().show();
+    });
   }, []);
 
   useEffect(() => {
