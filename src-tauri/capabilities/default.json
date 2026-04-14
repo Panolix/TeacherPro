@@ -9,6 +9,28 @@
     "core:default",
     "opener:default",
     "dialog:default",
-    "fs:default"
+    "fs:default",
+    "os:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-exists",
+    "fs:allow-read-dir",
+    "fs:allow-mkdir",
+    "fs:allow-remove",
+    "fs:allow-rename",
+    "fs:allow-app-write",
+    "fs:allow-app-read",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "**"
+        },
+        {
+          "path": "$HOME/**"
+        }
+      ]
+    },
+    "store:default"
   ]
 }

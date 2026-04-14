@@ -1,12 +1,14 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-background: #ffffff;
-  --color-foreground: #0f172a;
+  --color-background: #121212;
+  --color-foreground: #f8f8f8;
+  --color-panel: #1e1e1e;
+  --color-border: #3a3a3a;
+  --color-muted: #a3a3a3;
+  --color-accent: #3b82f6;
+  --color-accent-hover: #2563eb;
+  --color-hover: #2a2a2a;
 }
 
 @layer base {
@@ -16,3 +18,123 @@
     font-family: ui-sans-serif, system-ui, sans-serif;
   }
 }
+
+/* TipTap Editor Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 50vh;
+  color: #f8f8f8;
+  font-size: 1.05rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: #ffffff;
+}
+
+.ProseMirror p {
+  margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.7;
+}
+
+.ProseMirror ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.5rem;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--color-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* TipTap Table Styles */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 2rem 0;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-background);
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width: 1em;
+  border: 1px solid var(--color-border);
+  padding: 12px 16px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror th {
+  font-weight: 600;
+  text-align: left;
+  background-color: var(--color-panel);
+  color: #e5e5e5;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.ProseMirror td > p {
+  margin: 0;
+}
+
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(59, 130, 246, 0.15);
+  pointer-events: none;
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .ProseMirror {
+    color: black !important;
+  }
+
+  .ProseMirror h2, .ProseMirror h1, .ProseMirror h3, .ProseMirror p, .ProseMirror li {
+    color: black !important;
+  }
+
+  .ProseMirror table {
+    border-color: #ccc !important;
+    background-color: white !important;
+  }
+
+  .ProseMirror th {
+    background-color: #f0f0f0 !important;
+    color: black !important;
+    border-color: #ccc !important;
+  }
+
+  .ProseMirror td {
+    border-color: #ccc !important;
+  }
+}
+
