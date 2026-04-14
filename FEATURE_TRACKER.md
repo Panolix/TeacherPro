@@ -209,3 +209,13 @@ When adding or changing behavior:
 - Fixed PDF export table sizing bug where `min-width: max-content` forced columns to stretch to untruncated filename widths. Enforced `table-layout: fixed !important` and `width: 100% !important` for consistent spacing between app and PDF.
 - Set default window dimensions to 1100x800, enforce minimum 800x600 size, and default to `maximized: true` so the app always opens maximizing screen space.
 - Re-added the `Teacher: ` UI into the PDF export modal as an editable text input instead of purely removing it, allowing manual personalization.
+
+### Window Management & OS Integration
+- Startup defaults to natively maximized and centered window using Tauri `tauri.conf.json`. 
+- Removed `visible: false` background-rendering logic to solve macOS desktop workspace hijacking when jumping into full-screen.
+
+### Typography & Export Integrity
+- Base Editor typographic scale standardized specifically to 12pt (matching Microsoft Word defaults) for strict 1-to-1 physical A4 realism.
+- Editor wrapper expanded to `1800px` to naturally handle widescreen macOS monitors.
+- Table headers natively collapse internal `<p>` tag margins to remove ugly whitespace on PDF generation.
+- PDF generation engine natively forces an `1062px` width DOM-lock before taking `html2canvas` snapshots, perfectly scaling to 297mm A4 without squashing or stretching.
