@@ -694,12 +694,6 @@ export function Sidebar() {
     [clearInstallPoller, pollModelInstallProgress],
   );
 
-  const buildHuggingFaceGemma4DownloadUrl = (modelId: string) =>
-    `https://huggingface.co/models?sort=trending&search=${encodeURIComponent(`${modelId} gguf`)}`;
-
-  const buildKaggleGemma4DownloadUrl = (modelId: string) =>
-    `https://kaggle.com/models?query=${encodeURIComponent(modelId.replace("gemma4:", "gemma 4 "))}`;
-
   const syncInstalledModels = async () => {
     setAiInfoMessage(null);
     setAiErrorMessage(null);
@@ -808,15 +802,7 @@ export function Sidebar() {
     }
   };
 
-  const openExternalModelSource = async (url: string) => {
-    setAiErrorMessage(null);
 
-    try {
-      await invoke("open_file_in_default_app", { path: url });
-    } catch (error) {
-      setAiErrorMessage(`Could not open model source link: ${String(error)}`);
-    }
-  };
 
   const handleImportGguf = async (modelId: string) => {
     setAiInfoMessage(null);

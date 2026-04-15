@@ -108,41 +108,7 @@ function parseThinkingFromResponse(raw: string): { thinking: string | null; resp
 
 
 
-/**
- * Converts the markdown subset Gemma emits into TipTap-compatible HTML so that
- * inserted text comes out as actual bold/italic/code rather than raw asterisks.
- */
-function markdownToTiptapHtml(text: string): string {
-  // Escape HTML entities first so raw < > & don't become tags.
-  const escape = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  const inlineHtml = (line: string): string => {
-    let s = escape(line);
-    // Bold **text** or __text__
-    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/__(.+?)__/g, "<strong>$1</strong>");
-    // Italic *text* or _text_ (not already consumed by bold)
-    s = s.replace(/\*([^*\n]+?)\*/g, "<em>$1</em>");
-    s = s.replace(/_([^_\n]+?)_/g, "<em>$1</em>");
-    // Inline code `code`
-    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-    return s;
-  };
-
-  // Split into paragraphs on blank lines; each non-empty line group → <p>
-  const paragraphs = text.split(/\n{2,}/);
-  return paragraphs
-    .map((block) => {
-      const trimmed = block.trim();
-      if (!trimmed) return "";
-      // Within a block, single newlines become <br>
-      const lines = trimmed.split("\n").map(inlineHtml).join("<br>");
-      return `<p>${lines}</p>`;
-    })
-    .filter(Boolean)
-    .join("");
-}
 function AiMarkdown({ text }: { text: string }) {
   // Render inline spans: **bold**, *italic*, `code`
   function renderInline(line: string, baseKey: string): React.ReactNode[] {
@@ -740,10 +706,8 @@ export function Editor() {
     setPendingMaterialDrop,
     logDebug,
     showActionButtonLabels,
-    sidebarOpen,
     subjects,
     aiEnabled,
-    aiProvider,
     aiDefaultModelId,
     aiChatHistoryLimit,
     aiTemperature,

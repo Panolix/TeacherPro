@@ -126,6 +126,7 @@ interface AppState {
   aiChatHistoryLimit: number;
   aiTemperature: number;
   aiSystemPrompt: string;
+  aiThinkingEnabled: boolean;
   aiTranslateTargetLanguage: string;
   aiModelInstallState: Record<string, AiModelInstallState>;
   lessonSubjectIndex: Record<string, string>;
@@ -528,6 +529,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiProvider: DEFAULT_UI_SETTINGS.aiProvider,
   aiDefaultModelId: DEFAULT_UI_SETTINGS.aiDefaultModelId,
   aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
+  aiChatHistoryLimit: DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
+  aiTemperature: DEFAULT_UI_SETTINGS.aiTemperature,
+  aiSystemPrompt: DEFAULT_UI_SETTINGS.aiSystemPrompt,
+  aiThinkingEnabled: DEFAULT_UI_SETTINGS.aiThinkingEnabled,
   aiTranslateTargetLanguage: DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
   aiModelInstallState: {},
   lessonSubjectIndex: {},
