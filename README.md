@@ -51,7 +51,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Smart Breadcrumbs:** The top navigation bar intelligently displays your exact location relative to your Vault.
 
 ### 📝 Lesson Plan Editor
-- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, and Unordered/Ordered lists.
+- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, Underline, Unordered/Ordered lists, text color, underline color, and multicolor highlighting.
 - **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, and resize them freely.
 - **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
 - **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
@@ -60,6 +60,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 ### 🧠 Mindmap Editor
 - **Infinite Canvas:** Build visual curriculums using a node-based interface (powered by React Flow).
 - **Drag-and-Drop Connectivity:** Create nodes, double-click to rename them, and drag connections between them to map out concepts.
+- **Color Workflow:** Right-click any standard node to apply fast preset colors or use a custom color picker; text and border contrast are auto-adjusted for readability.
 - **Material Nodes:** You can drag and drop external files directly onto the mindmap surface to create dedicated file nodes.
 - **Context Menus:** Right-click anywhere on the canvas or on specific nodes to access quick-actions (Delete, Add Node).
 
@@ -82,7 +83,9 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### ⚙️ UI & Customization
 - **Accent Colors:** Personalize your workspace! The default theme is a soft TeacherPro blue (`#9fd2e4`), but you can change the accent color to match your preference.
+- **Custom Accent Picker:** In addition to presets, you can choose any custom accent color directly from the settings color picker.
 - **Dark & Light Modes:** Full support for dark and light environments. Automatically switches or can be forced via settings.
+- **Independent Paper Tones:** Set Lesson Plan paper and Mindmap paper to White or Dark independently from the global app theme.
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
 - **Compact Action Buttons:** Save/Preview/Print/Export actions are icon-first by default, with an optional setting to show text labels.
 

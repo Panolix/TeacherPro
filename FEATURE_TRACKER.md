@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-14
+Last updated: 2026-04-15
 
 ## Purpose
 
@@ -23,6 +23,8 @@ Primary implementation:
 ### Lesson Editor
 
 - TipTap-based editor with headings, lists, formatting, and tables.
+- Extended rich-text controls now include underline, text color, underline color, and multicolor highlight.
+- Ordered list numbering visibility is explicitly styled to remain visible in the editor.
 - Lesson table insertion template with fixed planning columns.
 - Right-click table context menu:
   - Insert/delete row or column
@@ -51,6 +53,9 @@ Primary implementation:
 - Sidebar search fields are optional/on-demand and opened from section-level magnifier toggles (Lesson Plans, Mindmaps, Materials, Trash).
 - Lesson and mindmap search now includes indexed JSON content (TipTap text + metadata for lessons, node labels/material paths for mindmaps), not only filenames.
 - Material search supports both file/folder names and relative paths (including nested entries).
+- Section headers for Lesson Plans, Mindmaps, Materials, and Trash now use larger/more readable sidebar typography.
+- Appearance settings now include independent paper-tone controls for lesson plans and mindmaps.
+- Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
 - Lesson context menu includes duplicate action.
@@ -84,7 +89,8 @@ Primary implementation:
 - React Flow board with node/edge editing.
 - Double-click node label editing.
 - Context menu actions for pane/node actions.
-- Node color presets (Slate, Blue, Emerald, Amber, Rose, Violet, Teal, Light).
+- Expanded node color presets plus a custom color picker in the node context menu.
+- Custom node color application auto-computes readable text and border contrast for better accessibility.
 - Material drag/drop creates linked material nodes in the map.
 - Mindmap material drop supports drag-end coordinate fallback for WebView cases where drop events are swallowed.
 - Material nodes support preview, open in default app, and reveal in file manager.
@@ -145,6 +151,7 @@ Primary implementation:
 - `handleMaterialDrop(...)` and native/window drop handlers coordinate drag/drop flow.
 - Row-targeted material insertion computes the current table row and uses the final media/material cell when available.
 - Autosave runs in the background while manual save remains available from the toolbar.
+- Toolbar now includes underline toggle, text-color picker/reset, underline-color picker/reset, and highlight-color picker/reset.
 - `createLessonPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
 ### Material Link Extension (`src/components/extensions/MaterialLink.tsx`)
@@ -167,7 +174,8 @@ Primary implementation:
 - `addNodeAt(...)` and context-menu add helpers.
 - `handleMaterialDrop(...)` creates material-linked nodes from sidebar drags.
 - Material node actions: preview/open/reveal via double-click and context menu.
-- `applyNodeColor(nodeId, presetStyle)` applies selected node color preset.
+- `handleApplyNodeColor(...)` applies selected node color preset.
+- `handleApplyCustomNodeColor()` applies custom node color with auto-contrast text/border styling.
 - `createMindmapPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
 ### PDF Utilities (`src/utils/pdfExport.ts`)
@@ -180,8 +188,13 @@ Primary implementation:
 ## UI and UX Design Decisions
 
 - Desktop-first dark UI with optional light mode.
+- Light theme has dedicated panel/menu/overlay styling so settings, context menus, and preview surfaces stay readable and consistent.
 - Accent color system with four choices (blue, emerald, rose, amber).
+- Accent settings now include a custom color picker in addition to preset swatches.
+- Lesson paper tone (white/dark) and mindmap paper tone (white/dark) are configurable independently from app theme mode.
+- Default teacher and default paper tones are grouped under a dedicated Defaults section in Settings.
 - Action toolbar text labels are optional; icon-only mode is the default for denser layouts.
+- Mindmap node styling uses a hybrid color UX: instant presets for speed and a custom picker for precision.
 - Sidebar sections are collapsible and preserve state.
 - Deletion UX is now soft-delete semantics; lessons, mindmaps, and materials are moved to `Trash` rather than permanently removed.
 - Trash recovery is available in-app via sidebar context menu (Restore), with optional permanent deletion for cleanup.
@@ -206,6 +219,7 @@ Primary implementation:
 
 - Verify drag/drop placement in all target contexts after latest table-cell targeting patch.
 - Verify native print dialog behavior consistently across environments.
+- Verify PDF preview/export output for underline color and highlight combinations in complex table-heavy lesson plans.
 
 ## Update Checklist
 

@@ -5,6 +5,9 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
+import UnderlineExtension from "@tiptap/extension-underline";
 import {
   addMonths,
   eachDayOfInterval,
@@ -22,6 +25,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
+import { UnderlineColor } from "./extensions/UnderlineColor";
 import {
   createPdfBlobUrl,
   renderElementToPdfBytes,
@@ -32,6 +36,7 @@ import {
   Bold,
   Italic,
   Strikethrough,
+  Underline,
   Heading1,
   Heading2,
   Heading3,
@@ -175,6 +180,35 @@ function parseEuropeanDateToDate(value: string): Date | null {
   return parsed;
 }
 
+function normalizeColorForPicker(colorValue: unknown, fallback: string): string {
+  if (typeof colorValue !== "string") {
+    return fallback;
+  }
+
+  const trimmed = colorValue.trim();
+  const shortHex = trimmed.match(/^#([0-9a-fA-F]{3})$/);
+  if (shortHex) {
+    const [r, g, b] = shortHex[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  const rgbMatch = trimmed.match(
+    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[0-9.]+)?\s*\)$/i,
+  );
+  if (rgbMatch) {
+    const rgb = rgbMatch
+      .slice(1, 4)
+      .map((chunk) => Math.max(0, Math.min(255, Number(chunk))));
+    return `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+
+  return fallback;
+}
+
 const MenuBar = ({
   editor,
   onSave,
@@ -216,7 +250,23 @@ const MenuBar = ({
   }
 
   const FONT_SIZES = ["8pt", "10pt", "11pt", "12pt", "14pt", "16pt", "18pt", "24pt"];
-  const currentFontSize = editor.getAttributes('textStyle').fontSize || "12pt";
+  const currentFontSize = editor.getAttributes("textStyle").fontSize || "12pt";
+  const isLightTheme =
+    typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-tp-lesson-paper") === "light";
+  const defaultTextColor = isLightTheme ? "#111827" : "#f8f8f8";
+  const currentTextColor = normalizeColorForPicker(
+    editor.getAttributes("textStyle").color,
+    defaultTextColor,
+  );
+  const currentUnderlineColor = normalizeColorForPicker(
+    editor.getAttributes("textStyle").underlineColor,
+    currentTextColor,
+  );
+  const currentHighlightColor = normalizeColorForPicker(
+    editor.getAttributes("highlight").color,
+    "#fef08a",
+  );
 
   return (
     <div className="tp-editor-toolbar border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl mb-4 print:hidden">
@@ -263,6 +313,92 @@ const MenuBar = ({
         >
           <Strikethrough className="w-4 h-4" />
         </button>
+        <button
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          disabled={!editor.can().chain().focus().toggleUnderline().run()}
+          className={`p-2 rounded-md transition-colors ${
+            editor.isActive("underline") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
+          }`}
+        >
+          <Underline className="w-4 h-4" />
+        </button>
+
+        <div className="w-px h-6 bg-[#333333] mx-1"></div>
+
+        <div className="flex items-center gap-1 rounded-md border border-[#3a3a3a] bg-[#242424] px-1 py-1">
+          <label
+            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            title="Text Color"
+          >
+            <span className="text-[11px] text-gray-200 font-semibold">A</span>
+            <input
+              type="color"
+              value={currentTextColor}
+              onChange={(event) => editor.chain().focus().setColor(event.target.value).run()}
+              className="absolute opacity-0 pointer-events-none"
+            />
+          </label>
+          <button
+            onClick={() => editor.chain().focus().unsetColor().run()}
+            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            title="Reset Text Color"
+          >
+            A-
+          </button>
+          <label
+            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            title="Underline Color"
+          >
+            <span className="text-[11px] text-gray-200 font-semibold">U</span>
+            <input
+              type="color"
+              value={currentUnderlineColor}
+              onChange={(event) => {
+                const chain = editor.chain().focus();
+                if (!editor.isActive("underline")) {
+                  chain.toggleUnderline();
+                }
+                chain.setMark("textStyle", { underlineColor: event.target.value }).run();
+              }}
+              className="absolute opacity-0 pointer-events-none"
+            />
+          </label>
+          <button
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .setMark("textStyle", { underlineColor: null })
+                .removeEmptyTextStyle()
+                .run()
+            }
+            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            title="Reset Underline Color"
+          >
+            U-
+          </button>
+          <label
+            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            title="Highlight Color"
+          >
+            <span className="text-[11px] text-gray-200 font-semibold">H</span>
+            <input
+              type="color"
+              value={currentHighlightColor}
+              onChange={(event) =>
+                editor.chain().focus().setHighlight({ color: event.target.value }).run()
+              }
+              className="absolute opacity-0 pointer-events-none"
+            />
+          </label>
+          <button
+            onClick={() => editor.chain().focus().unsetHighlight().run()}
+            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            title="Clear Highlight"
+          >
+            H-
+          </button>
+        </div>
 
         <div className="w-px h-6 bg-[#333333] mx-1"></div>
 
@@ -486,8 +622,16 @@ export function Editor() {
   const editor = useEditor({
     extensions: [
       StarterKit,
+      UnderlineExtension,
       TextStyle,
+      Color.configure({
+        types: ["textStyle"],
+      }),
+      Highlight.configure({
+        multicolor: true,
+      }),
       FontSize,
+      UnderlineColor,
       Placeholder.configure({
         placeholder: "Start typing or add a lesson plan table...",
       }),
@@ -1445,7 +1589,7 @@ export function Editor() {
 
           {tableContextMenu && (
             <div
-              className="fixed z-[70] min-w-[220px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl print:hidden"
+              className="tp-menu-surface fixed z-[70] min-w-[220px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl print:hidden"
               style={{ top: tableContextMenu.y, left: tableContextMenu.x }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -1545,7 +1689,7 @@ export function Editor() {
           <div
             ref={pdfPreviewRef}
             tabIndex={-1}
-            className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">

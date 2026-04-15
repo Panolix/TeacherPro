@@ -39,7 +39,7 @@ export function MiniCalendar() {
   if (!sidebarOpen) return null;
 
   return (
-    <div className="p-4 border-b border-[#333333]">
+    <div className="tp-mini-calendar p-4 border-b border-[#333333]">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-semibold text-gray-200">
           {format(currentDate, "MMMM yyyy")}

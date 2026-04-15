@@ -61,12 +61,15 @@ export interface DebugEventEntry {
 }
 
 export type ThemeMode = "dark" | "light";
-export type AccentColor = "blue" | "emerald" | "rose" | "amber";
+export type AccentColor = string;
+export type PaperTone = "light" | "dark";
 export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials" | "trash";
 
 interface UISettings {
   themeMode: ThemeMode;
   accentColor: AccentColor;
+  lessonPaperTone: PaperTone;
+  mindmapPaperTone: PaperTone;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -86,6 +89,8 @@ interface AppState {
   isSearchIndexing: boolean;
   themeMode: ThemeMode;
   accentColor: AccentColor;
+  lessonPaperTone: PaperTone;
+  mindmapPaperTone: PaperTone;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -104,6 +109,8 @@ interface AppState {
   setSidebarOpen: (isOpen: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setAccentColor: (color: AccentColor) => void;
+  setLessonPaperTone: (tone: PaperTone) => void;
+  setMindmapPaperTone: (tone: PaperTone) => void;
   setCalendarCollapsed: (collapsed: boolean) => void;
   toggleSectionCollapsed: (section: SidebarSectionKey) => void;
   setDebugMode: (enabled: boolean) => void;
@@ -140,6 +147,8 @@ const STORE_KEY = "teacherpro-settings.json";
 const DEFAULT_UI_SETTINGS: UISettings = {
   themeMode: "dark",
   accentColor: "blue",
+  lessonPaperTone: "dark",
+  mindmapPaperTone: "dark",
   calendarCollapsed: false,
   sectionCollapsed: {
     lessonPlans: false,
@@ -428,6 +437,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   isSearchIndexing: false,
   themeMode: DEFAULT_UI_SETTINGS.themeMode,
   accentColor: DEFAULT_UI_SETTINGS.accentColor,
+  lessonPaperTone: DEFAULT_UI_SETTINGS.lessonPaperTone,
+  mindmapPaperTone: DEFAULT_UI_SETTINGS.mindmapPaperTone,
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
@@ -452,6 +463,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({
           themeMode: savedSettings.themeMode || DEFAULT_UI_SETTINGS.themeMode,
           accentColor: savedSettings.accentColor || DEFAULT_UI_SETTINGS.accentColor,
+          lessonPaperTone: savedSettings.lessonPaperTone || DEFAULT_UI_SETTINGS.lessonPaperTone,
+          mindmapPaperTone: savedSettings.mindmapPaperTone || DEFAULT_UI_SETTINGS.mindmapPaperTone,
           calendarCollapsed: savedSettings.calendarCollapsed ?? DEFAULT_UI_SETTINGS.calendarCollapsed,
           sectionCollapsed: {
             ...DEFAULT_UI_SETTINGS.sectionCollapsed,
@@ -483,6 +496,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAccentColor: (color) => {
     set({ accentColor: color });
     void persistUiSettings({ accentColor: color });
+  },
+  setLessonPaperTone: (tone) => {
+    set({ lessonPaperTone: tone });
+    void persistUiSettings({ lessonPaperTone: tone });
+  },
+  setMindmapPaperTone: (tone) => {
+    set({ mindmapPaperTone: tone });
+    void persistUiSettings({ mindmapPaperTone: tone });
   },
   setCalendarCollapsed: (collapsed) => {
     set({ calendarCollapsed: collapsed });

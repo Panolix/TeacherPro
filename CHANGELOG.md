@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.1] - 2026-04-15
+### Added
+- Custom accent color picker in Settings, alongside preset accent swatches.
+- Independent paper-tone defaults for Lesson Plans and Mindmaps (white/dark writing surface).
+- Expanded Settings panel with section tabs: Appearance, Defaults, and Advanced.
+
+### Changed
+- Light mode styling overhaul for better readability and consistency across sidebar, menus, settings, previews, and calendar surfaces.
+- Sidebar collapsible category spacing and header action controls are now visually consistent across Lesson Plans, Mindmaps, Materials, and Trash.
+- Settings panel now uses fixed-height tab content so switching tabs no longer causes layout jumps.
+
+### Fixed
+- Ordered list numbering visibility in lesson editor content.
+
 ## [1.1.0] - 2026-04-14
 ### Added
 - Content-aware sidebar search for Lesson Plans and Mindmaps using indexed document data (not only file names).

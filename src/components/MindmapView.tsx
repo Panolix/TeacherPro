@@ -60,6 +60,58 @@ interface MaterialPreviewState {
   blobUrl?: string;
 }
 
+function normalizeHexColor(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  const shortHex = trimmed.match(/^#([0-9a-fA-F]{3})$/);
+  if (shortHex) {
+    const [r, g, b] = shortHex[1].split("");
+    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+  }
+
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+    return trimmed.toLowerCase();
+  }
+
+  return fallback;
+}
+
+function clampColorChannel(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function shiftHexColor(hexColor: string, offset: number): string {
+  const normalized = normalizeHexColor(hexColor, "#2d2d2d");
+  const r = clampColorChannel(Number.parseInt(normalized.slice(1, 3), 16) + offset);
+  const g = clampColorChannel(Number.parseInt(normalized.slice(3, 5), 16) + offset);
+  const b = clampColorChannel(Number.parseInt(normalized.slice(5, 7), 16) + offset);
+  return `#${[r, g, b].map((chunk) => chunk.toString(16).padStart(2, "0")).join("")}`;
+}
+
+function getReadableTextColor(hexColor: string): string {
+  const normalized = normalizeHexColor(hexColor, "#2d2d2d");
+  const r = Number.parseInt(normalized.slice(1, 3), 16);
+  const g = Number.parseInt(normalized.slice(3, 5), 16);
+  const b = Number.parseInt(normalized.slice(5, 7), 16);
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness >= 160 ? "#111827" : "#ffffff";
+}
+
+function buildNodeColorStyle(backgroundColor: string): Record<string, string> {
+  const normalizedBackground = normalizeHexColor(backgroundColor, "#2d2d2d");
+  const textColor = getReadableTextColor(normalizedBackground);
+  const borderOffset = textColor === "#ffffff" ? -26 : -16;
+
+  return {
+    background: normalizedBackground,
+    color: textColor,
+    border: `1px solid ${shiftHexColor(normalizedBackground, borderOffset)}`,
+  };
+}
+
 const NODE_STYLE = {
   background: "#2d2d2d",
   color: "#e5e5e5",
@@ -82,42 +134,62 @@ const NODE_COLOR_PRESETS: NodeColorPreset[] = [
   {
     id: "slate",
     label: "Slate",
-    style: { background: "#2d2d2d", color: "#e5e5e5", border: "1px solid #444" },
+    style: buildNodeColorStyle("#2d2d2d"),
   },
   {
     id: "blue",
     label: "Blue",
-    style: { background: "#9fd2e4", color: "#ffffff", border: "1px solid #7cb1c4" },
+    style: buildNodeColorStyle("#9fd2e4"),
   },
   {
     id: "emerald",
     label: "Emerald",
-    style: { background: "#059669", color: "#ffffff", border: "1px solid #047857" },
+    style: buildNodeColorStyle("#059669"),
   },
   {
     id: "amber",
     label: "Amber",
-    style: { background: "#d97706", color: "#ffffff", border: "1px solid #b45309" },
+    style: buildNodeColorStyle("#d97706"),
   },
   {
     id: "rose",
     label: "Rose",
-    style: { background: "#e11d48", color: "#ffffff", border: "1px solid #be123c" },
+    style: buildNodeColorStyle("#e11d48"),
   },
   {
     id: "violet",
     label: "Violet",
-    style: { background: "#7c3aed", color: "#ffffff", border: "1px solid #6d28d9" },
+    style: buildNodeColorStyle("#7c3aed"),
   },
   {
     id: "teal",
     label: "Teal",
-    style: { background: "#0f766e", color: "#ffffff", border: "1px solid #0f766e" },
+    style: buildNodeColorStyle("#0f766e"),
+  },
+  {
+    id: "indigo",
+    label: "Indigo",
+    style: buildNodeColorStyle("#4338ca"),
+  },
+  {
+    id: "sky",
+    label: "Sky",
+    style: buildNodeColorStyle("#0ea5e9"),
+  },
+  {
+    id: "lime",
+    label: "Lime",
+    style: buildNodeColorStyle("#65a30d"),
+  },
+  {
+    id: "coral",
+    label: "Coral",
+    style: buildNodeColorStyle("#f97316"),
   },
   {
     id: "light",
     label: "Light",
-    style: { background: "#f8fafc", color: "#111827", border: "1px solid #cbd5e1" },
+    style: buildNodeColorStyle("#f8fafc"),
   },
 ];
 
@@ -236,7 +308,7 @@ export function MindmapView() {
     activeFilePath,
     createNewMindmap,
     vaultPath,
-    themeMode,
+    mindmapPaperTone,
     showActionButtonLabels,
     draggedMaterial,
     setDraggedMaterial,
@@ -250,6 +322,7 @@ export function MindmapView() {
   const [isPdfBusy, setIsPdfBusy] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [customNodeColor, setCustomNodeColor] = useState("#2d2d2d");
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
   const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
   const materialPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -343,6 +416,21 @@ export function MindmapView() {
       materialPreviewRef.current?.focus();
     });
   }, [materialPreview]);
+
+  useEffect(() => {
+    if (!contextMenu || contextMenu.target.kind !== "node") {
+      return;
+    }
+
+    const { nodeId } = contextMenu.target;
+    const node = nodes.find((item) => item.id === nodeId);
+    if (!node || getMaterialMetaFromNode(node)) {
+      return;
+    }
+
+    const nodeBackground = normalizeHexColor(node.style?.background, "#2d2d2d");
+    setCustomNodeColor(nodeBackground);
+  }, [contextMenu, nodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -859,6 +947,14 @@ export function MindmapView() {
     setContextMenu(null);
   };
 
+  const handleApplyCustomNodeColor = () => {
+    handleApplyNodeColor({
+      id: "custom",
+      label: "Custom",
+      style: buildNodeColorStyle(customNodeColor),
+    });
+  };
+
   let contextNode: Node | undefined;
   if (contextMenu && contextMenu.target.kind === "node") {
     const { nodeId } = contextMenu.target;
@@ -1061,7 +1157,7 @@ export function MindmapView() {
     }
   };
 
-  const isLightMode = themeMode === "light";
+  const isLightMindmapPaper = mindmapPaperTone === "light";
 
   if (!activeFilePath) {
     return (
@@ -1171,7 +1267,7 @@ export function MindmapView() {
 
       {contextMenu && (
         <div
-          className="fixed z-50 min-w-[180px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="tp-menu-surface fixed z-50 min-w-[180px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -1233,6 +1329,22 @@ export function MindmapView() {
                         />
                       ))}
                     </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={customNodeColor}
+                        onChange={(event) => setCustomNodeColor(event.target.value)}
+                        className="h-7 w-10 rounded border border-[#444] bg-transparent cursor-pointer"
+                        title="Custom node color"
+                      />
+                      <button
+                        onClick={handleApplyCustomNodeColor}
+                        className="px-2 py-1 text-xs rounded border border-[#3e3e3e] text-gray-200 hover:bg-[#2d2d2d]"
+                      >
+                        Apply Custom
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
@@ -1256,7 +1368,7 @@ export function MindmapView() {
           <div
             ref={materialPreviewRef}
             tabIndex={-1}
-            className="w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            className="tp-preview-surface w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-11 border-b border-[#333] px-4 flex items-center justify-between">
@@ -1310,7 +1422,7 @@ export function MindmapView() {
           <div
             ref={pdfPreviewRef}
             tabIndex={-1}
-            className="w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
@@ -1355,7 +1467,7 @@ export function MindmapView() {
           onPaneClick={() => setContextMenu(null)}
           panOnDrag={[0, 1]}
           fitView
-          colorMode={isLightMode ? "light" : "dark"}
+          colorMode={isLightMindmapPaper ? "light" : "dark"}
           className="print:!bg-white"
         >
           <Controls
@@ -1363,12 +1475,12 @@ export function MindmapView() {
             style={{
               display: "flex",
               flexDirection: "column",
-              backgroundColor: "#222",
-              fill: "#ccc",
-              border: "1px solid #333",
+              backgroundColor: isLightMindmapPaper ? "#f3f6fb" : "#222",
+              fill: isLightMindmapPaper ? "#334155" : "#ccc",
+              border: isLightMindmapPaper ? "1px solid #cbd5e1" : "1px solid #333",
             }}
           />
-          <Background className="print:hidden" color="#333" gap={16} />
+          <Background className="print:hidden" color={isLightMindmapPaper ? "#d5dde8" : "#333"} gap={16} />
         </ReactFlow>
       </div>
     </div>

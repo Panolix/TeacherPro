@@ -88,13 +88,13 @@ export function CalendarView() {
   };
 
   return (
-    <div className="p-8 h-full flex flex-col bg-[#1e1e1e]">
+    <div className="tp-calendar-page p-8 h-full flex flex-col bg-[#1e1e1e]">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-100">Weekly Planner</h1>
           <p className="text-gray-400 mt-1">Plan your lessons across the week.</p>
         </div>
-        <div className="flex items-center gap-4 bg-[#2a2a2a] p-1 rounded-lg border border-[#333]">
+        <div className="tp-calendar-nav flex items-center gap-4 bg-[#2a2a2a] p-1 rounded-lg border border-[#333]">
           <button onClick={prevWeek} className="p-2 hover:bg-[#333] rounded-md text-gray-300">
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -127,7 +127,7 @@ export function CalendarView() {
           const lessons = getLessonsForDate(day);
           
           return (
-            <div key={idx} className="flex flex-col bg-[#191919] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-sm">
+            <div key={idx} className="tp-calendar-day-card flex flex-col bg-[#191919] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-sm">
               <div className="p-3 border-b border-[#2a2a2a] bg-[#222] text-center">
                 <div className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{format(day, "EEEE")}</div>
                 <div className="text-2xl font-bold text-gray-200 mt-1">{format(day, "d")}</div>

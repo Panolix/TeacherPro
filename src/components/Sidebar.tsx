@@ -28,7 +28,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { AccentColor, MaterialEntry, MindmapData, ThemeMode, useAppStore } from "../store";
+import { AccentColor, MaterialEntry, MindmapData, PaperTone, ThemeMode, useAppStore } from "../store";
 import { MiniCalendar } from "./MiniCalendar";
 
 type SidebarMenuTarget =
@@ -83,6 +83,13 @@ interface MaterialPreviewState {
   mindmap?: MindmapPreviewData;
 }
 
+const ACCENT_PRESET_COLORS: Record<string, string> = {
+  blue: "#9fd2e4",
+  emerald: "#059669",
+  rose: "#e11d48",
+  amber: "#d97706",
+};
+
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; color: string }> = [
   { value: "blue", label: "Blue", color: "#9fd2e4" },
   { value: "emerald", label: "Emerald", color: "#059669" },
@@ -95,8 +102,42 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }
   { value: "light", label: "Light", icon: Sun },
 ];
 
+const PAPER_TONE_OPTIONS: Array<{ value: PaperTone; label: string }> = [
+  { value: "light", label: "White" },
+  { value: "dark", label: "Dark" },
+];
+
+type SettingsSection = "appearance" | "defaults" | "advanced";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isHexColor(value: string): boolean {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+}
+
+function normalizeHexColor(value: string): string {
+  const trimmed = value.trim();
+  const shortHex = trimmed.match(/^#([0-9a-fA-F]{3})$/);
+  if (!shortHex) {
+    return trimmed.toLowerCase();
+  }
+
+  const [r, g, b] = shortHex[1].split("");
+  return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+}
+
+function resolveAccentColorValue(accentValue: string): string {
+  if (ACCENT_PRESET_COLORS[accentValue]) {
+    return ACCENT_PRESET_COLORS[accentValue];
+  }
+
+  if (isHexColor(accentValue)) {
+    return normalizeHexColor(accentValue);
+  }
+
+  return ACCENT_PRESET_COLORS.blue;
 }
 
 function escapeHtml(value: string): string {
@@ -117,8 +158,27 @@ function formatPreviewDate(isoValue: string | null | undefined): string {
   return date.toLocaleDateString();
 }
 
+function isSafeCssColor(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return (
+    /^#[0-9a-fA-F]{3,8}$/.test(trimmed) ||
+    /^rgba?\([^()]+\)$/i.test(trimmed) ||
+    /^hsla?\([^()]+\)$/i.test(trimmed) ||
+    /^[a-zA-Z]+$/.test(trimmed)
+  );
+}
+
+function isSafeFontSize(value: string): boolean {
+  return /^\d+(?:\.\d+)?(?:px|pt|em|rem|%)$/i.test(value.trim());
+}
+
 function renderTextWithMarks(text: string, marks: unknown): string {
   let output = escapeHtml(text);
+  const textStyleParts: string[] = [];
 
   if (!Array.isArray(marks)) {
     return output;
@@ -135,9 +195,36 @@ function renderTextWithMarks(text: string, marks: unknown): string {
       output = `<em>${output}</em>`;
     } else if (mark.type === "strike") {
       output = `<s>${output}</s>`;
+    } else if (mark.type === "underline") {
+      output = `<u>${output}</u>`;
     } else if (mark.type === "code") {
       output = `<code>${output}</code>`;
+    } else if (mark.type === "highlight") {
+      const attrs = isRecord(mark.attrs) ? mark.attrs : {};
+      const color =
+        typeof attrs.color === "string" && isSafeCssColor(attrs.color)
+          ? attrs.color.trim()
+          : "#fef08a";
+      output = `<mark style="background-color: ${escapeHtml(color)};">${output}</mark>`;
+    } else if (mark.type === "textStyle") {
+      const attrs = isRecord(mark.attrs) ? mark.attrs : {};
+
+      if (typeof attrs.color === "string" && isSafeCssColor(attrs.color)) {
+        textStyleParts.push(`color: ${attrs.color.trim()}`);
+      }
+
+      if (typeof attrs.underlineColor === "string" && isSafeCssColor(attrs.underlineColor)) {
+        textStyleParts.push(`text-decoration-color: ${attrs.underlineColor.trim()}`);
+      }
+
+      if (typeof attrs.fontSize === "string" && isSafeFontSize(attrs.fontSize)) {
+        textStyleParts.push(`font-size: ${attrs.fontSize.trim()}`);
+      }
     }
+  }
+
+  if (textStyleParts.length > 0) {
+    output = `<span style="${escapeHtml(textStyleParts.join("; "))}">${output}</span>`;
   }
 
   return output;
@@ -441,6 +528,10 @@ export function Sidebar() {
     accentColor,
     setThemeMode,
     setAccentColor,
+    lessonPaperTone,
+    setLessonPaperTone,
+    mindmapPaperTone,
+    setMindmapPaperTone,
     calendarCollapsed,
     setCalendarCollapsed,
     sectionCollapsed,
@@ -461,6 +552,7 @@ export function Sidebar() {
   const [expandedMaterialFolders, setExpandedMaterialFolders] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<SidebarMenuState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
   const [lessonSearch, setLessonSearch] = useState("");
   const [mindmapSearch, setMindmapSearch] = useState("");
@@ -474,6 +566,8 @@ export function Sidebar() {
   });
   const materialPreviewRef = useRef<HTMLDivElement | null>(null);
   const [expandedTrashFolders, setExpandedTrashFolders] = useState<Record<string, boolean>>({});
+  const currentAccentPickerColor = resolveAccentColorValue(accentColor);
+  const hasCustomAccent = !Object.prototype.hasOwnProperty.call(ACCENT_PRESET_COLORS, accentColor);
 
   useEffect(() => {
     return () => {
@@ -1003,10 +1097,18 @@ export function Sidebar() {
   const handleSettingsClick = () => {
     if (!sidebarOpen) {
       setSidebarOpen(true);
+      setSettingsSection("appearance");
       setSettingsOpen(true);
       return;
     }
-    setSettingsOpen((previous) => !previous);
+
+    setSettingsOpen((previous) => {
+      const next = !previous;
+      if (next) {
+        setSettingsSection("appearance");
+      }
+      return next;
+    });
   };
 
   const handleCopyDebugLog = async () => {
@@ -1057,12 +1159,12 @@ export function Sidebar() {
     actions?: ReactNode;
     marginTop?: string;
   }) => (
-    <div className={`px-4 flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ${marginTop}`}>
+    <div className={`px-2 flex items-center justify-between text-sm text-gray-400 mb-2 ${marginTop}`}>
       <button
         onClick={onToggle}
-        className="flex items-center gap-1.5 text-left hover:text-gray-300 transition-colors"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
       >
-        {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         <span>{title}</span>
       </button>
       {actions}
@@ -1265,23 +1367,31 @@ export function Sidebar() {
             collapsed: sectionCollapsed.lessonPlans,
             onToggle: () => toggleSectionCollapsed("lessonPlans"),
             actions: vaultPath ? (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => toggleSearchField("lessonPlans")}
-                  className={`p-1 rounded ${searchOpen.lessonPlans || !!normalizedLessonSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
+                    searchOpen.lessonPlans || !!normalizedLessonSearch
+                      ? "text-[var(--tp-accent)] bg-[#232323]"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                  }`}
                   title={searchOpen.lessonPlans ? "Hide lesson search" : "Show lesson search"}
                 >
-                  <Search className="w-3.5 h-3.5" />
+                  <Search className="w-4 h-4" />
                 </button>
-                <button onClick={() => createNewLesson()} className="hover:text-gray-300 p-1" title="New lesson plan">
-                  <Plus className="w-3 h-3" />
+                <button
+                  onClick={() => createNewLesson()}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
+                  title="New lesson plan"
+                >
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             ) : null,
-            marginTop: "mt-4",
+            marginTop: "mt-3",
           })}
           {!sectionCollapsed.lessonPlans && (
-            <ul className="space-y-1 px-2 mb-6">
+            <ul className="space-y-1 px-2 mb-4">
               {(searchOpen.lessonPlans || !!normalizedLessonSearch) && (
                 <li className="px-1 pb-2">
                   <div className="relative">
@@ -1350,22 +1460,31 @@ export function Sidebar() {
             collapsed: sectionCollapsed.mindmaps,
             onToggle: () => toggleSectionCollapsed("mindmaps"),
             actions: vaultPath ? (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => toggleSearchField("mindmaps")}
-                  className={`p-1 rounded ${searchOpen.mindmaps || !!normalizedMindmapSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
+                    searchOpen.mindmaps || !!normalizedMindmapSearch
+                      ? "text-[var(--tp-accent)] bg-[#232323]"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                  }`}
                   title={searchOpen.mindmaps ? "Hide mindmap search" : "Show mindmap search"}
                 >
-                  <Search className="w-3.5 h-3.5" />
+                  <Search className="w-4 h-4" />
                 </button>
-                <button onClick={() => createNewMindmap()} className="hover:text-gray-300 p-1">
-                  <Plus className="w-3 h-3" />
+                <button
+                  onClick={() => createNewMindmap()}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
+                  title="New mindmap"
+                >
+                  <Plus className="w-4 h-4" />
                 </button>
               </div>
             ) : null,
+            marginTop: "mt-3",
           })}
           {!sectionCollapsed.mindmaps && (
-            <ul className="space-y-1 px-2">
+            <ul className="space-y-1 px-2 mb-4">
               {(searchOpen.mindmaps || !!normalizedMindmapSearch) && (
                 <li className="px-1 pb-2">
                   <div className="relative">
@@ -1430,34 +1549,38 @@ export function Sidebar() {
             collapsed: sectionCollapsed.materials,
             onToggle: () => toggleSectionCollapsed("materials"),
             actions: (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => toggleSearchField("materials")}
                   title={searchOpen.materials ? "Hide material search" : "Show material search"}
-                  className={`p-1 rounded ${searchOpen.materials || !!normalizedMaterialSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
+                    searchOpen.materials || !!normalizedMaterialSearch
+                      ? "text-[var(--tp-accent)] bg-[#232323]"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                  }`}
                 >
-                  <Search className="w-3.5 h-3.5" />
+                  <Search className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => addMaterialFiles()}
                   title="Add files"
-                  className="hover:text-gray-300 p-1"
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
                 >
-                  <FilePlus className="w-3.5 h-3.5" />
+                  <FilePlus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => addMaterialDirectory()}
                   title="Add folder"
-                  className="hover:text-gray-300 p-1"
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
                 >
-                  <FolderPlus className="w-3.5 h-3.5" />
+                  <FolderPlus className="w-4 h-4" />
                 </button>
               </div>
             ),
-            marginTop: "mt-6",
+            marginTop: "mt-3",
           })}
           {!sectionCollapsed.materials && (
-            <ul className="space-y-1 px-2 pb-8">
+            <ul className="space-y-1 px-2 pb-4 mb-4">
               {(searchOpen.materials || !!normalizedMaterialSearch) && (
                 <li className="px-1 pb-2">
                   <div className="relative">
@@ -1490,15 +1613,19 @@ export function Sidebar() {
               <button
                 onClick={() => toggleSearchField("trash")}
                 title={searchOpen.trash ? "Hide trash search" : "Show trash search"}
-                className={`p-1 rounded ${searchOpen.trash || !!normalizedTrashSearch ? "text-[var(--tp-accent)]" : "hover:text-gray-300"}`}
+                className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
+                  searchOpen.trash || !!normalizedTrashSearch
+                    ? "text-[var(--tp-accent)] bg-[#232323]"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                }`}
               >
-                <Search className="w-3.5 h-3.5" />
+                <Search className="w-4 h-4" />
               </button>
             ),
-            marginTop: "mt-6",
+            marginTop: "mt-3",
           })}
           {!sectionCollapsed.trash && (
-            <ul className="space-y-1 px-2 pb-8">
+            <ul className="space-y-1 px-2 pb-4">
               {(searchOpen.trash || !!normalizedTrashSearch) && (
                 <li className="px-1 pb-2">
                   <div className="relative">
@@ -1541,9 +1668,9 @@ export function Sidebar() {
       </div>
 
       {settingsOpen && sidebarOpen && (
-        <div className="absolute bottom-20 left-3 right-3 z-50 rounded-xl border border-[#343434] bg-[#181818] p-4 shadow-xl">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-gray-200">Appearance</h3>
+        <div className="tp-settings-panel absolute bottom-20 left-3 z-50 w-[360px] max-w-[calc(100vw-1.5rem)] h-[520px] max-h-[calc(100vh-7rem)] rounded-xl border border-[#343434] bg-[#181818] shadow-xl overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-[#2d2d2d] flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-200">Settings</h3>
             <button
               onClick={() => setSettingsOpen(false)}
               className="text-xs text-gray-400 hover:text-gray-200"
@@ -1552,103 +1679,219 @@ export function Sidebar() {
             </button>
           </div>
 
-          <div className="mb-4">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-500 mb-2">
-              <Palette className="w-3.5 h-3.5" /> Theme
+          <div className="p-2 border-b border-[#2d2d2d]">
+            <div className="grid grid-cols-3 gap-1 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
+              <button
+                onClick={() => setSettingsSection("appearance")}
+                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  settingsSection === "appearance"
+                    ? "bg-[#232323] text-white"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                }`}
+              >
+                Appearance
+              </button>
+              <button
+                onClick={() => setSettingsSection("defaults")}
+                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  settingsSection === "defaults"
+                    ? "bg-[#232323] text-white"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                }`}
+              >
+                Defaults
+              </button>
+              <button
+                onClick={() => setSettingsSection("advanced")}
+                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  settingsSection === "advanced"
+                    ? "bg-[#232323] text-white"
+                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                }`}
+              >
+                Advanced
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {THEME_OPTIONS.map((option) => {
-                const Icon = option.icon;
-                const isActive = themeMode === option.value;
-                return (
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {settingsSection === "appearance" && (
+              <>
+                <div>
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-500 mb-2">
+                    <Palette className="w-3.5 h-3.5" /> Theme
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {THEME_OPTIONS.map((option) => {
+                      const Icon = option.icon;
+                      const isActive = themeMode === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          onClick={() => setThemeMode(option.value)}
+                          className={`flex items-center justify-center gap-2 px-2 py-2 rounded-md text-sm border transition-colors ${
+                            isActive
+                              ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                              : "border-[#333] text-gray-300 hover:bg-[#222]"
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Accent Color</div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {ACCENT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        onClick={() => setAccentColor(option.value)}
+                        title={option.label}
+                        className={`h-8 rounded-md border transition-transform ${
+                          accentColor === option.value
+                            ? "border-white scale-[1.04]"
+                            : "border-[#333] hover:scale-[1.03]"
+                        }`}
+                        style={{ backgroundColor: option.color }}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <label className="text-xs text-gray-400">Custom</label>
+                    <input
+                      type="color"
+                      value={currentAccentPickerColor}
+                      onChange={(event) => setAccentColor(event.target.value.toLowerCase())}
+                      className={`h-8 w-11 cursor-pointer rounded-md border bg-transparent p-0.5 ${
+                        hasCustomAccent ? "border-[var(--tp-accent)]" : "border-[#333]"
+                      }`}
+                      title="Pick a custom accent color"
+                    />
+                    <button
+                      onClick={() => setAccentColor("blue")}
+                      className="ml-auto px-2 py-1 text-xs rounded border border-[#333] text-gray-300 hover:bg-[#222]"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Toolbar Labels</div>
                   <button
-                    key={option.value}
-                    onClick={() => setThemeMode(option.value)}
-                    className={`flex items-center justify-center gap-2 px-2 py-2 rounded-md text-sm border transition-colors ${
-                      isActive
+                    onClick={() => setShowActionButtonLabels(!showActionButtonLabels)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors ${
+                      showActionButtonLabels
                         ? "border-[var(--tp-accent)] text-white bg-[#232323]"
                         : "border-[#333] text-gray-300 hover:bg-[#222]"
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    {option.label}
+                    <span>Show action button text</span>
+                    <span className="text-xs uppercase tracking-wider">{showActionButtonLabels ? "On" : "Off"}</span>
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              </>
+            )}
 
-          <div>
-            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Teacher</div>
-            <input
-              type="text"
-              value={defaultTeacherName}
-              onChange={(e) => setDefaultTeacherName(e.target.value)}
-              placeholder="e.g. John Doe"
-              className="w-full bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
-            />
-          </div>
+            {settingsSection === "defaults" && (
+              <>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Teacher</div>
+                  <input
+                    type="text"
+                    value={defaultTeacherName}
+                    onChange={(e) => setDefaultTeacherName(e.target.value)}
+                    placeholder="e.g. John Doe"
+                    className="w-full bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
+                  />
+                </div>
 
-          <div className="mt-4">
-            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Toolbar Labels</div>
-            <button
-              onClick={() => setShowActionButtonLabels(!showActionButtonLabels)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors ${
-                showActionButtonLabels
-                  ? "border-[var(--tp-accent)] text-white bg-[#232323]"
-                  : "border-[#333] text-gray-300 hover:bg-[#222]"
-              }`}
-            >
-              <span>Show action button text</span>
-              <span className="text-xs uppercase tracking-wider">{showActionButtonLabels ? "On" : "Off"}</span>
-            </button>
-          </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Lesson Paper</div>
+                  <p className="text-[11px] text-gray-500 mb-2">
+                    Controls the writing surface background while editing lesson plans.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PAPER_TONE_OPTIONS.map((option) => {
+                      const isActive = lessonPaperTone === option.value;
+                      return (
+                        <button
+                          key={`lesson-paper-${option.value}`}
+                          onClick={() => setLessonPaperTone(option.value)}
+                          className={`px-2 py-2 rounded-md text-sm border transition-colors ${
+                            isActive
+                              ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                              : "border-[#333] text-gray-300 hover:bg-[#222]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-          <div>
-            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Accent Color</div>
-            <div className="grid grid-cols-4 gap-2">
-              {ACCENT_OPTIONS.map((option) => (
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Mindmap Paper</div>
+                  <p className="text-[11px] text-gray-500 mb-2">
+                    Controls the mindmap canvas background while brainstorming.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PAPER_TONE_OPTIONS.map((option) => {
+                      const isActive = mindmapPaperTone === option.value;
+                      return (
+                        <button
+                          key={`mindmap-paper-${option.value}`}
+                          onClick={() => setMindmapPaperTone(option.value)}
+                          className={`px-2 py-2 rounded-md text-sm border transition-colors ${
+                            isActive
+                              ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                              : "border-[#333] text-gray-300 hover:bg-[#222]"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {settingsSection === "advanced" && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Diagnostics</div>
                 <button
-                  key={option.value}
-                  onClick={() => setAccentColor(option.value)}
-                  title={option.label}
-                  className={`h-8 rounded-md border transition-transform ${
-                    accentColor === option.value
-                      ? "border-white scale-[1.04]"
-                      : "border-[#333] hover:scale-[1.03]"
+                  onClick={() => {
+                    const next = !debugMode;
+                    setDebugMode(next);
+                    if (next) {
+                      logDebug("debug", "enabled", "Runtime diagnostics ON");
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors ${
+                    debugMode
+                      ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                      : "border-[#333] text-gray-300 hover:bg-[#222]"
                   }`}
-                  style={{ backgroundColor: option.color }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-[#2d2d2d]">
-            <button
-              onClick={() => {
-                const next = !debugMode;
-                setDebugMode(next);
-                if (next) {
-                  logDebug("debug", "enabled", "Runtime diagnostics ON");
-                }
-              }}
-              className={`w-full flex items-center justify-between px-2 py-2 rounded-md text-sm border transition-colors ${
-                debugMode
-                  ? "border-[var(--tp-accent)] text-white bg-[#232323]"
-                  : "border-[#333] text-gray-300 hover:bg-[#222]"
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Bug className="w-4 h-4" /> Debug Mode
-              </span>
-              <span className="text-xs uppercase tracking-wider">{debugMode ? "On" : "Off"}</span>
-            </button>
+                >
+                  <span className="flex items-center gap-2">
+                    <Bug className="w-4 h-4" /> Debug Mode
+                  </span>
+                  <span className="text-xs uppercase tracking-wider">{debugMode ? "On" : "Off"}</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {debugMode && sidebarOpen && (
-        <div className={`absolute ${settingsOpen ? "bottom-[18rem]" : "bottom-24"} left-3 right-3 z-[55] rounded-lg border border-[#3a3a3a] bg-[#141414] p-2 shadow-xl`}>
+      {debugMode && sidebarOpen && !settingsOpen && (
+        <div className="tp-debug-console absolute bottom-24 left-3 right-3 z-[55] rounded-lg border border-[#3a3a3a] bg-[#141414] p-2 shadow-xl">
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-300">Debug Console</div>
             <div className="flex items-center gap-2">
@@ -1689,7 +1932,7 @@ export function Sidebar() {
 
       {contextMenu && (
         <div
-          className="fixed z-[60] min-w-[170px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="tp-menu-surface fixed z-[60] min-w-[170px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -1788,7 +2031,7 @@ export function Sidebar() {
           <div
             ref={materialPreviewRef}
             tabIndex={-1}
-            className="w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
+            className="tp-preview-surface w-full max-w-5xl max-h-[88vh] bg-[#151515] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="h-11 border-b border-[#333] px-4 flex items-center justify-between">

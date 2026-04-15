@@ -13,6 +13,27 @@
 
 :root {
   --tp-accent: #9fd2e4;
+  --tp-app-bg: #121212;
+  --tp-panel-bg: #1e1e1e;
+  --tp-panel-elevated: #181818;
+  --tp-panel-muted: #222222;
+  --tp-border-strong: #333333;
+  --tp-border-soft: #3a3a3a;
+  --tp-text-primary: #f3f4f6;
+  --tp-text-muted: #9ca3af;
+  --tp-text-soft: #6b7280;
+}
+
+html[data-tp-theme="light"] {
+  --tp-app-bg: #eef2f7;
+  --tp-panel-bg: #f8fafd;
+  --tp-panel-elevated: #ffffff;
+  --tp-panel-muted: #edf2f8;
+  --tp-border-strong: #d3dde9;
+  --tp-border-soft: #d9e3ee;
+  --tp-text-primary: #172033;
+  --tp-text-muted: #4d5d73;
+  --tp-text-soft: #6d7d93;
 }
 
 @layer base {
@@ -127,6 +148,240 @@ html[data-tp-theme="light"] .ProseMirror th {
   color: #0f172a;
 }
 
+/* Light mode overhaul for consistency across settings/menus/overlays */
+html[data-tp-theme="light"] .tp-app-shell {
+  background-color: var(--tp-app-bg) !important;
+}
+
+html[data-tp-theme="light"] .tp-main,
+html[data-tp-theme="light"] .tp-main-header,
+html[data-tp-theme="light"] .tp-sidebar,
+html[data-tp-theme="light"] .tp-editor-toolbar,
+html[data-tp-theme="light"] .tp-editor-surface,
+html[data-tp-theme="light"] .tp-mindmap,
+html[data-tp-theme="light"] .tp-calendar-page {
+  background-color: var(--tp-panel-bg) !important;
+  border-color: var(--tp-border-strong) !important;
+  color: var(--tp-text-primary) !important;
+}
+
+html[data-tp-theme="light"] .tp-main .text-gray-100,
+html[data-tp-theme="light"] .tp-main .text-gray-200,
+html[data-tp-theme="light"] .tp-main .text-gray-300,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-100,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-200,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-300,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-100,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-200,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-300 {
+  color: var(--tp-text-primary) !important;
+}
+
+html[data-tp-theme="light"] .tp-main .text-gray-400,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-400,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-400 {
+  color: var(--tp-text-muted) !important;
+}
+
+html[data-tp-theme="light"] .tp-main .text-gray-500,
+html[data-tp-theme="light"] .tp-sidebar .text-gray-500,
+html[data-tp-theme="light"] .tp-mindmap .text-gray-500 {
+  color: var(--tp-text-soft) !important;
+}
+
+html[data-tp-theme="light"] .tp-settings-panel,
+html[data-tp-theme="light"] .tp-debug-console,
+html[data-tp-theme="light"] .tp-menu-surface,
+html[data-tp-theme="light"] .tp-preview-surface {
+  background-color: var(--tp-panel-elevated) !important;
+  border-color: var(--tp-border-strong) !important;
+  color: var(--tp-text-primary) !important;
+}
+
+html[data-tp-theme="light"] .tp-settings-panel .bg-\[\#232323\],
+html[data-tp-theme="light"] .tp-settings-panel .bg-\[\#222\],
+html[data-tp-theme="light"] .tp-settings-panel .bg-\[\#202020\],
+html[data-tp-theme="light"] .tp-debug-console .bg-\[\#222\] {
+  background-color: var(--tp-panel-muted) !important;
+  border-color: var(--tp-border-soft) !important;
+  color: var(--tp-text-primary) !important;
+}
+
+html[data-tp-theme="light"] .tp-settings-panel input,
+html[data-tp-theme="light"] .tp-settings-panel button,
+html[data-tp-theme="light"] .tp-debug-console button,
+html[data-tp-theme="light"] .tp-menu-surface button {
+  color: inherit;
+}
+
+html[data-tp-theme="light"] .tp-menu-surface .hover\:bg-\[\#2d2d2d\]:hover,
+html[data-tp-theme="light"] .tp-menu-surface .hover\:bg-\[\#232323\]:hover,
+html[data-tp-theme="light"] .tp-menu-surface .hover\:bg-\[\#303030\]:hover {
+  background-color: #eaf0f7 !important;
+}
+
+html[data-tp-theme="light"] .tp-preview-surface .text-gray-200,
+html[data-tp-theme="light"] .tp-preview-surface .text-gray-300,
+html[data-tp-theme="light"] .tp-preview-surface .text-gray-400 {
+  color: #1f2c42 !important;
+}
+
+html[data-tp-theme="light"] .tp-preview-surface .bg-\[\#101010\],
+html[data-tp-theme="light"] .tp-preview-surface .bg-\[\#121212\] {
+  background-color: #f2f6fb !important;
+  border-color: #d3deea !important;
+}
+
+html[data-tp-theme="light"] .tp-editor-toolbar {
+  background-color: #f4f7fb !important;
+  border-color: var(--tp-border-strong) !important;
+}
+
+html[data-tp-theme="light"] .tp-editor-toolbar .bg-\[\#242424\],
+html[data-tp-theme="light"] .tp-editor-toolbar .bg-\[\#2d2d2d\],
+html[data-tp-theme="light"] .tp-editor-toolbar .bg-\[\#333\],
+html[data-tp-theme="light"] .tp-editor-toolbar .bg-\[\#2f2f2f\] {
+  background-color: #e9eef5 !important;
+  color: #1f2a3d !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-tp-theme="light"] .tp-editor-toolbar .hover\:bg-\[\#2d2d2d\]:hover,
+html[data-tp-theme="light"] .tp-editor-toolbar .hover\:bg-\[\#303030\]:hover,
+html[data-tp-theme="light"] .tp-editor-toolbar .hover\:bg-\[\#3a3a3a\]:hover,
+html[data-tp-theme="light"] .tp-editor-toolbar .hover\:bg-\[\#444\]:hover {
+  background-color: #dce5f0 !important;
+}
+
+html[data-tp-theme="light"] .tp-calendar-page .tp-calendar-nav,
+html[data-tp-theme="light"] .tp-calendar-page .tp-calendar-day-card,
+html[data-tp-theme="light"] .tp-mini-calendar {
+  background-color: var(--tp-panel-elevated) !important;
+  border-color: var(--tp-border-strong) !important;
+}
+
+html[data-tp-theme="light"] .tp-calendar-page .bg-\[\#222\],
+html[data-tp-theme="light"] .tp-calendar-page .bg-\[\#2d2d2d\],
+html[data-tp-theme="light"] .tp-mini-calendar .bg-\[\#2d2d2d\] {
+  background-color: var(--tp-panel-muted) !important;
+  border-color: var(--tp-border-soft) !important;
+}
+
+/* Independent lesson paper tone */
+html[data-tp-lesson-paper="light"] .tp-editor-surface {
+  background-color: #ffffff !important;
+  border-color: #d4deea !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-meta {
+  border-bottom-color: #dbe4ef !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-label,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-value,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror h1,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror h2,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror h3,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror p,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror li {
+  color: #111827 !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-input,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-planned-input,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger button {
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror table {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror th,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror td {
+  border-color: #cbd5e1 !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror th {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html[data-tp-lesson-paper="dark"] .tp-editor-surface {
+  background-color: #181818 !important;
+  border-color: #2a2a2a !important;
+}
+
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-input,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-planned-input,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-calendar-trigger button {
+  background-color: #222222 !important;
+  border-color: #333333 !important;
+  color: #f3f4f6 !important;
+}
+
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-label,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-value,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h1,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h2,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h3,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror p,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror li {
+  color: #f8f8f8 !important;
+}
+
+/* Independent mindmap paper tone */
+html[data-tp-mindmap-paper="light"] .tp-mindmap {
+  background-color: #f2f6fb !important;
+}
+
+html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-100,
+html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-200,
+html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-300 {
+  color: #172033 !important;
+}
+
+html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-400,
+html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-500 {
+  color: #5a6a80 !important;
+}
+
+html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#2d2d2d\],
+html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#2f2f2f\],
+html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#333\] {
+  background-color: #e8eef6 !important;
+  color: #18263a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-tp-mindmap-paper="dark"] .tp-mindmap {
+  background-color: #121212 !important;
+}
+
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .text-gray-100,
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .text-gray-200,
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .text-gray-300 {
+  color: #f3f4f6 !important;
+}
+
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .text-gray-400,
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#2d2d2d\],
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#2f2f2f\],
+html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
+  background-color: #2d2d2d !important;
+  color: #f3f4f6 !important;
+  border-color: #444 !important;
+}
+
 /* In-App A4 Landscape Paper Container */
 #lesson-plan-container {
   width: 100%;
@@ -183,6 +438,12 @@ html[data-tp-theme="light"] .ProseMirror th {
 .ProseMirror ul {
   list-style-type: disc;
   padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+  padding-left: 1.75rem;
   margin-bottom: 1rem;
 }
 
