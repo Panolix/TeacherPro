@@ -13,33 +13,43 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 </p>
 
 <p align="center">
+  <b>Lesson Plan Editor</b>
+  <br>
   <img src="public/screenshot5.png" alt="Lesson Plan Editor" width="78%">
   <br>
-  <sub><b>Lesson Plan Editor</b> - Focused writing surface with structured metadata and lesson-table tools.</sub>
+  Focused writing surface with structured metadata and lesson-table tools.
 </p>
 
 <p align="center">
+  <b>Mindmap Editor</b>
+  <br>
   <img src="public/screenshot6.png" alt="Mindmap Editor" width="78%">
   <br>
-  <sub><b>Mindmap Editor</b> - Visual node workspace for fast planning, linking, and concept mapping.</sub>
+  Visual node workspace for fast planning, linking, and concept mapping.
 </p>
 
 <p align="center">
+  <b>Weekly Calendar View</b>
+  <br>
   <img src="public/screenshot7.png" alt="Weekly Calendar View" width="78%">
   <br>
-  <sub><b>Weekly Calendar View</b> - Week-at-a-glance planning with quick lesson access and scheduling flow.</sub>
+  Week-at-a-glance planning with quick lesson access and scheduling flow.
 </p>
 
 <p align="center">
+  <b>Document Preview (Materials)</b>
+  <br>
   <img src="public/screenshot8.png" alt="Document Preview (Materials)" width="78%">
   <br>
-  <sub><b>Document Preview (Materials)</b> - Preview PDFs, images, and text before opening files or linking materials into lesson plans.</sub>
+  Preview PDFs, images, and text before opening files or linking materials into lesson plans.
 </p>
 
 <p align="center">
+  <b>Settings - Defaults</b>
+  <br>
   <img src="public/screenshot9.png" alt="Settings - Defaults" width="78%">
   <br>
-  <sub><b>Settings - Defaults</b> - Configure teacher defaults, subjects, and paper-tone preferences in one place.</sub>
+  Configure teacher defaults, subjects, and paper-tone preferences in one place.
 </p>
 
 ---
