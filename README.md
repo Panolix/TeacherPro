@@ -26,13 +26,13 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   </tr>
   <tr>
     <td align="center" valign="top">
-      <b>5. Lesson Plan Editor</b><br><sub>Focused writing surface with structured metadata and lesson-table tools.</sub>
+      <b>Lesson Plan Editor</b><br><sub>Focused writing surface with structured metadata and lesson-table tools.</sub>
     </td>
     <td align="center" valign="top">
-      <b>6. Mindmap Editor</b><br><sub>Visual node workspace for fast planning, linking, and concept mapping.</sub>
+      <b>Mindmap Editor</b><br><sub>Visual node workspace for fast planning, linking, and concept mapping.</sub>
     </td>
     <td align="center" valign="top">
-      <b>7. Weekly Calendar View</b><br><sub>Week-at-a-glance planning with quick lesson access and scheduling flow.</sub>
+      <b>Weekly Calendar View</b><br><sub>Week-at-a-glance planning with quick lesson access and scheduling flow.</sub>
     </td>
   </tr>
 </table>
@@ -48,10 +48,10 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   </tr>
   <tr>
     <td align="center" valign="top">
-      <b>8. Document Preview (Materials)</b><br><sub>Preview PDFs, images, and text before opening files in native apps.</sub>
+      <b>Document Preview (Materials)</b><br><sub>Preview PDFs, images, and text before opening files or linking materials into lesson plans.</sub>
     </td>
     <td align="center" valign="top">
-      <b>9. Settings - Defaults</b><br><sub>Configure teacher defaults, subjects, and paper-tone preferences in one place.</sub>
+      <b>Settings - Defaults</b><br><sub>Configure teacher defaults, subjects, and paper-tone preferences in one place.</sub>
     </td>
   </tr>
 </table>
