@@ -1,10 +1,12 @@
 name: Build Installers
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (example: 1.2.1)"
+        required: true
+        type: string
 
 jobs:
   build-tauri:
@@ -45,8 +47,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'TeacherPro v__VERSION__'
+          tagName: v${{ github.event.inputs.version }}
+          releaseName: 'TeacherPro v${{ github.event.inputs.version }}'
           releaseBody: 'Download the installers for Windows, Mac, and Linux below.'
           releaseDraft: true
           prerelease: false

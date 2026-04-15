@@ -23,10 +23,13 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import {
   createPdfBlobUrl,
+  printCurrentWindow,
+  printPdfBlobUrl,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
+import { type as osType } from "@tauri-apps/plugin-os";
 
 type ContextTarget =
   | { kind: "pane"; position: { x: number; y: number } }
@@ -1167,6 +1170,24 @@ export function MindmapView() {
       setEditingNodeId(null);
 
       const { pdfBytes, fileName } = await createMindmapPdf();
+
+      if (osType() === "windows") {
+        const printBlobUrl = createPdfBlobUrl(pdfBytes);
+
+        try {
+          await printPdfBlobUrl(printBlobUrl);
+          return;
+        } catch (printError) {
+          console.warn(
+            "Mindmap PDF blob print failed on Windows, falling back to webview print dialog.",
+            printError,
+          );
+          await printCurrentWindow();
+          return;
+        } finally {
+          revokePdfBlobUrl(printBlobUrl);
+        }
+      }
       
       const { tempDir, join } = await import("@tauri-apps/api/path");
       const { writeFile } = await import("@tauri-apps/plugin-fs");

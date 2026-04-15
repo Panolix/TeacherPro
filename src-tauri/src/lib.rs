@@ -55,10 +55,40 @@ fn print_pdf_file(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        Command::new("powershell")
-            .args(["-Command", &format!("Start-Process -FilePath \"{}\" -Verb Print", path)])
-            .spawn()
-            .map_err(|error| format!("Failed to open print dialog: {error}"))?;
+        // Some Windows PDF handlers do not expose a "Print" shell verb.
+        // When that happens, open the file so the user can print manually.
+        let escaped_path = path.replace('\'', "''");
+        let print_script = format!(
+            "$ErrorActionPreference='Stop'; Start-Process -FilePath '{escaped_path}' -Verb Print -ErrorAction Stop"
+        );
+
+        let print_attempt = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &print_script,
+            ])
+            .output()
+            .map_err(|error| format!("Failed to run print command: {error}"))?;
+
+        if !print_attempt.status.success() {
+            let open_attempt = Command::new("cmd")
+                .args(["/C", "start", "", &path])
+                .status()
+                .map_err(|error| format!("Failed to print or open file: {error}"))?;
+
+            if !open_attempt.success() {
+                let stderr = String::from_utf8_lossy(&print_attempt.stderr);
+                let detail = stderr.trim();
+                if detail.is_empty() {
+                    return Err("Failed to print PDF on Windows.".to_string());
+                }
+                return Err(format!("Failed to print PDF on Windows: {detail}"));
+            }
+        }
     }
 
     #[cfg(target_os = "linux")]

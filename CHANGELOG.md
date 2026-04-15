@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.1] - 2026-04-15
+### Changed
+- Windows print flow now prioritizes in-app print dialogs for lesson and mindmap PDFs (PDF iframe print first, then webview print fallback) before shell-level fallback behavior.
+- White lesson paper behavior on wide Windows monitors now keeps dark out-of-bounds canvas styling while still fixing gray side gutters inside the lesson container.
+- GitHub release workflow now attempts to load release body content from a version-matched release-notes file (`RELEASE_NOTES_vX.Y.Z.md`) when a tag is pushed.
+
+### Fixed
+- Windows backend PDF print command path handling was hardened to avoid false failures that caused print to fall back to opening the PDF.
+- Lesson paper tone regression where out-of-bounds editor areas became white in light paper mode has been corrected.
+
 ## [1.2.0] - 2026-04-15
 ### Added
 - Subject defaults with color coding in Settings, including subject dropdown selection in the lesson editor.

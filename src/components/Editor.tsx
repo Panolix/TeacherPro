@@ -28,10 +28,13 @@ import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
 import {
   createPdfBlobUrl,
+  printCurrentWindow,
+  printPdfBlobUrl,
   renderElementToPdfBytes,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
+import { type as osType } from "@tauri-apps/plugin-os";
 import {
   Bold,
   Italic,
@@ -1427,6 +1430,24 @@ export function Editor() {
       setPlannedCalendarOpen(false);
 
       const { pdfBytes, fileName } = await createLessonPdf();
+
+      if (osType() === "windows") {
+        const printBlobUrl = createPdfBlobUrl(pdfBytes);
+
+        try {
+          await printPdfBlobUrl(printBlobUrl);
+          return;
+        } catch (printError) {
+          console.warn(
+            "Lesson PDF blob print failed on Windows, falling back to webview print dialog.",
+            printError,
+          );
+          await printCurrentWindow(["tp-exporting"]);
+          return;
+        } finally {
+          revokePdfBlobUrl(printBlobUrl);
+        }
+      }
       
       const { tempDir, join } = await import("@tauri-apps/api/path");
       const { writeFile } = await import("@tauri-apps/plugin-fs");

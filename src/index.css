@@ -305,6 +305,16 @@ html[data-tp-theme="light"] .tp-mini-calendar .bg-\[\#2d2d2d\] {
 }
 
 /* Independent lesson paper tone */
+html[data-tp-lesson-paper="light"] .tp-editor-page #lesson-plan-container {
+  border-color: #dbe4ef !important;
+}
+
+@media (min-width: 1601px) {
+  html[data-tp-lesson-paper="light"] .tp-editor-page #lesson-plan-container {
+    background-color: #ffffff !important;
+  }
+}
+
 html[data-tp-lesson-paper="light"] .tp-editor-page .lesson-export-surface {
   background-color: #ffffff !important;
 }
