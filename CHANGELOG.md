@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.1] - 2026-04-15
+### Fixed
+- Scrollbars throughout the app now consistently use the thin dark style. The main editor area and AI chat panel were showing a white OS-native scrollbar in certain cases; all scroll containers now explicitly override `-webkit-scrollbar` styles and `scrollbar-color`.
+- Ollama menu bar app (`Ollama.app`) now closes when TeacherPro quits on macOS. Previously only the CLI process (`ollama`) was killed; now a graceful `osascript quit` is sent to the app bundle followed by a case-insensitive `pkill -ix ollama` to catch both the app and any CLI remnants.
+
 ## [1.3.0] - 2026-04-15
 ### Added
 - AI rewrite context menu now expands into six tone options: Improve, More Formal, More Casual, Simpler, More Engaging, More Concise.

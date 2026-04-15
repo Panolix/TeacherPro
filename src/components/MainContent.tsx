@@ -69,7 +69,7 @@ export function MainContent() {
       </header>
 
       {/* Main Container */}
-      <main className="tp-main-scroll flex-1 overflow-y-auto relative print:overflow-visible">
+      <main className="tp-main-scroll flex-1 overflow-y-auto relative print:overflow-visible [scrollbar-width:thin] [scrollbar-color:#3a3a3a_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
         {!vaultPath ? (
           <div className="text-center mt-20 max-w-xl mx-auto p-8">
             <h1 className="text-4xl font-bold text-gray-100 mb-6">Welcome to TeacherPro</h1>

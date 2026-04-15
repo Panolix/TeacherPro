@@ -99,9 +99,19 @@ fn stop_ollama_server() {
     }
     // Fallback: ollama serve sometimes forks a subprocess that outlives the
     // tracked child handle. Kill all ollama processes by name.
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
     {
-        let _ = Command::new("pkill").arg("-x").arg("ollama").output();
+        // The official Ollama.app runs as "Ollama" (capital O) in the menu bar.
+        // The Homebrew/CLI install runs as "ollama" (lowercase).
+        // Quit the app bundle gracefully first, then force-kill any remnant.
+        let _ = Command::new("osascript")
+            .args(["-e", "tell application \"Ollama\" to quit"])
+            .output();
+        let _ = Command::new("pkill").args(["-ix", "ollama"]).output();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = Command::new("pkill").args(["-x", "ollama"]).output();
     }
     #[cfg(windows)]
     {
