@@ -20,6 +20,8 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   Focused writing surface with structured metadata and lesson-table tools.
 </p>
 
+<hr>
+
 <p align="center">
   <b>Mindmap Editor</b>
   <br>
@@ -27,6 +29,8 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   <br>
   Visual node workspace for fast planning, linking, and concept mapping.
 </p>
+
+<hr>
 
 <p align="center">
   <b>Weekly Calendar View</b>
@@ -36,6 +40,8 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   Week-at-a-glance planning with quick lesson access and scheduling flow.
 </p>
 
+<hr>
+
 <p align="center">
   <b>Document Preview (Materials)</b>
   <br>
@@ -43,6 +49,8 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   <br>
   Preview PDFs, images, and text before opening files or linking materials into lesson plans.
 </p>
+
+<hr>
 
 <p align="center">
   <b>Settings - Defaults</b>
