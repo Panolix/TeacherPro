@@ -4,7 +4,18 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>TeacherPro</title>
+    <style>
+      /* Injected early so WKWebView picks these up before any JS renders.
+         Tailwind's * rules sometimes don't reach the root scroll container
+         in a production Tauri/WKWebView build. */
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background-color: #3a3a3a; border-radius: 9999px; }
+      ::-webkit-scrollbar-thumb:hover { background-color: #555555; }
+      ::-webkit-scrollbar-corner { background: transparent; }
+      * { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+    </style>
   </head>
 
   <body>

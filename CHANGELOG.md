@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2] - 2026-04-15
+### Fixed
+- Scrollbar fix from v1.3.1 was never actually committed — the `index.html` stylesheet change was only applied locally. CSS is now properly committed and included in the release.
+- Custom thin dark scrollbar styles (`::-webkit-scrollbar`, `scrollbar-color`) are now injected via a `<style>` block directly in `index.html` `<head>`, which is the only method reliably respected by the Tauri WKWebView document model.
+
+### Known Issues
+- Automatic shutdown of the Ollama background service when quitting TeacherPro is not yet fully working and is still under investigation.
+
 ## [1.3.1] - 2026-04-15
 ### Fixed
 - Scrollbars throughout the app now consistently use the thin dark style. The main editor area and AI chat panel were showing a white OS-native scrollbar in certain cases; all scroll containers now explicitly override `-webkit-scrollbar` styles and `scrollbar-color`.
