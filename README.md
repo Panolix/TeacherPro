@@ -14,27 +14,44 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 
 <table align="center" width="100%">
   <tr>
-    <td align="center" width="50%">
-      <img src="public/screenshot.png" alt="Lesson Plan Editor">
-      <br>
-      <b>📝 Lesson Plan Editor</b><br>Rich text and specialized data tables.
+    <td align="center" width="33.33%">
+      <img src="public/screenshot5.png" alt="Lesson Plan Editor" width="100%">
     </td>
-    <td align="center" width="50%">
-      <img src="public/screenshot2.png" alt="Mindmap Editor">
-      <br>
-      <b>🧠 Mindmap Editor</b><br>Create fluid, visual curriculums.
+    <td align="center" width="33.33%">
+      <img src="public/screenshot6.png" alt="Mindmap Editor" width="100%">
+    </td>
+    <td align="center" width="33.33%">
+      <img src="public/screenshot7.png" alt="Weekly Calendar View" width="100%">
     </td>
   </tr>
   <tr>
+    <td align="center" valign="top">
+      <b>5. Lesson Plan Editor</b><br><sub>Focused writing surface with structured metadata and lesson-table tools.</sub>
+    </td>
+    <td align="center" valign="top">
+      <b>6. Mindmap Editor</b><br><sub>Visual node workspace for fast planning, linking, and concept mapping.</sub>
+    </td>
+    <td align="center" valign="top">
+      <b>7. Weekly Calendar View</b><br><sub>Week-at-a-glance planning with quick lesson access and scheduling flow.</sub>
+    </td>
+  </tr>
+</table>
+
+<table align="center" width="100%">
+  <tr>
     <td align="center" width="50%">
-      <img src="public/screenshot3.png" alt="Weekly Calendar View">
-      <br>
-      <b>📅 Weekly Calendar View</b><br>See your upcoming week at a glance.
+      <img src="public/screenshot8.png" alt="Document Preview (Materials)" width="100%">
     </td>
     <td align="center" width="50%">
-      <img src="public/screenshot4.png" alt="PDF Preview">
-      <br>
-      <b>🖨️ PDF Preview & Print</b><br>Export flawless natively-styled sheets.
+      <img src="public/screenshot9.png" alt="Settings Menu - Defaults" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <b>8. Document Preview (Materials)</b><br><sub>Preview PDFs, images, and text before opening files in native apps.</sub>
+    </td>
+    <td align="center" valign="top">
+      <b>9. Settings - Defaults</b><br><sub>Configure teacher defaults, subjects, and paper-tone preferences in one place.</sub>
     </td>
   </tr>
 </table>
