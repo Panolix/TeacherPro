@@ -14,45 +14,46 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 
 <table align="center" width="100%">
   <tr>
-    <td align="center" width="33.33%">
+    <td align="center" width="16.66%" colspan="2">
       <img src="public/screenshot5.png" alt="Lesson Plan Editor" width="100%">
     </td>
-    <td align="center" width="33.33%">
+    <td align="center" width="16.66%" colspan="2">
       <img src="public/screenshot6.png" alt="Mindmap Editor" width="100%">
     </td>
-    <td align="center" width="33.33%">
+    <td align="center" width="16.66%" colspan="2">
       <img src="public/screenshot7.png" alt="Weekly Calendar View" width="100%">
     </td>
   </tr>
   <tr>
-    <td align="center" valign="top">
+    <td align="center" valign="top" colspan="2">
       <b>Lesson Plan Editor</b><br><sub>Focused writing surface with structured metadata and lesson-table tools.</sub>
     </td>
-    <td align="center" valign="top">
+    <td align="center" valign="top" colspan="2">
       <b>Mindmap Editor</b><br><sub>Visual node workspace for fast planning, linking, and concept mapping.</sub>
     </td>
-    <td align="center" valign="top">
+    <td align="center" valign="top" colspan="2">
       <b>Weekly Calendar View</b><br><sub>Week-at-a-glance planning with quick lesson access and scheduling flow.</sub>
     </td>
   </tr>
-</table>
-
-<table align="center" width="100%">
   <tr>
-    <td align="center" width="50%">
+    <td colspan="1"></td>
+    <td align="center" width="16.66%" colspan="2">
       <img src="public/screenshot8.png" alt="Document Preview (Materials)" width="100%">
     </td>
-    <td align="center" width="50%">
+    <td align="center" width="16.66%" colspan="2">
       <img src="public/screenshot9.png" alt="Settings Menu - Defaults" width="100%">
     </td>
+    <td colspan="1"></td>
   </tr>
   <tr>
-    <td align="center" valign="top">
+    <td colspan="1"></td>
+    <td align="center" valign="top" colspan="2">
       <b>Document Preview (Materials)</b><br><sub>Preview PDFs, images, and text before opening files or linking materials into lesson plans.</sub>
     </td>
-    <td align="center" valign="top">
+    <td align="center" valign="top" colspan="2">
       <b>Settings - Defaults</b><br><sub>Configure teacher defaults, subjects, and paper-tone preferences in one place.</sub>
     </td>
+    <td colspan="1"></td>
   </tr>
 </table>
 
