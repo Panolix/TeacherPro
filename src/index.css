@@ -6,13 +6,13 @@
   --color-panel: #1e1e1e;
   --color-border: #3a3a3a;
   --color-muted: #a3a3a3;
-  --color-accent: #9fd2e4;
-  --color-accent-hover: #8fc2d4;
+  --color-accent: #2d86a5;
+  --color-accent-hover: #267691;
   --color-hover: #2a2a2a;
 }
 
 :root {
-  --tp-accent: #9fd2e4;
+  --tp-accent: #2d86a5;
   --tp-app-bg: #121212;
   --tp-panel-bg: #1e1e1e;
   --tp-panel-elevated: #181818;
@@ -22,6 +22,43 @@
   --tp-text-primary: #f3f4f6;
   --tp-text-muted: #9ca3af;
   --tp-text-soft: #6b7280;
+  --tp-scrollbar-size: 8px;
+}
+
+/* Keep scrollbars visually lighter and avoid sudden content-width jumps. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4a4a4a transparent;
+}
+
+*::-webkit-scrollbar {
+  width: var(--tp-scrollbar-size);
+  height: var(--tp-scrollbar-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #4a4a4a;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #616161;
+}
+
+.tp-main-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+@supports not (scrollbar-gutter: stable) {
+  .tp-main-scroll {
+    overflow-y: scroll;
+  }
 }
 
 html[data-tp-theme="light"] {
@@ -268,9 +305,8 @@ html[data-tp-theme="light"] .tp-mini-calendar .bg-\[\#2d2d2d\] {
 }
 
 /* Independent lesson paper tone */
-html[data-tp-lesson-paper="light"] .tp-editor-surface {
+html[data-tp-lesson-paper="light"] .tp-editor-page .lesson-export-surface {
   background-color: #ffffff !important;
-  border-color: #d4deea !important;
 }
 
 html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-meta {
@@ -311,9 +347,8 @@ html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror th {
   color: #0f172a !important;
 }
 
-html[data-tp-lesson-paper="dark"] .tp-editor-surface {
+html[data-tp-lesson-paper="dark"] .tp-editor-page .lesson-export-surface {
   background-color: #181818 !important;
-  border-color: #2a2a2a !important;
 }
 
 html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-input,
@@ -387,14 +422,14 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   width: 100%;
   max-width: 1800px; /* Much wider to use the full screen natively */
   margin: 0 auto;
-  border-radius: 4px;
+  border-radius: 0 0 6px 6px;
 }
 
 .lesson-export-surface {
   width: 100%;
   max-width: 1600px; /* internal comfortable reading width */
   margin: 0 auto;
-  border-radius: 4px;
+  border-radius: 0 0 6px 6px;
 }
 
 /* TipTap Editor Styles - Standardized to A4 12pt Typography */
@@ -569,6 +604,18 @@ body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text,
 body.tp-exporting #lesson-plan-export-content .lesson-export-teacher-text,
 .tp-export-light-clone .lesson-export-teacher-text {
   display: inline !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-subject-picker,
+.tp-export-light-clone .lesson-export-subject-picker {
+  display: none !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-subject-dot-print,
+.tp-export-light-clone .lesson-export-subject-dot-print {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-planned-text,

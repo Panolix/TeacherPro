@@ -69,7 +69,7 @@ export function MainContent() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 overflow-y-auto relative print:overflow-visible">
+      <main className="tp-main-scroll flex-1 overflow-y-auto relative print:overflow-visible">
         {!vaultPath ? (
           <div className="text-center mt-20 max-w-xl mx-auto p-8">
             <h1 className="text-4xl font-bold text-gray-100 mb-6">Welcome to TeacherPro</h1>
@@ -89,7 +89,7 @@ export function MainContent() {
         ) : (
           <>
             {currentView === "editor" && (
-              <div className="p-8 print:p-0">
+              <div className="px-8 pb-8 pt-0 print:p-0">
                 {!activeFilePath ? (
                   <div className="text-center mt-20 max-w-xl mx-auto">
                      <h2 className="text-3xl font-bold text-gray-100 mb-4">Workspace Ready</h2>
@@ -105,7 +105,7 @@ export function MainContent() {
                     </button>
                   </div>
                 ) : (
-                  <Editor key={activeFilePath} /> 
+                  <Editor /> 
                 )}
               </div>
             )}

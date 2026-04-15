@@ -269,7 +269,7 @@ const MenuBar = ({
   );
 
   return (
-    <div className="tp-editor-toolbar border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl mb-4 print:hidden">
+    <div className="tp-editor-toolbar border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl print:hidden">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-1 flex-wrap">
         <select
@@ -517,6 +517,7 @@ export function Editor() {
     setPendingMaterialDrop,
     logDebug,
     showActionButtonLabels,
+    subjects,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
@@ -645,6 +646,24 @@ export function Editor() {
     ],
     content: activeFileContent?.content || `<h2>New Lesson Plan</h2>`,
   });
+
+  useEffect(() => {
+    if (!editor || !activeFileContent) {
+      return;
+    }
+
+    try {
+      const current = JSON.stringify(editor.getJSON());
+      const incoming = JSON.stringify(activeFileContent.content);
+      if (current === incoming) {
+        return;
+      }
+    } catch {
+      // Ignore comparison errors and force content sync below.
+    }
+
+    editor.commands.setContent(activeFileContent.content, { emitUpdate: false });
+  }, [editor, activeFilePath]);
 
   useEffect(() => {
     if (!editor) {
@@ -1271,10 +1290,33 @@ export function Editor() {
         node.style.display = "none";
       });
 
+    const subjectPicker = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-picker");
+    if (subjectPicker) {
+      subjectPicker.style.display = "none";
+    }
+
     const subjectText = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-text");
     if (subjectText) {
+      subjectText.style.display = "inline-flex";
+      subjectText.style.alignItems = "center";
+      subjectText.style.gap = "6px";
+    }
+
+    const subjectName = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-name-print");
+    if (subjectName) {
+      subjectName.textContent = subject.trim() || "Not set";
+    } else if (subjectText) {
       subjectText.textContent = subject.trim() || "Not set";
-      subjectText.style.display = "inline";
+    }
+
+    const exportSubjectDot = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-dot-print");
+    if (exportSubjectDot) {
+      if (selectedSubjectColor) {
+        exportSubjectDot.style.display = "inline-block";
+        exportSubjectDot.style.backgroundColor = selectedSubjectColor;
+      } else {
+        exportSubjectDot.style.display = "none";
+      }
     }
 
     const teacherText = clonedElement.querySelector<HTMLElement>(".lesson-export-teacher-text");
@@ -1363,6 +1405,15 @@ export function Editor() {
     }
   };
 
+  const handlePdfPreviewBackdropMouseDown = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    setPdfPreviewUrl(null);
+  };
+
   const handlePrintPDF = async () => {
     if (!vaultPath) {
       alert("Please open a vault before printing.");
@@ -1402,6 +1453,13 @@ export function Editor() {
   };
 
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
+  const normalizedSubjectName = subject.trim().toLowerCase();
+  const selectedSubjectConfig = normalizedSubjectName
+    ? subjects.find((entry) => entry.name.trim().toLowerCase() === normalizedSubjectName)
+    : undefined;
+  const selectedSubjectColor = selectedSubjectConfig
+    ? normalizeColorForPicker(selectedSubjectConfig.color, "#9ca3af")
+    : null;
   const monthStart = startOfMonth(plannedCalendarMonth);
   const monthEnd = endOfMonth(monthStart);
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -1437,16 +1495,15 @@ export function Editor() {
 
   return (
     <div className="tp-editor-page w-full max-w-none mx-auto print:max-w-none print:w-full">
-      <div className="mb-4 flex gap-2 print:hidden">
-        <button
-          onClick={insertLessonTable}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-[#222] hover:bg-[#2d2d2d] border border-[#333] rounded-md text-white font-medium shadow-sm transition-colors"
-        >
-          <TableIcon className="w-4 h-4" /> Insert Lesson Table
-        </button>
-      </div>
-      
-      <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-xl shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
+      <div className="sticky top-0 z-[66] bg-[#1e1e1e] pt-8 print:hidden">
+        <div className="mb-3 flex gap-2">
+          <button
+            onClick={insertLessonTable}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#222] hover:bg-[#2d2d2d] border border-[#333] rounded-md text-white font-medium shadow-sm transition-colors"
+          >
+            <TableIcon className="w-4 h-4" /> Insert Lesson Table
+          </button>
+        </div>
         <MenuBar
           editor={editor}
           onSave={handleSave}
@@ -1456,9 +1513,12 @@ export function Editor() {
           isPdfBusy={isPdfBusy}
           showActionButtonLabels={showActionButtonLabels}
         />
+      </div>
+      
+      <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-b-md rounded-t-none shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
           {activeFileContent?.metadata && (
-            <div className="px-8 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
+            <div className="px-8 pt-4 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-y-4 gap-x-6 text-sm text-gray-400 print:text-black">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Teacher:</span>
@@ -1564,14 +1624,38 @@ export function Editor() {
                 </div>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Subject:</span>
-                  <input
-                    type="text"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g. Mathematics"
-                    className="flex-1 min-w-[180px] bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
-                  />
-                  <span className="hidden lesson-export-value lesson-export-subject-text">{subject.trim() || "Not set"}</span>
+                  {subjects.length > 0 ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-[180px] lesson-export-subject-picker">
+                      {selectedSubjectColor && (
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 border border-white/20"
+                          style={{ backgroundColor: selectedSubjectColor }}
+                        />
+                      )}
+                      <select
+                        value={subject}
+                        onChange={(e) => setSubject(e.target.value)}
+                        className="flex-1 bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                      >
+                        <option value="">— None —</option>
+                        {subjects.map((s) => (
+                          <option key={s.name} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="e.g. Mathematics"
+                      className="flex-1 min-w-[180px] bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                    />
+                  )}
+                  <span className="hidden lesson-export-value lesson-export-subject-text">
+                    <span className="lesson-export-subject-dot-print h-2.5 w-2.5 rounded-full border border-black/10" />
+                    <span className="lesson-export-subject-name-print">{subject.trim() || "Not set"}</span>
+                  </span>
                 </div>
               </div>
             </div>
@@ -1589,7 +1673,7 @@ export function Editor() {
 
           {tableContextMenu && (
             <div
-              className="tp-menu-surface fixed z-[70] min-w-[220px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl print:hidden"
+              className="tp-menu-surface fixed z-[70] min-w-[220px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl print:hidden"
               style={{ top: tableContextMenu.y, left: tableContextMenu.x }}
               onClick={(event) => event.stopPropagation()}
             >
@@ -1684,13 +1768,13 @@ export function Editor() {
       {pdfPreviewUrl && (
         <div
           className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden pdf-preview-modal"
-          onClick={() => setPdfPreviewUrl(null)}
+          onMouseDown={handlePdfPreviewBackdropMouseDown}
         >
           <div
             ref={pdfPreviewRef}
             tabIndex={-1}
             className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
-            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
               <div className="text-sm text-gray-200 font-medium">Lesson Plan PDF Preview</div>

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.2.0] - 2026-04-15
+### Added
+- Subject defaults with color coding in Settings, including subject dropdown selection in the lesson editor.
+- In-app rename dialog for lesson plans, mindmaps, and materials (replaces blocked prompt dialogs in Tauri).
+- Centered Settings modal with tabbed sections, ESC close, and backdrop-dismiss behavior.
+
+### Changed
+- Default app accent blue is now darker (`#2d86a5`) for improved readability.
+- Light mode has been removed from runtime behavior and appearance controls; dark mode is now the only app theme.
+- Default mindmap blue node preset and starter node color now match the new accent blue.
+- App scrollbars are slimmer and use neutral gray styling; main content scrolling now keeps a stable gutter to prevent layout width jumps.
+- Lesson paper container top corners are now square to avoid clipped corner artifacts under the sticky header while scrolling.
+
+### Fixed
+- Subject color indicator in lesson metadata now uses configured subject color reliably.
+- Lesson PDF preview/export subject metadata spacing and dot rendering are aligned and compact.
+- First-open PDF preview no longer closes immediately due to overlay interaction timing.
+- Lesson file naming on autosave now remains subject/date-based while avoiding filename collisions.
+- Sidebar lesson rename flow is stable again in desktop runtime.
+- White paper mode now controls the lesson paper area correctly, including the toolbar-to-paper gap strip.
+- Mindmap node context menu now repositions near viewport edges so it no longer gets clipped near window bounds.
+- Material-link context menu now uses viewport-safe positioning.
+- All major right-click menus (sidebar, editor table, mindmap, material link) now enforce viewport max-size and internal scroll to remain fully accessible.
+
 ## [1.1.1] - 2026-04-15
 ### Added
 - Custom accent color picker in Settings, alongside preset accent swatches.

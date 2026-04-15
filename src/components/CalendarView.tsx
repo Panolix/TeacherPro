@@ -6,7 +6,7 @@ import { useAppStore } from "../store";
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
-  const { lessonPlans, openLesson, deleteLesson, createNewLesson } = useAppStore();
+  const { lessonPlans, openLesson, deleteLesson, createNewLesson, subjects, lessonSubjectIndex } = useAppStore();
 
   const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   
@@ -140,6 +140,8 @@ export function CalendarView() {
                     const title = lesson.name?.replace(`-${format(day, "yyyy-MM-dd")}-`, "").replace(".json", "") || "Lesson";
                     const lessonName = lesson.name || "";
                     const isSelected = lessonName ? selectedLessons.has(lessonName) : false;
+                    const subjectName = lessonName ? (lessonSubjectIndex[lessonName] || "") : "";
+                    const subjectColor = subjectName ? subjects.find((s) => s.name === subjectName)?.color : undefined;
                     return (
                       <div
                         key={lIdx}
@@ -148,6 +150,7 @@ export function CalendarView() {
                             ? "bg-[#2f2940] border-[var(--tp-accent)]"
                             : "bg-[#2d2d2d] border-[#444]"
                         }`}
+                        style={subjectColor ? { borderLeftColor: subjectColor, borderLeftWidth: "3px" } : undefined}
                       >
                         <div className="flex items-center gap-2">
                           <button

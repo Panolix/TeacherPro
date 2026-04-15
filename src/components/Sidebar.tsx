@@ -14,21 +14,19 @@ import {
   FolderPlus,
   Pencil,
   Trash2,
-  Sun,
-  Moon,
-  Palette,
   Bug,
   PanelTopClose,
   PanelTopOpen,
   Search,
   Copy,
   RotateCcw,
+  X,
 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { AccentColor, MaterialEntry, MindmapData, PaperTone, ThemeMode, useAppStore } from "../store";
+import { AccentColor, MaterialEntry, MindmapData, PaperTone, useAppStore } from "../store";
 import { MiniCalendar } from "./MiniCalendar";
 
 type SidebarMenuTarget =
@@ -41,6 +39,12 @@ interface SidebarMenuState {
   x: number;
   y: number;
   target: SidebarMenuTarget;
+}
+
+interface RenameDialogState {
+  target: SidebarMenuTarget;
+  title: string;
+  value: string;
 }
 
 type MaterialPreviewKind = "pdf" | "image" | "text" | "error" | "lesson" | "mindmap";
@@ -84,22 +88,17 @@ interface MaterialPreviewState {
 }
 
 const ACCENT_PRESET_COLORS: Record<string, string> = {
-  blue: "#9fd2e4",
+  blue: "#2d86a5",
   emerald: "#059669",
   rose: "#e11d48",
   amber: "#d97706",
 };
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; color: string }> = [
-  { value: "blue", label: "Blue", color: "#9fd2e4" },
+  { value: "blue", label: "Blue", color: "#2d86a5" },
   { value: "emerald", label: "Emerald", color: "#059669" },
   { value: "rose", label: "Rose", color: "#e11d48" },
   { value: "amber", label: "Amber", color: "#d97706" },
-];
-
-const THEME_OPTIONS: Array<{ value: ThemeMode; label: string; icon: typeof Sun }> = [
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "light", label: "Light", icon: Sun },
 ];
 
 const PAPER_TONE_OPTIONS: Array<{ value: PaperTone; label: string }> = [
@@ -524,9 +523,7 @@ export function Sidebar() {
     renameMaterialEntry,
     restoreTrashEntry,
     permanentlyDeleteTrashEntry,
-    themeMode,
     accentColor,
-    setThemeMode,
     setAccentColor,
     lessonPaperTone,
     setLessonPaperTone,
@@ -547,6 +544,8 @@ export function Sidebar() {
     setDefaultTeacherName,
     showActionButtonLabels,
     setShowActionButtonLabels,
+    subjects,
+    setSubjects,
   } = useAppStore();
 
   const [expandedMaterialFolders, setExpandedMaterialFolders] = useState<Record<string, boolean>>({});
@@ -554,6 +553,7 @@ export function Sidebar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
+  const [renameDialog, setRenameDialog] = useState<RenameDialogState | null>(null);
   const [lessonSearch, setLessonSearch] = useState("");
   const [mindmapSearch, setMindmapSearch] = useState("");
   const [materialSearch, setMaterialSearch] = useState("");
@@ -591,7 +591,9 @@ export function Sidebar() {
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setContextMenu(null);
+        setRenameDialog(null);
         setPreviewState(null);
+        setSettingsOpen(false);
       }
     };
 
@@ -974,17 +976,21 @@ export function Sidebar() {
 
     if (target.kind === "lesson") {
       const currentName = target.fileName.replace(/\.json$/i, "");
-      const nextName = prompt("Rename lesson plan", currentName);
-      if (!nextName) return;
-      await renameLesson(target.fileName, nextName);
+      setRenameDialog({
+        target,
+        title: "Rename lesson plan",
+        value: currentName,
+      });
       return;
     }
 
     if (target.kind === "mindmap") {
       const currentName = target.fileName.replace(/\.json$/i, "");
-      const nextName = prompt("Rename mindmap", currentName);
-      if (!nextName) return;
-      await renameMindmap(target.fileName, nextName);
+      setRenameDialog({
+        target,
+        title: "Rename mindmap",
+        value: currentName,
+      });
       return;
     }
 
@@ -993,9 +999,39 @@ export function Sidebar() {
     }
 
     const currentName = target.relativePath.split("/").pop() || target.relativePath;
-    const nextName = prompt("Rename material item", currentName);
-    if (!nextName) return;
-    await renameMaterialEntry(target.relativePath, nextName);
+    setRenameDialog({
+      target,
+      title: "Rename material item",
+      value: currentName,
+    });
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renameDialog) {
+      return;
+    }
+
+    const nextName = renameDialog.value.trim();
+    const target = renameDialog.target;
+    setRenameDialog(null);
+
+    if (!nextName) {
+      return;
+    }
+
+    if (target.kind === "lesson") {
+      await renameLesson(target.fileName, nextName);
+      return;
+    }
+
+    if (target.kind === "mindmap") {
+      await renameMindmap(target.fileName, nextName);
+      return;
+    }
+
+    if (target.kind === "material") {
+      await renameMaterialEntry(target.relativePath, nextName);
+    }
   };
 
   const normalizedLessonSearch = lessonSearch.trim().toLowerCase();
@@ -1095,13 +1131,6 @@ export function Sidebar() {
   );
 
   const handleSettingsClick = () => {
-    if (!sidebarOpen) {
-      setSidebarOpen(true);
-      setSettingsSection("appearance");
-      setSettingsOpen(true);
-      return;
-    }
-
     setSettingsOpen((previous) => {
       const next = !previous;
       if (next) {
@@ -1109,6 +1138,7 @@ export function Sidebar() {
       }
       return next;
     });
+    setContextMenu(null);
   };
 
   const handleCopyDebugLog = async () => {
@@ -1667,82 +1697,69 @@ export function Sidebar() {
         </button>
       </div>
 
-      {settingsOpen && sidebarOpen && (
-        <div className="tp-settings-panel absolute bottom-20 left-3 z-50 w-[360px] max-w-[calc(100vw-1.5rem)] h-[520px] max-h-[calc(100vh-7rem)] rounded-xl border border-[#343434] bg-[#181818] shadow-xl overflow-hidden flex flex-col">
-          <div className="px-4 py-3 border-b border-[#2d2d2d] flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-200">Settings</h3>
-            <button
-              onClick={() => setSettingsOpen(false)}
-              className="text-xs text-gray-400 hover:text-gray-200"
-            >
-              Close
-            </button>
-          </div>
+      {settingsOpen && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setSettingsOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
 
-          <div className="p-2 border-b border-[#2d2d2d]">
-            <div className="grid grid-cols-3 gap-1 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
+          <div
+            className="tp-settings-panel relative w-[min(760px,calc(100vw-2rem))] h-[min(620px,calc(100vh-2.5rem))] rounded-2xl border border-[#343434] bg-[#181818] shadow-2xl overflow-hidden flex flex-col"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[#2d2d2d] flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-gray-100">Settings</h3>
+                <p className="text-xs text-gray-400 mt-1">Customize appearance, defaults, and diagnostics.</p>
+              </div>
               <button
-                onClick={() => setSettingsSection("appearance")}
-                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  settingsSection === "appearance"
-                    ? "bg-[#232323] text-white"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
-                }`}
+                onClick={() => setSettingsOpen(false)}
+                className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#232323] transition-colors"
+                aria-label="Close settings"
               >
-                Appearance
-              </button>
-              <button
-                onClick={() => setSettingsSection("defaults")}
-                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  settingsSection === "defaults"
-                    ? "bg-[#232323] text-white"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
-                }`}
-              >
-                Defaults
-              </button>
-              <button
-                onClick={() => setSettingsSection("advanced")}
-                className={`px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  settingsSection === "advanced"
-                    ? "bg-[#232323] text-white"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
-                }`}
-              >
-                Advanced
+                <X className="w-4 h-4" />
               </button>
             </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="px-6 pt-3 pb-2 border-b border-[#2d2d2d]">
+              <div className="grid grid-cols-3 gap-1.5 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
+                <button
+                  onClick={() => setSettingsSection("appearance")}
+                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                    settingsSection === "appearance"
+                      ? "bg-[#232323] text-white"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                  }`}
+                >
+                  Appearance
+                </button>
+                <button
+                  onClick={() => setSettingsSection("defaults")}
+                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                    settingsSection === "defaults"
+                      ? "bg-[#232323] text-white"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                  }`}
+                >
+                  Defaults
+                </button>
+                <button
+                  onClick={() => setSettingsSection("advanced")}
+                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                    settingsSection === "advanced"
+                      ? "bg-[#232323] text-white"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                  }`}
+                >
+                  Advanced
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
             {settingsSection === "appearance" && (
               <>
-                <div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-gray-500 mb-2">
-                    <Palette className="w-3.5 h-3.5" /> Theme
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {THEME_OPTIONS.map((option) => {
-                      const Icon = option.icon;
-                      const isActive = themeMode === option.value;
-                      return (
-                        <button
-                          key={option.value}
-                          onClick={() => setThemeMode(option.value)}
-                          className={`flex items-center justify-center gap-2 px-2 py-2 rounded-md text-sm border transition-colors ${
-                            isActive
-                              ? "border-[var(--tp-accent)] text-white bg-[#232323]"
-                              : "border-[#333] text-gray-300 hover:bg-[#222]"
-                          }`}
-                        >
-                          <Icon className="w-4 h-4" />
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div>
                   <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Accent Color</div>
                   <div className="grid grid-cols-4 gap-2">
@@ -1808,6 +1825,64 @@ export function Sidebar() {
                     placeholder="e.g. John Doe"
                     className="w-full bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
                   />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs uppercase tracking-wider text-gray-500">Subjects</div>
+                    {subjects.length < 4 && (
+                      <button
+                        onClick={() =>
+                          setSubjects([...subjects, { name: "", color: "#6366f1" }])
+                        }
+                        className="text-xs text-[var(--tp-accent)] hover:opacity-80 transition-opacity"
+                      >
+                        + Add
+                      </button>
+                    )}
+                  </div>
+                  {subjects.length === 0 && (
+                    <p className="text-[11px] text-gray-500">
+                      Add up to 4 subjects to quickly tag lessons and color-code your calendar.
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {subjects.map((subj, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={subj.color}
+                          onChange={(e) => {
+                            const next = subjects.map((s, i) =>
+                              i === idx ? { ...s, color: e.target.value } : s
+                            );
+                            setSubjects(next);
+                          }}
+                          className="h-8 w-9 cursor-pointer rounded border border-[#333] bg-transparent p-0.5 shrink-0"
+                          title="Subject color"
+                        />
+                        <input
+                          type="text"
+                          value={subj.name}
+                          onChange={(e) => {
+                            const next = subjects.map((s, i) =>
+                              i === idx ? { ...s, name: e.target.value } : s
+                            );
+                            setSubjects(next);
+                          }}
+                          placeholder="e.g. Mathematics"
+                          className="flex-1 bg-[#202020] border border-[#333] rounded px-2 py-1.5 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
+                        />
+                        <button
+                          onClick={() => setSubjects(subjects.filter((_, i) => i !== idx))}
+                          className="text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                          title="Remove subject"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
@@ -1886,6 +1961,7 @@ export function Sidebar() {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
@@ -1932,7 +2008,7 @@ export function Sidebar() {
 
       {contextMenu && (
         <div
-          className="tp-menu-surface fixed z-[60] min-w-[170px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="tp-menu-surface fixed z-[60] min-w-[170px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -2020,6 +2096,67 @@ export function Sidebar() {
             <Trash2 className="w-3.5 h-3.5" />
             {contextMenu.target.kind === "trash" ? "Delete Permanently" : "Move to Trash"}
           </button>
+        </div>
+      )}
+
+      {renameDialog && (
+        <div
+          className="fixed inset-0 z-[72] bg-black/55 flex items-center justify-center p-6"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setRenameDialog(null);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-[#343434] bg-[#181818] shadow-xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-[#2d2d2d]">
+              <h3 className="text-sm font-semibold text-gray-200">{renameDialog.title}</h3>
+            </div>
+
+            <form
+              className="p-4 space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleRenameSubmit();
+              }}
+            >
+              <input
+                type="text"
+                value={renameDialog.value}
+                onChange={(event) =>
+                  setRenameDialog((previous) =>
+                    previous
+                      ? {
+                          ...previous,
+                          value: event.target.value,
+                        }
+                      : previous,
+                  )
+                }
+                autoFocus
+                className="w-full bg-[#202020] border border-[#333] rounded-md px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+              />
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRenameDialog(null)}
+                  className="px-3 py-1.5 text-xs rounded-md border border-[#333] text-gray-300 hover:bg-[#222]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 text-xs rounded-md border border-[var(--tp-accent)] text-white bg-[#232323] hover:opacity-90"
+                >
+                  Rename
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-15
+Last updated: 2026-04-15 (v1.2.0 release stabilization)
 
 ## Purpose
 
@@ -39,6 +39,7 @@ Primary implementation:
 - Lesson editor typography is slightly reduced (content and table-header scale) to improve readability in smaller windows.
 - Debounced autosave (including metadata fields) with invalid date guard for planned date.
 - Lesson action buttons (Preview, Print, Export, Save) are icon-first by default and can optionally show labels via settings.
+- Subject field renders as a color-swatch dropdown when subjects are configured in settings; falls back to free-text input when no subjects are defined.
 
 Primary implementation:
 
@@ -56,6 +57,8 @@ Primary implementation:
 - Section headers for Lesson Plans, Mindmaps, Materials, and Trash now use larger/more readable sidebar typography.
 - Appearance settings now include independent paper-tone controls for lesson plans and mindmaps.
 - Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
+- Settings now open as a centered modal overlay with stronger spacing, dimmed/blurred backdrop, and Escape/backdrop dismiss.
+- Defaults tab includes a Subjects block: up to 4 named subjects each with a custom color picker. Subjects are persisted to vault settings.
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
 - Lesson context menu includes duplicate action.
@@ -76,6 +79,7 @@ Primary implementation:
 - Weekly navigation (Mon-Sun).
 - One-click "Today" jump to the current week.
 - Day cards with lesson listing by date.
+- Lesson cards show a colored left-border reflecting the subject color configured in settings (via `lessonSubjectIndex`).
 - Create lesson directly for a selected day.
 - Select/unselect lessons for bulk move-to-trash.
 - Day-level move-all-to-trash action.
@@ -89,6 +93,7 @@ Primary implementation:
 - React Flow board with node/edge editing.
 - Double-click node label editing.
 - Context menu actions for pane/node actions.
+- Mindmap context menu uses viewport-aware clamping so menu actions remain visible near screen edges.
 - Expanded node color presets plus a custom color picker in the node context menu.
 - Custom node color application auto-computes readable text and border contrast for better accessibility.
 - Material drag/drop creates linked material nodes in the map.
@@ -133,14 +138,15 @@ Primary implementation:
 
 ### App Store (`src/store.ts`)
 
-- `initVault()` loads persisted vault/settings.
+- `initVault()` loads persisted vault/settings including `subjects`.
 - `openVault()` chooses and persists vault path.
-- `refreshVault()` syncs folders and file trees.
+- `refreshVault()` syncs folders and file trees; rebuilds `lessonSubjectIndex` (filename → subject name) alongside search indexes.
+- `setSubjects(subjects)` persists up to 4 `SubjectConfig { name, color }` entries to vault settings.
 - `createNewLesson(plannedDate?)`, `duplicateLesson(fileName)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?)`.
 - `createNewMindmap()`, `openMindmap(fileName)`, `saveActiveMindmap(nodes, edges)`.
 - Search indexing runs during vault refresh to keep lesson/mindmap content queries local and fast.
 - `addMaterialFiles()`, `addMaterialDirectory()`, `renameMaterialEntry(...)`, `deleteMaterialEntry(...)`.
-- `setThemeMode(mode)`, `setAccentColor(color)`, `setDebugMode(enabled)`, `setShowActionButtonLabels(enabled)`.
+- `setThemeMode(mode)` (dark-only guard), `setAccentColor(color)`, `setDebugMode(enabled)`, `setShowActionButtonLabels(enabled)`.
 - `logDebug(source, action, detail?)` and `clearDebugEvents()`.
 
 ### Lesson Editor (`src/components/Editor.tsx`)
@@ -187,11 +193,10 @@ Primary implementation:
 
 ## UI and UX Design Decisions
 
-- Desktop-first dark UI with optional light mode.
-- Light theme has dedicated panel/menu/overlay styling so settings, context menus, and preview surfaces stay readable and consistent.
+- Desktop-first dark UI (light mode removed).
 - Accent color system with four choices (blue, emerald, rose, amber).
 - Accent settings now include a custom color picker in addition to preset swatches.
-- Lesson paper tone (white/dark) and mindmap paper tone (white/dark) are configurable independently from app theme mode.
+- Lesson paper tone (white/dark) and mindmap paper tone (white/dark) are configurable independently from the app shell theme.
 - Default teacher and default paper tones are grouped under a dedicated Defaults section in Settings.
 - Action toolbar text labels are optional; icon-only mode is the default for denser layouts.
 - Mindmap node styling uses a hybrid color UX: instant presets for speed and a custom picker for precision.
@@ -202,6 +207,8 @@ Primary implementation:
 - Material links are visual chips inside lesson content to reduce plain-path clutter.
 - Preview modals use centered overlays with explicit close controls.
 - Escape key closes preview/context overlays across sidebar, editor, and mindmap previews.
+- Right-click menus across sidebar/editor/mindmap/material link enforce viewport clamping and max-height scroll behavior for accessibility near window edges.
+- Main content scroll area reserves stable scrollbar gutter to prevent width shifts while scrolling.
 - PDF export mode uses temporary body class (`tp-exporting`) to hide interactive controls.
 
 ## Backend and Permissions Notes
@@ -231,6 +238,16 @@ When adding or changing behavior:
 4. Add a note under "Known Gaps" if behavior is pending verification.
 
 ### Recent Fixes
+- Removed light mode from runtime and Settings Appearance controls to enforce a single dark-shell UX and avoid mixed-theme rendering regressions.
+- Fixed lesson editor light-mode rendering conflict caused by CSS specificity overlap between theme and paper-tone selectors; lesson surface/background now consistently follows the selected paper tone instead of mixing light container styles with dark metadata/content styles.
+- Restored automatic subject/date filename updates during lesson autosave while preserving preview stability by keeping the lesson editor mounted across active file path changes.
+- Replaced sidebar rename prompts with an in-app rename dialog (lesson, mindmap, material) because browser prompt dialogs are blocked in Tauri.
+- Fixed lesson save naming regressions by enforcing collision-safe unique filenames during subject/date-based renames, so multiple lessons can share the same subject/date without overwriting or disappearing.
+- Fixed first-run PDF preview modal instability where the overlay could close immediately after opening; backdrop dismissal now uses backdrop-only mouse-down handling to avoid click-propagation race behavior.
+- Restored subject color swatch fidelity in the lesson editor by preventing paper-tone input styling from overriding the swatch color, and tightened PDF preview/export subject metadata spacing by hiding the subject picker scaffold in export mode and rendering a compact subject dot + label.
+- Updated right-click menus (mindmap nodes/materials, editor table, sidebar items, and material links) to stay fully visible inside viewport bounds with menu overflow scrolling when needed.
+- Redesigned Settings into a centered modal panel with dim/blur backdrop and Escape-to-close behavior for a more professional desktop UX.
+- Normalized scrollbar styling to a slimmer neutral-gray appearance and stabilized scroll gutter spacing to stop paper/editor width jumps.
 - Fixed lesson plan layout by removing `overflow: hidden` from `.ProseMirror table` and enforcing `word-break: break-word`, resolving the issue where tables were completely clipped on the right edge.
 - Replaced iframe-based PDF print dialog (which fails natively on macOS WKWebView) with `printCurrentWindow` calling native `window.print()` combined with `@media print` CSS for reliable PDF/printer generation.
 - Recreated Tauri App icons to use native transparency instead of forcing a solid square bounding box background with ImageMagick floodfill, fixing the "non texture" dock issues.

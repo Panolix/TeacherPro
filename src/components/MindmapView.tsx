@@ -139,7 +139,7 @@ const NODE_COLOR_PRESETS: NodeColorPreset[] = [
   {
     id: "blue",
     label: "Blue",
-    style: buildNodeColorStyle("#9fd2e4"),
+    style: buildNodeColorStyle("#2d86a5"),
   },
   {
     id: "emerald",
@@ -298,6 +298,19 @@ function findAvailablePosition(
   return {
     x: base.x + 180,
     y: base.y + 120,
+  };
+}
+
+function clampMenuToViewport(
+  x: number,
+  y: number,
+  estimatedWidth: number,
+  estimatedHeight: number,
+  padding = 8,
+): { x: number; y: number } {
+  return {
+    x: Math.max(padding, Math.min(x, window.innerWidth - estimatedWidth - padding)),
+    y: Math.max(padding, Math.min(y, window.innerHeight - estimatedHeight - padding)),
   };
 }
 
@@ -819,9 +832,11 @@ export function MindmapView() {
         y: event.clientY,
       });
 
+      const { x, y } = clampMenuToViewport(event.clientX, event.clientY, 220, 60);
+
       setContextMenu({
-        x: event.clientX,
-        y: event.clientY,
+        x,
+        y,
         target: { kind: "pane", position: flowPosition },
       });
     },
@@ -832,9 +847,13 @@ export function MindmapView() {
     event.preventDefault();
     event.stopPropagation();
 
+    const isMaterialNode = Boolean(getMaterialMetaFromNode(node));
+    const estimatedHeight = isMaterialNode ? 230 : 390;
+    const { x, y } = clampMenuToViewport(event.clientX, event.clientY, 280, estimatedHeight);
+
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x,
+      y,
       target: { kind: "node", nodeId: node.id, position: node.position },
     });
   }, []);
@@ -1126,6 +1145,15 @@ export function MindmapView() {
     }
   };
 
+  const handlePdfPreviewBackdropMouseDown = (
+    event: React.MouseEvent<HTMLDivElement>,
+  ) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    setPdfPreviewUrl(null);
+  };
+
   const handlePrintPDF = async () => {
     if (!vaultPath) {
       alert("Please open a vault before printing.");
@@ -1267,7 +1295,7 @@ export function MindmapView() {
 
       {contextMenu && (
         <div
-          className="tp-menu-surface fixed z-50 min-w-[180px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="tp-menu-surface fixed z-50 min-w-[180px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -1417,13 +1445,13 @@ export function MindmapView() {
       {pdfPreviewUrl && (
         <div
           className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden pdf-preview-modal"
-          onClick={() => setPdfPreviewUrl(null)}
+          onMouseDown={handlePdfPreviewBackdropMouseDown}
         >
           <div
             ref={pdfPreviewRef}
             tabIndex={-1}
             className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
-            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
               <div className="text-sm text-gray-200 font-medium">Mindmap PDF Preview</div>

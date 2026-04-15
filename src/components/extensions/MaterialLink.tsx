@@ -13,6 +13,19 @@ interface LinkContextMenuState {
   y: number;
 }
 
+function clampMenuToViewport(
+  x: number,
+  y: number,
+  estimatedWidth: number,
+  estimatedHeight: number,
+  padding = 8,
+): LinkContextMenuState {
+  return {
+    x: Math.max(padding, Math.min(x, window.innerWidth - estimatedWidth - padding)),
+    y: Math.max(padding, Math.min(y, window.innerHeight - estimatedHeight - padding)),
+  };
+}
+
 const MaterialLinkComponent = (props: NodeViewProps) => {
   const { vaultPath } = useAppStore();
   const filePath = String(props.node.attrs.filePath ?? props.node.attrs.fileName ?? "");
@@ -192,7 +205,8 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
   const handleContextMenu = (event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    setContextMenu({ x: event.clientX, y: event.clientY });
+    const position = clampMenuToViewport(event.clientX, event.clientY, 210, 170);
+    setContextMenu(position);
   };
 
   const closeContextMenu = () => setContextMenu(null);
@@ -267,7 +281,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
 
       {contextMenu && (
         <div
-          className="fixed z-[85] min-w-[180px] rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="fixed z-[85] min-w-[180px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >

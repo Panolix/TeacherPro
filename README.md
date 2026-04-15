@@ -75,6 +75,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Duplicate Plan:** Right-click any lesson and duplicate it for recurring classes.
 - **Safe Deletion + Recovery:** Deleted lessons/mindmaps/materials are moved to the Vault's `Trash` folder, where you can restore items later or permanently delete them.
 - **Rendered Trash Preview:** Lesson plans and mindmaps inside Trash can be previewed in rendered form (not raw JSON) before restoring.
+- **Centered Settings Workspace:** Settings now open in a dedicated centered modal with clearer spacing, professional section tabs, and ESC/backdrop close behavior.
 
 ### 🖨️ Native Printing & PDF Export
 - **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
@@ -82,10 +83,12 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Export to PDF:** Save beautifully formatted PDF versions of your documents directly into your Vault's `Exports` folder.
 
 ### ⚙️ UI & Customization
-- **Accent Colors:** Personalize your workspace! The default theme is a soft TeacherPro blue (`#9fd2e4`), but you can change the accent color to match your preference.
+- **Accent Colors:** Personalize your workspace! The default theme is a deeper TeacherPro blue (`#2d86a5`) for better in-app readability, and you can still change the accent color to match your preference.
 - **Custom Accent Picker:** In addition to presets, you can choose any custom accent color directly from the settings color picker.
-- **Dark & Light Modes:** Full support for dark and light environments. Automatically switches or can be forced via settings.
+- **Dark Mode Focus:** TeacherPro now runs with a dark app shell for consistent readability and reduced visual drift across screens.
 - **Independent Paper Tones:** Set Lesson Plan paper and Mindmap paper to White or Dark independently from the global app theme.
+- **Viewport-Safe Context Menus:** Right-click menus in sidebar, editor tables, mindmaps, and material links auto-reposition near window edges so actions remain fully visible.
+- **Stable Scrolling Layout:** Scrollbar gutters are stabilized to avoid content width shifts while scrolling; scrollbar visuals are slimmer and neutral gray.
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
 - **Compact Action Buttons:** Save/Preview/Print/Export actions are icon-first by default, with an optional setting to show text labels.
 

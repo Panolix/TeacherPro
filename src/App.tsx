@@ -5,7 +5,7 @@ import { MainContent } from "./components/MainContent";
 import { useAppStore } from "./store";
 
 const ACCENT_COLORS: Record<string, string> = {
-  blue: "#9fd2e4",
+  blue: "#2d86a5",
   emerald: "#059669",
   rose: "#e11d48",
   amber: "#d97706",
@@ -39,7 +39,7 @@ function resolveAccentColor(accentValue: string): string {
 }
 
 function App() {
-  const { initVault, themeMode, accentColor, lessonPaperTone, mindmapPaperTone } = useAppStore();
+  const { initVault, accentColor, lessonPaperTone, mindmapPaperTone } = useAppStore();
 
   useEffect(() => {
     console.log("App mounted. Attempting to show window immediately...");
@@ -60,8 +60,8 @@ function App() {
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-tp-theme", themeMode);
-  }, [themeMode]);
+    document.documentElement.setAttribute("data-tp-theme", "dark");
+  }, []);
 
   useEffect(() => {
     const accent = resolveAccentColor(accentColor);

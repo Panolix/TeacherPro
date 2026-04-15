@@ -65,6 +65,15 @@ export type AccentColor = string;
 export type PaperTone = "light" | "dark";
 export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials" | "trash";
 
+export interface SubjectConfig {
+  name: string;
+  color: string;
+}
+
+interface SaveLessonOptions {
+  allowRename?: boolean;
+}
+
 interface UISettings {
   themeMode: ThemeMode;
   accentColor: AccentColor;
@@ -75,6 +84,7 @@ interface UISettings {
   debugMode: boolean;
   defaultTeacherName: string;
   showActionButtonLabels: boolean;
+  subjects: SubjectConfig[];
 }
 
 interface AppState {
@@ -96,6 +106,8 @@ interface AppState {
   debugMode: boolean;
   defaultTeacherName: string;
   showActionButtonLabels: boolean;
+  subjects: SubjectConfig[];
+  lessonSubjectIndex: Record<string, string>;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
   pendingMaterialDrop: PendingMaterialDropRef | null;
@@ -116,6 +128,7 @@ interface AppState {
   setDebugMode: (enabled: boolean) => void;
   setDefaultTeacherName: (name: string) => void;
   setShowActionButtonLabels: (enabled: boolean) => void;
+  setSubjects: (subjects: SubjectConfig[]) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
@@ -127,7 +140,11 @@ interface AppState {
   duplicateLesson: (fileName: string) => Promise<void>;
   deleteLesson: (fileName: string) => Promise<void>;
   renameLesson: (oldFileName: string, newName: string) => Promise<void>;
-  saveActiveLesson: (content: any, metadata?: Partial<LessonMetadata>) => Promise<void>;
+  saveActiveLesson: (
+    content: any,
+    metadata?: Partial<LessonMetadata>,
+    options?: SaveLessonOptions,
+  ) => Promise<void>;
   openLesson: (fileName: string) => Promise<void>;
   createNewMindmap: () => Promise<void>;
   deleteMindmap: (fileName: string) => Promise<void>;
@@ -159,6 +176,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   debugMode: false,
   defaultTeacherName: "",
   showActionButtonLabels: false,
+  subjects: [],
 };
 
 function createTrashName(originalName: string): string {
@@ -309,6 +327,27 @@ async function buildMindmapSearchIndex(vaultPath: string, mindmapEntries: DirEnt
   return Object.fromEntries(pairs);
 }
 
+async function buildLessonSubjectIndex(vaultPath: string, lessonEntries: DirEntry[]): Promise<Record<string, string>> {
+  const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+  const pairs = await Promise.all(
+    lessonEntries
+      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
+      .map(async (entry) => {
+        const fileName = entry.name!;
+        const filePath = await join(lessonPlansFolder, fileName);
+        try {
+          const text = await readTextFile(filePath);
+          const parsed = JSON.parse(text) as { metadata?: { subject?: unknown } };
+          const subject = typeof parsed?.metadata?.subject === "string" ? parsed.metadata.subject.trim() : "";
+          return [fileName, subject] as const;
+        } catch {
+          return [fileName, ""] as const;
+        }
+      }),
+  );
+  return Object.fromEntries(pairs);
+}
+
 let searchIndexBuildVersion = 0;
 
 async function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
@@ -444,6 +483,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
   defaultTeacherName: DEFAULT_UI_SETTINGS.defaultTeacherName,
   showActionButtonLabels: DEFAULT_UI_SETTINGS.showActionButtonLabels,
+  subjects: DEFAULT_UI_SETTINGS.subjects,
+  lessonSubjectIndex: {},
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
@@ -461,7 +502,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (savedSettings) {
         set({
-          themeMode: savedSettings.themeMode || DEFAULT_UI_SETTINGS.themeMode,
+          themeMode: "dark",
           accentColor: savedSettings.accentColor || DEFAULT_UI_SETTINGS.accentColor,
           lessonPaperTone: savedSettings.lessonPaperTone || DEFAULT_UI_SETTINGS.lessonPaperTone,
           mindmapPaperTone: savedSettings.mindmapPaperTone || DEFAULT_UI_SETTINGS.mindmapPaperTone,
@@ -474,6 +515,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           defaultTeacherName: savedSettings.defaultTeacherName ?? DEFAULT_UI_SETTINGS.defaultTeacherName,
           showActionButtonLabels:
             savedSettings.showActionButtonLabels ?? DEFAULT_UI_SETTINGS.showActionButtonLabels,
+          subjects: Array.isArray(savedSettings.subjects)
+            ? savedSettings.subjects
+            : DEFAULT_UI_SETTINGS.subjects,
         });
       }
       
@@ -489,9 +533,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSidebarOpen: (isOpen) => set({ sidebarOpen: isOpen }),
-  setThemeMode: (mode) => {
-    set({ themeMode: mode });
-    void persistUiSettings({ themeMode: mode });
+  setThemeMode: () => {
+    set({ themeMode: "dark" });
+    void persistUiSettings({ themeMode: "dark" });
   },
   setAccentColor: (color) => {
     set({ accentColor: color });
@@ -529,6 +573,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setShowActionButtonLabels: (enabled) => {
     set({ showActionButtonLabels: enabled });
     void persistUiSettings({ showActionButtonLabels: enabled });
+  },
+  setSubjects: (subjects) => {
+    set({ subjects });
+    void persistUiSettings({ subjects });
   },
   logDebug: (source, action, detail) => {
     const { debugMode } = get();
@@ -623,9 +671,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       void (async () => {
         try {
-          const [nextLessonIndex, nextMindmapIndex] = await Promise.all([
+          const [nextLessonIndex, nextMindmapIndex, nextSubjectIndex] = await Promise.all([
             buildLessonSearchIndex(vaultPath, lpFiltered),
             buildMindmapSearchIndex(vaultPath, mmFiltered),
+            buildLessonSubjectIndex(vaultPath, lpFiltered),
           ]);
 
           if (buildVersion !== searchIndexBuildVersion) {
@@ -635,6 +684,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           set({
             lessonSearchIndex: nextLessonIndex,
             mindmapSearchIndex: nextMindmapIndex,
+            lessonSubjectIndex: nextSubjectIndex,
             isSearchIndexing: false,
           });
         } catch (indexError) {
@@ -781,9 +831,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  saveActiveLesson: async (content: any, updatedMetadata?: Partial<LessonMetadata>) => {
+  saveActiveLesson: async (
+    content: any,
+    updatedMetadata?: Partial<LessonMetadata>,
+    options?: SaveLessonOptions,
+  ) => {
     const { activeFilePath, activeFileContent, vaultPath } = get();
     if (!activeFilePath || !activeFileContent || !vaultPath) return;
+    const allowRename = options?.allowRename ?? true;
 
     try {
       const newLessonData: LessonData = {
@@ -814,15 +869,24 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      if (currentFileName !== newFileName) {
-         const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-         const newSavePath = await join(lessonPlansFolder, newFileName);
-         try {
-           await rename(activeFilePath, newSavePath);
-           savePath = newSavePath;
-         } catch (renameError) {
-           console.error("Rename failed, saving to old path", renameError);
-         }
+      if (allowRename && currentFileName !== newFileName) {
+        const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+        const requestedPath = await join(lessonPlansFolder, newFileName);
+        let newSavePath = requestedPath;
+
+        if (requestedPath !== activeFilePath) {
+          const requestedPathExists = await exists(requestedPath);
+          if (requestedPathExists) {
+            newSavePath = await ensureUniqueTargetPath(lessonPlansFolder, newFileName);
+          }
+
+          try {
+            await rename(activeFilePath, newSavePath);
+            savePath = newSavePath;
+          } catch (renameError) {
+            console.error("Rename failed, saving to old path", renameError);
+          }
+        }
       }
 
       await writeTextFile(savePath, JSON.stringify(newLessonData, null, 2));
@@ -890,7 +954,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             id: '1',
             data: { label: 'New Brainstorm' },
             position: { x: 250, y: 150 },
-            style: { background: '#9fd2e4', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold' }
+            style: { background: '#2d86a5', color: 'white', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 'bold' }
           }
         ],
         edges: []
