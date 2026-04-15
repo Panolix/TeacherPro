@@ -14,13 +14,13 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 
 <table align="center" width="100%">
   <tr>
-    <td align="center" width="16.66%" colspan="2">
+    <td align="center" colspan="2">
       <img src="public/screenshot5.png" alt="Lesson Plan Editor" width="100%">
     </td>
-    <td align="center" width="16.66%" colspan="2">
+    <td align="center" colspan="2">
       <img src="public/screenshot6.png" alt="Mindmap Editor" width="100%">
     </td>
-    <td align="center" width="16.66%" colspan="2">
+    <td align="center" colspan="2">
       <img src="public/screenshot7.png" alt="Weekly Calendar View" width="100%">
     </td>
   </tr>
@@ -37,10 +37,10 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
   </tr>
   <tr>
     <td colspan="1"></td>
-    <td align="center" width="16.66%" colspan="2">
+    <td align="center" colspan="2">
       <img src="public/screenshot8.png" alt="Document Preview (Materials)" width="100%">
     </td>
-    <td align="center" width="16.66%" colspan="2">
+    <td align="center" colspan="2">
       <img src="public/screenshot9.png" alt="Settings Menu - Defaults" width="100%">
     </td>
     <td colspan="1"></td>
