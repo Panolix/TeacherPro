@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.3.0] - 2026-04-15
+### Added
+- AI rewrite context menu now expands into six tone options: Improve, More Formal, More Casual, Simpler, More Engaging, More Concise.
+- AI translate context menu now expands into a language picker with 12 common languages. The configured target language is pinned at the top with a ★ indicator.
+- Lesson AI Chat now includes five quick-action chips when the chat is empty: Summarize this lesson, Key themes & topics, Check learning objectives, Suggest improvements, Activity ideas.
+- Chat clear button (trash icon) in the chat header resets conversation history and restores quick-action chips.
+
+### Changed
+- AI rewrite and translate are now permitted inside table cells and list items, not just plain paragraphs and headings. The guard now only blocks selections that span across multiple textblocks.
+- AI rewrite prompt overhauled: dedicated system prompt per mode, explicit instruction that the model must change the wording (not echo back the input), and tone-specific instructions per variant.
+- Lesson AI Chat is now purely conversational — the REPLACE:N automatic in-place editing approach has been removed in favor of reliability. The chat reads and discusses the lesson but does not modify it.
+- Chat now includes teacher name, subject, and planned date metadata in every message sent to the AI.
+- Default chat system prompt now explicitly forbids asking the teacher to paste content, covers summarization, theme identification, and recommendations, and acknowledges empty lessons gracefully.
+- `AiMarkdown` renderer rewritten to properly handle headings (`#`/`##`/`###`), bullet lists (`-`/`*`/`+`), numbered lists, bold, italic, and inline code. Raw `*` characters no longer appear in chat responses.
+
+### Fixed
+- Ollama server shutdown now fires reliably on app quit (Cmd+Q and all exit paths) using `RunEvent::Exit` via `.build()` + `.run()` instead of the per-window `WindowEvent::Destroyed` which did not fire consistently on macOS.
+- Ollama child process is now tracked in a static `OLLAMA_SERVER_CHILD` and killed directly rather than running `ollama stop` as a subprocess.
+
 ## [1.2.1] - 2026-04-15
 ### Changed
 - Windows print flow now prioritizes in-app print dialogs for lesson and mindmap PDFs (PDF iframe print first, then webview print fallback) before shell-level fallback behavior.

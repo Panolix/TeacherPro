@@ -29,6 +29,7 @@ import {
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
+import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
 import { type as osType } from "@tauri-apps/plugin-os";
 
 type ContextTarget =
@@ -301,19 +302,6 @@ function findAvailablePosition(
   return {
     x: base.x + 180,
     y: base.y + 120,
-  };
-}
-
-function clampMenuToViewport(
-  x: number,
-  y: number,
-  estimatedWidth: number,
-  estimatedHeight: number,
-  padding = 8,
-): { x: number; y: number } {
-  return {
-    x: Math.max(padding, Math.min(x, window.innerWidth - estimatedWidth - padding)),
-    y: Math.max(padding, Math.min(y, window.innerHeight - estimatedHeight - padding)),
   };
 }
 
@@ -835,7 +823,10 @@ export function MindmapView() {
         y: event.clientY,
       });
 
-      const { x, y } = clampMenuToViewport(event.clientX, event.clientY, 220, 60);
+      const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+        estimatedWidth: 220,
+        estimatedHeight: 60,
+      });
 
       setContextMenu({
         x,
@@ -852,7 +843,10 @@ export function MindmapView() {
 
     const isMaterialNode = Boolean(getMaterialMetaFromNode(node));
     const estimatedHeight = isMaterialNode ? 230 : 390;
-    const { x, y } = clampMenuToViewport(event.clientX, event.clientY, 280, estimatedHeight);
+    const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+      estimatedWidth: 280,
+      estimatedHeight,
+    });
 
     setContextMenu({
       x,
@@ -1316,7 +1310,7 @@ export function MindmapView() {
 
       {contextMenu && (
         <div
-          className="tp-menu-surface fixed z-50 min-w-[180px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className={buildContextMenuClassName("z-50 min-w-[180px]")}
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >

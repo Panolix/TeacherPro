@@ -20,6 +20,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MaterialLink } from "./extensions/MaterialLink";
@@ -34,6 +35,7 @@ import {
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
+import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
 import { type as osType } from "@tauri-apps/plugin-os";
 import {
   Bold,
@@ -55,7 +57,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  Sparkles,
+  Languages,
+  MessageSquare,
+  Send,
   X,
+  Brain,
+  Trash2,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -66,6 +74,167 @@ interface MaterialDropPayload {
 interface TableContextMenuState {
   x: number;
   y: number;
+  showTableActions: boolean;
+  aiSelection: SelectedTextRange | null;
+}
+
+interface SelectedTextRange {
+  from: number;
+  to: number;
+  selectedText: string;
+}
+
+interface AiChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  thinking?: string;
+  timestamp: number;
+}
+
+/**
+ * Split a raw model response into thinking content and actual response.
+ * The thinking content comes from <think>...</think> blocks.
+ */
+function parseThinkingFromResponse(raw: string): { thinking: string | null; response: string } {
+  const thinkMatch = raw.match(/<think>([\s\S]*?)<\/think>/i);
+  const thinking = thinkMatch ? thinkMatch[1].trim() : null;
+  const response = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  return { thinking, response };
+}
+
+
+
+
+
+
+/**
+ * Converts the markdown subset Gemma emits into TipTap-compatible HTML so that
+ * inserted text comes out as actual bold/italic/code rather than raw asterisks.
+ */
+function markdownToTiptapHtml(text: string): string {
+  // Escape HTML entities first so raw < > & don't become tags.
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const inlineHtml = (line: string): string => {
+    let s = escape(line);
+    // Bold **text** or __text__
+    s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    s = s.replace(/__(.+?)__/g, "<strong>$1</strong>");
+    // Italic *text* or _text_ (not already consumed by bold)
+    s = s.replace(/\*([^*\n]+?)\*/g, "<em>$1</em>");
+    s = s.replace(/_([^_\n]+?)_/g, "<em>$1</em>");
+    // Inline code `code`
+    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+    return s;
+  };
+
+  // Split into paragraphs on blank lines; each non-empty line group → <p>
+  const paragraphs = text.split(/\n{2,}/);
+  return paragraphs
+    .map((block) => {
+      const trimmed = block.trim();
+      if (!trimmed) return "";
+      // Within a block, single newlines become <br>
+      const lines = trimmed.split("\n").map(inlineHtml).join("<br>");
+      return `<p>${lines}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+function AiMarkdown({ text }: { text: string }) {
+  // Render inline spans: **bold**, *italic*, `code`
+  function renderInline(line: string, baseKey: string): React.ReactNode[] {
+    const tokens: React.ReactNode[] = [];
+    const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+    let last = 0;
+    let match: RegExpExecArray | null;
+    let k = 0;
+    while ((match = pattern.exec(line)) !== null) {
+      if (match.index > last) tokens.push(line.slice(last, match.index));
+      if (match[2] !== undefined)
+        tokens.push(<strong key={`${baseKey}-b${k++}`}>{match[2]}</strong>);
+      else if (match[3] !== undefined)
+        tokens.push(<em key={`${baseKey}-i${k++}`}>{match[3]}</em>);
+      else if (match[4] !== undefined)
+        tokens.push(
+          <code key={`${baseKey}-c${k++}`} className="rounded bg-black/20 px-1 font-mono text-[11px]">
+            {match[4]}
+          </code>,
+        );
+      last = match.index + match[0].length;
+    }
+    if (last < line.length) tokens.push(line.slice(last));
+    return tokens;
+  }
+
+  // Group lines into block-level nodes
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const raw = lines[i];
+    const trimmed = raw.trim();
+
+    // Blank line — skip, acts as paragraph separator
+    if (!trimmed) { i++; continue; }
+
+    // Heading  # / ## / ###
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const cls = level === 1
+        ? "font-bold text-[14px] mt-2 mb-0.5 text-[var(--tp-text-primary)]"
+        : level === 2
+          ? "font-semibold text-[13px] mt-1.5 mb-0.5 text-[var(--tp-text-primary)]"
+          : "font-semibold text-[12px] mt-1 text-[var(--tp-text-primary)]";
+      blocks.push(<div key={i} className={cls}>{renderInline(headingMatch[2], String(i))}</div>);
+      i++; continue;
+    }
+
+    // Bullet list — collect consecutive bullet lines
+    if (/^[-*+]\s+/.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
+        const itemText = lines[i].trim().replace(/^[-*+]\s+/, "");
+        items.push(
+          <li key={i} className="ml-4 list-disc">
+            {renderInline(itemText, String(i))}
+          </li>,
+        );
+        i++;
+      }
+      blocks.push(<ul key={`ul-${i}`} className="my-0.5 space-y-0.5">{items}</ul>);
+      continue;
+    }
+
+    // Numbered list — collect consecutive numbered lines
+    if (/^\d+\.\s+/.test(trimmed)) {
+      const items: React.ReactNode[] = [];
+      while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
+        const itemText = lines[i].trim().replace(/^\d+\.\s+/, "");
+        items.push(
+          <li key={i} className="ml-4 list-decimal">
+            {renderInline(itemText, String(i))}
+          </li>,
+        );
+        i++;
+      }
+      blocks.push(<ol key={`ol-${i}`} className="my-0.5 space-y-0.5">{items}</ol>);
+      continue;
+    }
+
+    // Regular paragraph
+    blocks.push(
+      <p key={i} className="leading-relaxed">
+        {renderInline(trimmed, String(i))}
+      </p>,
+    );
+    i++;
+  }
+
+  return <div className="space-y-1 text-[13px]">{blocks}</div>;
 }
 
 function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload | null {
@@ -212,22 +381,58 @@ function normalizeColorForPicker(colorValue: unknown, fallback: string): string 
   return fallback;
 }
 
+function normalizeAiFragmentOutput(rawOutput: string, originalSelection: string): string {
+  let normalized = rawOutput.trim();
+
+  // Strip <think>...</think> blocks emitted by reasoning models.
+  normalized = normalized.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Drop wrapping code fences if the model emits markdown blocks.
+  if (normalized.startsWith("```")) {
+    normalized = normalized.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+  }
+
+  normalized = normalized.replace(/\r\n/g, "\n").trim();
+
+  const originalHadLineBreaks = originalSelection.includes("\n");
+  if (!originalHadLineBreaks) {
+    // Keep single-line fragments single-line.
+    normalized = normalized.replace(/\s+/g, " ").trim();
+  }
+
+  const originalHasLists = /(^\s*[-*]\s+)|(^\s*\d+\.\s+)/m.test(originalSelection);
+  if (!originalHasLists) {
+    normalized = normalized
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .trim();
+  }
+
+  return normalized;
+}
+
 const MenuBar = ({
   editor,
   onSave,
   onPreview,
   onPrint,
   onExport,
+  onToggleChat,
+  chatOpen,
   isPdfBusy,
   showActionButtonLabels,
+  aiEnabled,
 }: {
   editor: any;
   onSave: () => void;
   onPreview: () => void;
   onPrint: () => void;
   onExport: () => void;
+  onToggleChat: () => void;
+  chatOpen: boolean;
   isPdfBusy: boolean;
   showActionButtonLabels: boolean;
+  aiEnabled: boolean;
 }) => {
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
@@ -467,6 +672,21 @@ const MenuBar = ({
         </button>
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-end">
+        {aiEnabled && (
+          <button
+            onClick={onToggleChat}
+            title={chatOpen ? "Hide AI Chat" : "Open AI Chat"}
+            aria-pressed={chatOpen}
+            className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
+              chatOpen
+                ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
+                : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            {showActionButtonLabels && <span>AI Chat</span>}
+          </button>
+        )}
         <button
           onClick={onPreview}
           title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
@@ -520,7 +740,18 @@ export function Editor() {
     setPendingMaterialDrop,
     logDebug,
     showActionButtonLabels,
+    sidebarOpen,
     subjects,
+    aiEnabled,
+    aiProvider,
+    aiDefaultModelId,
+    aiChatHistoryLimit,
+    aiTemperature,
+    aiSystemPrompt,
+    aiThinkingEnabled,
+    setAiThinkingEnabled,
+    aiPersistChats,
+    aiTranslateTargetLanguage,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
@@ -528,15 +759,56 @@ export function Editor() {
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
   const [isPdfBusy, setIsPdfBusy] = useState(false);
+  const [isAiBusy, setIsAiBusy] = useState(false);
+  const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
+  const [rewriteSubmenuOpen, setRewriteSubmenuOpen] = useState(false);
+  const [translateSubmenuOpen, setTranslateSubmenuOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const [editorRevision, setEditorRevision] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
+
+  // Auto-close chat when AI is turned off in settings.
+  useEffect(() => {
+    if (!aiEnabled) {
+      setChatOpen(false);
+    }
+  }, [aiEnabled]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatBusy, setIsChatBusy] = useState(false);
+  const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
   const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
+  // Per-lesson chat cache for session-level persistence.
+  const chatStoreRef = useRef<Record<string, AiChatMessage[]>>({});
+  const prevFilePathRef = useRef<string | null>(null);
+
+  // Save/restore chat messages when the active lesson changes.
+  useEffect(() => {
+    const prevPath = prevFilePathRef.current;
+    const nextPath = activeFilePath;
+
+    if (prevPath !== nextPath) {
+      // Save current messages for the lesson we're leaving.
+      if (prevPath && aiPersistChats) {
+        chatStoreRef.current[prevPath] = chatMessages;
+      }
+      // Restore or clear messages for the new lesson.
+      if (nextPath && aiPersistChats && chatStoreRef.current[nextPath]) {
+        setChatMessages(chatStoreRef.current[nextPath]);
+      } else {
+        setChatMessages([]);
+      }
+      prevFilePathRef.current = nextPath;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilePath, aiPersistChats]);
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
@@ -553,10 +825,16 @@ export function Editor() {
   ]);
 
   useEffect(() => {
-    const closeMenu = () => setTableContextMenu(null);
+    const closeMenu = () => {
+      setTableContextMenu(null);
+      setRewriteSubmenuOpen(false);
+      setTranslateSubmenuOpen(false);
+    };
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setTableContextMenu(null);
+        setRewriteSubmenuOpen(false);
+        setTranslateSubmenuOpen(false);
       }
     };
 
@@ -793,14 +1071,31 @@ export function Editor() {
     [editor],
   );
 
-  const handleTableContextMenu = useCallback(
+  const handleEditorContextMenu = useCallback(
     (event: React.MouseEvent) => {
       if (!editor) {
         return;
       }
 
       const target = event.target as HTMLElement | null;
-      if (!target || !target.closest("table")) {
+      const isTableTarget = !!target && !!target.closest("table");
+      const { from, to, empty } = editor.state.selection;
+      const selectedText = editor.state.doc.textBetween(from, to, "\n", " ").trim();
+      const aiSelection = !empty && selectedText
+        ? {
+            from,
+            to,
+            selectedText,
+          }
+        : null;
+
+      if (!isTableTarget && !aiSelection) {
+        setTableContextMenu(null);
+        return;
+      }
+
+      // If AI is off and there's no table to act on, nothing to show.
+      if (!aiEnabled && !isTableTarget) {
         setTableContextMenu(null);
         return;
       }
@@ -808,25 +1103,27 @@ export function Editor() {
       event.preventDefault();
       event.stopPropagation();
 
-      const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
-      if (pos?.pos !== undefined) {
-        editor.chain().focus().setTextSelection(pos.pos).run();
+      // For table-only operations with no text selection, anchor to clicked cell position.
+      if (isTableTarget && !aiSelection) {
+        const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (pos?.pos !== undefined) {
+          editor.chain().focus().setTextSelection(pos.pos).run();
+        }
       }
 
-      const estimatedWidth = 220;
-      const estimatedHeight = 420;
-      const padding = 8;
+      const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+        estimatedWidth: 220,
+        estimatedHeight: isTableTarget ? 760 : 200,
+      });
 
-      const x = Math.max(
-        padding,
-        Math.min(event.clientX, window.innerWidth - estimatedWidth - padding),
-      );
-      const y = Math.max(
-        padding,
-        Math.min(event.clientY, window.innerHeight - estimatedHeight - padding),
-      );
-
-      setTableContextMenu({ x, y });
+      setRewriteSubmenuOpen(false);
+      setTranslateSubmenuOpen(false);
+      setTableContextMenu({
+        x,
+        y,
+        showTableActions: isTableTarget,
+        aiSelection,
+      });
     },
     [editor],
   );
@@ -853,6 +1150,364 @@ export function Editor() {
       plannedFor: parsedPlannedFor,
     });
   };
+
+  const getSelectedTextRange = useCallback((): SelectedTextRange | null => {
+    if (!editor) {
+      return null;
+    }
+
+    const { from, to, empty } = editor.state.selection;
+    if (empty) {
+      return null;
+    }
+
+    const selectedText = editor.state.doc.textBetween(from, to, "\n", " ").trim();
+    if (!selectedText) {
+      return null;
+    }
+
+    return { from, to, selectedText };
+  }, [editor]);
+
+  const getSelectionValidationError = useCallback(
+    (selection: SelectedTextRange): string | null => {
+      if (!editor) {
+        return "Editor is not ready yet.";
+      }
+
+      const docSize = editor.state.doc.content.size;
+      const from = Math.max(0, Math.min(selection.from, docSize));
+      const to = Math.max(from, Math.min(selection.to, docSize));
+
+      if (from === to) {
+        return "Select text first to use AI actions.";
+      }
+
+      const $from = editor.state.doc.resolve(from);
+      const $to = editor.state.doc.resolve(Math.max(from, to - 1));
+
+      // Ensure both ends sit in the same textblock (paragraph / heading / cell).
+      const fromParent = $from.parent;
+      const toParent = $to.parent;
+      if (fromParent !== toParent) {
+        return "Select text within a single paragraph or cell — multi-block selections can't be safely rewritten.";
+      }
+
+      return null;
+    },
+    [editor],
+  );
+
+  const runAiSelectionAction = useCallback(
+    async (
+      mode: "rewrite" | "translate",
+      explicitSelection?: SelectedTextRange | null,
+      options?: { tone?: string; language?: string },
+    ) => {
+      if (!editor) {
+        return;
+      }
+
+      if (!aiEnabled) {
+        setAiStatusMessage("Enable Local AI first in Settings > AI.");
+        return;
+      }
+
+      const selectedRange = explicitSelection || getSelectedTextRange();
+      if (!selectedRange) {
+        setAiStatusMessage("Select text first to use AI actions.");
+        return;
+      }
+
+      const validationError = getSelectionValidationError(selectedRange);
+      if (validationError) {
+        setAiStatusMessage(validationError);
+        return;
+      }
+
+      const sourceText = editor.state.doc
+        .textBetween(selectedRange.from, selectedRange.to, "\n", " ")
+        .trim();
+      if (!sourceText) {
+        setAiStatusMessage("Selected text is empty.");
+        return;
+      }
+
+      const tone = options?.tone ?? "improve";
+      const targetLang = options?.language ?? aiTranslateTargetLanguage;
+
+      const toneInstruction: Record<string, string> = {
+        improve:   "Improve clarity, flow, and vocabulary while keeping the original meaning.",
+        formal:    "Rewrite in a formal, professional tone. Use precise language and proper structure.",
+        casual:    "Rewrite in a casual, conversational tone. Make it sound natural and approachable.",
+        simple:    "Rewrite in plain, simple language. Use short sentences and everyday words so anyone can understand.",
+        engaging:  "Rewrite in an engaging, energetic tone. Make it lively, vivid, and interesting.",
+        concise:   "Rewrite more concisely. Remove unnecessary words and filler while keeping the full meaning.",
+      };
+
+      const instruction =
+        mode === "rewrite"
+          ? [
+              "You are a writing assistant. Your task is to REWRITE the text below.",
+              "You MUST change the wording — do NOT return the same text.",
+              toneInstruction[tone] ?? toneInstruction.improve,
+              "Keep the same general length unless instructed to shorten.",
+              "Return ONLY the rewritten text, nothing else — no labels, no quotes, no markdown.",
+            ].join("\n")
+          : [
+              `You are a translator. Translate the text below into clear, natural ${targetLang}.`,
+              "Return ONLY the translated text, nothing else — no labels, no quotes, no markdown.",
+            ].join("\n");
+
+      const prompt = `${instruction}\n\n${sourceText}`;
+
+      const rewriteSystemPrompt =
+        mode === "rewrite"
+          ? `You rewrite text. Tone: ${tone}. Always change the wording — never repeat the input verbatim. Output ONLY the rewritten text.`
+          : `You translate text into ${targetLang}. Output ONLY the translation.`;
+
+      const statusLabel = mode === "translate"
+        ? `AI translating to ${targetLang}...`
+        : tone === "improve" ? "AI rewriting selection..." : `AI rewriting (${tone})...`;
+
+      setIsAiBusy(true);
+      setAiStatusMessage(statusLabel);
+
+      try {
+        const response = await tauriInvoke<string>("ai_generate_text", {
+          modelId: aiDefaultModelId,
+          prompt,
+          temperature: aiTemperature,
+          systemPrompt: rewriteSystemPrompt,
+          enableThinking: false,
+        });
+
+        console.log("[AI rewrite] raw response:", JSON.stringify(response));
+
+        const transformedText = normalizeAiFragmentOutput(response, sourceText);
+        console.log("[AI rewrite] normalized:", JSON.stringify(transformedText));
+        if (!transformedText) {
+          throw new Error("AI returned an empty response.");
+        }
+
+        const selectionStillValid = !getSelectionValidationError(selectedRange);
+        if (!selectionStillValid) {
+          throw new Error("Selection changed while AI was running. Please select the text again and retry.");
+        }
+
+        const currentSelectionText = editor.state.doc
+          .textBetween(selectedRange.from, selectedRange.to, "\n", " ")
+          .trim();
+        if (currentSelectionText !== sourceText) {
+          throw new Error("Selection content changed while AI was running. Please retry.");
+        }
+
+        const transaction = editor.state.tr.insertText(
+          transformedText,
+          selectedRange.from,
+          selectedRange.to,
+        );
+        editor.view.dispatch(transaction);
+        editor.view.focus();
+
+        setAiStatusMessage(mode === "rewrite" ? "AI rewrite applied." : "AI translation applied.");
+      } catch (error) {
+        console.error("AI action failed:", error);
+        setAiStatusMessage(`AI action failed: ${String(error)}`);
+      } finally {
+        setIsAiBusy(false);
+      }
+    },
+    [
+      aiDefaultModelId,
+      aiEnabled,
+      aiTemperature,
+      aiTranslateTargetLanguage,
+      editor,
+      getSelectedTextRange,
+      getSelectionValidationError,
+    ],
+  );
+
+  const buildLessonContextText = useCallback((): string => {
+    if (!editor) {
+      return "";
+    }
+
+    // Walk the TipTap document and emit structured plain text so the AI
+    // can distinguish headings, paragraphs, list items, and table cells.
+    function nodeToText(node: any, depth = 0): string {
+      const indent = "  ".repeat(depth);
+      switch (node.type) {
+        case "heading": {
+          const level = node.attrs?.level ?? 1;
+          const prefix = "#".repeat(level) + " ";
+          const text = (node.content ?? []).map((n: any) => nodeToText(n, 0)).join("").trim();
+          return text ? `${prefix}${text}\n` : "";
+        }
+        case "paragraph": {
+          const text = (node.content ?? []).map((n: any) => nodeToText(n, 0)).join("").trim();
+          return text ? `${text}\n` : "\n";
+        }
+        case "bulletList":
+        case "orderedList": {
+          return (node.content ?? []).map((n: any) => nodeToText(n, depth)).join("");
+        }
+        case "listItem": {
+          const text = (node.content ?? []).map((n: any) => nodeToText(n, 0)).join("").trim();
+          return text ? `${indent}- ${text}\n` : "";
+        }
+        case "table": {
+          return (node.content ?? []).map((n: any) => nodeToText(n, depth)).join("") + "\n";
+        }
+        case "tableRow": {
+          const cells = (node.content ?? []).map((n: any) =>
+            (n.content ?? []).map((c: any) => nodeToText(c, 0)).join("").replace(/\n/g, " ").trim()
+          );
+          return `| ${cells.join(" | ")} |\n`;
+        }
+        case "text": {
+          return node.text ?? "";
+        }
+        case "hardBreak": {
+          return "\n";
+        }
+        case "doc": {
+          return (node.content ?? []).map((n: any) => nodeToText(n, depth)).join("\n");
+        }
+        default: {
+          if (node.content) {
+            return (node.content as any[]).map((n: any) => nodeToText(n, depth)).join("");
+          }
+          return node.text ?? "";
+        }
+      }
+    }
+
+    const structured = nodeToText(editor.getJSON()).trim();
+
+    // Cap at 8000 chars — generous enough for any real lesson plan.
+    const body = structured.length <= 8000
+      ? structured
+      : `${structured.slice(0, 8000)}\n\n[Content truncated at 8000 characters]`;
+
+    return body || "(no body content yet)";
+  }, [editor]);
+
+  const handleSubmitChat = useCallback(async (overrideText?: string) => {
+    if (!aiEnabled) {
+      setAiStatusMessage("Enable Local AI first in Settings > AI.");
+      return;
+    }
+
+    const userText = (overrideText ?? chatInput).trim();
+    if (!userText) {
+      return;
+    }
+
+    const userMessage: AiChatMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      text: userText,
+      timestamp: Date.now(),
+    };
+
+    setChatMessages((previous) => [...previous, userMessage]);
+    setChatInput("");
+    setIsChatBusy(true);
+    setAiStatusMessage("AI chat is thinking...");
+
+    try {
+      const contextText = buildLessonContextText();
+
+      // Build metadata header from local state fields.
+      const metaLines: string[] = [];
+      if (teacher)         metaLines.push(`Teacher: ${teacher}`);
+      if (subject)         metaLines.push(`Subject: ${subject}`);
+      if (plannedForInput) metaLines.push(`Planned for: ${plannedForInput}`);
+      const metaHeader = metaLines.length > 0 ? metaLines.join("\n") + "\n" : "";
+
+      // Build conversation history (capped at the user-configured limit).
+      const historyLines: string[] = [];
+      const recentMessages = chatMessages.slice(-aiChatHistoryLimit);
+      for (const msg of recentMessages) {
+        historyLines.push(msg.role === "user" ? `User: ${msg.text}` : `Assistant: ${msg.text}`);
+      }
+
+      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
+
+      const prompt = [
+        `The teacher's current lesson plan is shown below. Read it carefully before responding.\n\n---\n${lessonBlock}\n---`,
+        "",
+        ...(historyLines.length > 0 ? ["Conversation so far:", ...historyLines, ""] : []),
+        `User: ${userText}`,
+        "",
+        "Assistant:",
+      ].join("\n");
+
+      const effectiveSystemPrompt = aiSystemPrompt ||
+        `You are TeacherPro Assistant, an expert educational advisor built into a lesson planning app. The teacher's full lesson plan is always included at the top of every message — you MUST use it to answer. Never ask the teacher to paste or provide their lesson plan.
+
+If the lesson plan is empty or has minimal content, acknowledge that and offer to help build it out.
+
+You can help with:
+- Summarizing the lesson plan or any section of it
+- Identifying key themes, topics, and learning objectives
+- Suggesting improvements to structure, activities, or wording
+- Recommending teaching strategies, differentiation ideas, or resources
+- Discussing pedagogy, timing, or curriculum alignment
+- Answering any questions the teacher has about their lesson
+
+Be concise but thorough. Use bullet points when listing multiple items. Never modify the lesson plan directly — only discuss and advise.`;
+
+      const response = await tauriInvoke<string>("ai_generate_text", {
+        modelId: aiDefaultModelId,
+        prompt,
+        temperature: aiTemperature,
+        systemPrompt: effectiveSystemPrompt,
+        enableThinking: aiThinkingEnabled,
+      });
+
+      const { thinking: thinkingContent, response: cleanResponse } = parseThinkingFromResponse(response);
+      const assistantText = cleanResponse || "(No response)";
+
+      setChatMessages((previous) => [
+        ...previous,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text: assistantText,
+          thinking: thinkingContent ?? undefined,
+          timestamp: Date.now(),
+        },
+      ]);
+      setAiStatusMessage("AI chat response ready.");
+    } catch (error) {
+      console.error("AI chat failed:", error);
+      setAiStatusMessage(`AI chat failed: ${String(error)}`);
+      setChatMessages((previous) => [
+        ...previous,
+        {
+          id: `assistant-error-${Date.now()}`,
+          role: "assistant",
+          text: `I hit an error: ${String(error)}`,
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsChatBusy(false);
+    }
+  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput]);
+
+  useEffect(() => {
+    if (!chatOpen) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
+    });
+  }, [chatOpen, chatMessages, isChatBusy]);
 
   const handleMaterialDragOver = useCallback(
     (event: React.DragEvent) => {
@@ -1474,6 +2129,7 @@ export function Editor() {
   };
 
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
+  const canRunAiContextActions = !!tableContextMenu?.aiSelection && !isAiBusy && aiEnabled;
   const normalizedSubjectName = subject.trim().toLowerCase();
   const selectedSubjectConfig = normalizedSubjectName
     ? subjects.find((entry) => entry.name.trim().toLowerCase() === normalizedSubjectName)
@@ -1515,7 +2171,9 @@ export function Editor() {
       };
 
   return (
-    <div className="tp-editor-page w-full max-w-none mx-auto print:max-w-none print:w-full">
+    <div
+      className="tp-editor-page w-full max-w-none mx-auto print:max-w-none print:w-full"
+    >
       <div className="sticky top-0 z-[66] bg-[#1e1e1e] pt-8 print:hidden">
         <div className="mb-3 flex gap-2">
           <button
@@ -1531,9 +2189,17 @@ export function Editor() {
           onPreview={handlePreviewPDF}
           onPrint={handlePrintPDF}
           onExport={handleExportPDF}
+          onToggleChat={() => setChatOpen((previous) => !previous)}
+          chatOpen={chatOpen}
           isPdfBusy={isPdfBusy}
           showActionButtonLabels={showActionButtonLabels}
+          aiEnabled={aiEnabled}
         />
+        {aiStatusMessage && (
+          <div className="mt-2 rounded-md border border-[#333] bg-[#202020] px-3 py-2 text-xs text-gray-300">
+            {aiStatusMessage}
+          </div>
+        )}
       </div>
       
       <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-b-md rounded-t-none shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
@@ -1687,103 +2353,388 @@ export function Editor() {
             className="px-8 pb-8 flex-1 print:p-0 lesson-export-editor overflow-x-auto"
             onDragOver={handleMaterialDragOver}
             onDrop={handleMaterialDrop}
-            onContextMenu={handleTableContextMenu}
+            onContextMenu={handleEditorContextMenu}
           >
             <EditorContent editor={editor} className="h-full" />
           </div>
 
           {tableContextMenu && (
             <div
-              className="tp-menu-surface fixed z-[70] min-w-[220px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl print:hidden"
-              style={{ top: tableContextMenu.y, left: tableContextMenu.x }}
+              className={buildContextMenuClassName("z-[70] min-w-[220px] print:hidden")}
+              style={{
+                top: tableContextMenu.y,
+                left: tableContextMenu.x,
+                maxHeight: `calc(100vh - ${Math.max(tableContextMenu.y + 8, 32)}px)`,
+              }}
               onClick={(event) => event.stopPropagation()}
             >
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().addRowBefore().run())}
-                disabled={!tableActionsEnabled.addRowBefore}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Insert Row Above
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().addRowAfter().run())}
-                disabled={!tableActionsEnabled.addRowAfter}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Insert Row Below
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().addColumnBefore().run())}
-                disabled={!tableActionsEnabled.addColumnBefore}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Insert Column Left
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().addColumnAfter().run())}
-                disabled={!tableActionsEnabled.addColumnAfter}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Insert Column Right
-              </button>
+              {tableContextMenu.showTableActions && (
+                <>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().addRowBefore().run())}
+                    disabled={!tableActionsEnabled.addRowBefore}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Insert Row Above
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().addRowAfter().run())}
+                    disabled={!tableActionsEnabled.addRowAfter}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Insert Row Below
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().addColumnBefore().run())}
+                    disabled={!tableActionsEnabled.addColumnBefore}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Insert Column Left
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().addColumnAfter().run())}
+                    disabled={!tableActionsEnabled.addColumnAfter}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Insert Column Right
+                  </button>
 
-              <div className="h-px bg-[#333] my-1" />
+                  <div className="h-px bg-[#333] my-1" />
+                </>
+              )}
 
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().deleteRow().run())}
-                disabled={!tableActionsEnabled.deleteRow}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Delete Row
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().deleteColumn().run())}
-                disabled={!tableActionsEnabled.deleteColumn}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Delete Column
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().deleteTable().run())}
-                disabled={!tableActionsEnabled.deleteTable}
-                className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Delete Table
-              </button>
+              {aiEnabled && (
+                <>
+                  {/* ── Rewrite submenu ─────────────────────────────────── */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRewriteSubmenuOpen((v) => !v);
+                      setTranslateSubmenuOpen(false);
+                    }}
+                    disabled={!canRunAiContextActions}
+                    className="w-full inline-flex items-center justify-between gap-2 text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
+                      AI Rewrite
+                    </span>
+                    <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${rewriteSubmenuOpen ? "rotate-90" : ""}`} />
+                  </button>
+                  {rewriteSubmenuOpen && (
+                    <div className="ml-5 flex flex-col">
+                      {(
+                        [
+                          { tone: "improve",  label: "Improve" },
+                          { tone: "formal",   label: "More Formal" },
+                          { tone: "casual",   label: "More Casual" },
+                          { tone: "simple",   label: "Simpler" },
+                          { tone: "engaging", label: "More Engaging" },
+                          { tone: "concise",  label: "More Concise" },
+                        ] as const
+                      ).map(({ tone, label }) => (
+                        <button
+                          key={tone}
+                          onClick={() => {
+                            setTableContextMenu(null);
+                            setRewriteSubmenuOpen(false);
+                            void runAiSelectionAction("rewrite", tableContextMenu!.aiSelection, { tone });
+                          }}
+                          disabled={!canRunAiContextActions}
+                          className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
-              <div className="h-px bg-[#333] my-1" />
+                  {/* ── Translate submenu ────────────────────────────────── */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTranslateSubmenuOpen((v) => !v);
+                      setRewriteSubmenuOpen(false);
+                    }}
+                    disabled={!canRunAiContextActions}
+                    className="w-full inline-flex items-center justify-between gap-2 text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Languages className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
+                      AI Translate
+                    </span>
+                    <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${translateSubmenuOpen ? "rotate-90" : ""}`} />
+                  </button>
+                  {translateSubmenuOpen && (
+                    <div className="ml-5 flex flex-col">
+                      {/* configured language first */}
+                      {aiTranslateTargetLanguage && (
+                        <button
+                          onClick={() => {
+                            setTableContextMenu(null);
+                            setTranslateSubmenuOpen(false);
+                            void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: aiTranslateTargetLanguage });
+                          }}
+                          disabled={!canRunAiContextActions}
+                          className="w-full text-left px-3 py-1.5 text-sm text-[var(--tp-accent)] hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {aiTranslateTargetLanguage} ★
+                        </button>
+                      )}
+                      {(
+                        [
+                          "English", "French", "Spanish", "German", "Greek",
+                          "Italian", "Portuguese", "Dutch", "Russian",
+                          "Arabic", "Japanese", "Chinese (Simplified)",
+                        ] as const
+                      )
+                        .filter((lang) => lang !== aiTranslateTargetLanguage)
+                        .map((lang) => (
+                          <button
+                            key={lang}
+                            onClick={() => {
+                              setTableContextMenu(null);
+                              setTranslateSubmenuOpen(false);
+                              void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: lang });
+                            }}
+                            disabled={!canRunAiContextActions}
+                            className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            {lang}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                </>
+              )}
 
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().mergeCells().run())}
-                disabled={!tableActionsEnabled.mergeCells}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Merge Selected Cells
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
-                disabled={!tableActionsEnabled.splitCell}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Split Cell
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
-                disabled={!tableActionsEnabled.toggleHeaderRow}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Toggle Header Row
-              </button>
-              <button
-                onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
-                disabled={!tableActionsEnabled.toggleHeaderColumn}
-                className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Toggle Header Column
-              </button>
+              {tableContextMenu.showTableActions && aiEnabled && <div className="h-px bg-[#333] my-1" />}
+
+              {tableContextMenu.showTableActions && (
+                <>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteRow().run())}
+                    disabled={!tableActionsEnabled.deleteRow}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Delete Row
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteColumn().run())}
+                    disabled={!tableActionsEnabled.deleteColumn}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Delete Column
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteTable().run())}
+                    disabled={!tableActionsEnabled.deleteTable}
+                    className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Delete Table
+                  </button>
+
+                  <div className="h-px bg-[#333] my-1" />
+
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().mergeCells().run())}
+                    disabled={!tableActionsEnabled.mergeCells}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Merge Selected Cells
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
+                    disabled={!tableActionsEnabled.splitCell}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Split Cell
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
+                    disabled={!tableActionsEnabled.toggleHeaderRow}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Toggle Header Row
+                  </button>
+                  <button
+                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
+                    disabled={!tableActionsEnabled.toggleHeaderColumn}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Toggle Header Column
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
+      </div>
+
+      <div
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-64 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+          chatOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+          <div className="flex flex-col h-full border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
+            {/* Header */}
+            <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
+              <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
+              <span className="flex-1 truncate text-[11px] text-[var(--tp-text-muted)] bg-[var(--tp-panel-muted)] px-2 py-0.5 rounded-full">{aiDefaultModelId}</span>
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => setChatMessages([])}
+                  title="Clear chat history"
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                    chatMessages.length > 0
+                      ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
+                      : "text-[var(--tp-border-strong)] cursor-default pointer-events-none"
+                  }`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setAiThinkingEnabled(!aiThinkingEnabled)}
+                  title={aiThinkingEnabled ? "Thinking mode on — click to disable" : "Thinking mode off — click to enable"}
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                    aiThinkingEnabled
+                      ? "text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)]"
+                      : "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)]"
+                  }`}
+                >
+                  <Brain className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+                  title="Close AI Chat"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+
+            {/* Messages */}
+            <div
+              ref={chatScrollRef}
+              className="flex-1 overflow-y-auto bg-[var(--tp-app-bg)] px-4 py-4 space-y-4"
+            >
+              {chatMessages.length === 0 && (
+                <div className="flex h-full flex-col items-center justify-center gap-4">
+                  <p className="text-xs text-[var(--tp-text-muted)] text-center max-w-xs leading-relaxed">
+                    Ask anything about your lesson plan — summarize it, discuss themes, get recommendations.
+                  </p>
+                  <div className="flex flex-col gap-1.5 w-full">
+                    {([
+                      { label: "Summarize this lesson", prompt: "Please summarize this lesson plan in a few sentences." },
+                      { label: "Key themes & topics", prompt: "What are the key themes and topics covered in this lesson plan?" },
+                      { label: "Check learning objectives", prompt: "Are the learning objectives clear and well-structured? How could they be improved?" },
+                      { label: "Suggest improvements", prompt: "What improvements would you suggest to make this lesson plan more effective?" },
+                      { label: "Activity ideas", prompt: "Can you suggest some additional activity ideas that would complement this lesson?" },
+                    ] as const).map(({ label, prompt }) => (
+                      <button
+                        key={label}
+                        disabled={isChatBusy}
+                        onClick={() => void handleSubmitChat(prompt)}
+                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] text-xs text-gray-300 hover:border-[var(--tp-accent)] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((message) => (
+                <div key={message.id} className="w-full">
+                  {message.role === "user" ? (
+                    <div className="flex justify-end">
+                      <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-[var(--tp-accent)] px-3.5 py-2 text-[13px] leading-relaxed text-white whitespace-pre-wrap">
+                        {message.text}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      <div className="mb-1 flex items-center gap-1.5">
+                        <MessageSquare className="w-3 h-3 text-[var(--tp-accent)]" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
+                      </div>
+                      <div className="w-full text-[13px] leading-relaxed text-[var(--tp-text-primary)]">
+                        <AiMarkdown text={message.text} />
+                      </div>
+                      {message.thinking != null && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => {
+                              setExpandedThinking((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(message.id)) next.delete(message.id);
+                                else next.add(message.id);
+                                return next;
+                              });
+                            }}
+                            className="flex items-center gap-1.5 text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] transition-colors"
+                          >
+                            <Brain className="w-3 h-3" />
+                            {expandedThinking.has(message.id) ? "Hide thinking" : "Show thinking"}
+                          </button>
+                          {expandedThinking.has(message.id) && (
+                            <div className="mt-1.5 rounded-md bg-[var(--tp-panel-muted)] px-3 py-2 text-[11px] text-[var(--tp-text-muted)] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
+                              {message.thinking}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {isChatBusy && (
+                <div className="w-full">
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <MessageSquare className="w-3 h-3 text-[var(--tp-accent)]" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 py-1">
+                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:0ms]" />
+                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:150ms]" />
+                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:300ms]" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input bar */}
+            <div className="shrink-0 border-t border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 py-3">
+              <div className="flex items-center gap-2 rounded-xl border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-2 focus-within:border-[var(--tp-accent)]">
+                <textarea
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void handleSubmitChat();
+                    }
+                  }}
+                  placeholder="Message AI..."
+                  rows={1}
+                  className="flex-1 min-h-[24px] max-h-32 resize-none bg-transparent text-sm text-[var(--tp-text-primary)] placeholder:text-[var(--tp-text-muted)] outline-none leading-6"
+                  style={{ fieldSizing: "content" } as React.CSSProperties}
+                />
+                <button
+                  onClick={() => { void handleSubmitChat(); }}
+                  disabled={isChatBusy || !chatInput.trim()}
+                  className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  title={isChatBusy ? "AI is responding..." : "Send (Enter)"}
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className="mt-1.5 text-center text-[10px] text-[var(--tp-text-muted)]">Enter to send · Shift+Enter for new line</p>
+            </div>
+          </div>
       </div>
 
       {pdfPreviewUrl && (

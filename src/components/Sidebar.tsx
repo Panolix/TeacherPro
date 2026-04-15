@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState, useCallback, type CSSProperties } from "react";
 import {
   FolderOpen,
   Settings,
@@ -21,13 +21,21 @@ import {
   Copy,
   RotateCcw,
   X,
+  Sparkles,
+  HardDriveDownload,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { AccentColor, MaterialEntry, MindmapData, PaperTone, useAppStore } from "../store";
 import { MiniCalendar } from "./MiniCalendar";
+import { AI_MODEL_CATALOG, DEFAULT_AI_MODEL_ID } from "../ai/modelCatalog";
+import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
 
 type SidebarMenuTarget =
   | { kind: "lesson"; fileName: string }
@@ -87,6 +95,20 @@ interface MaterialPreviewState {
   mindmap?: MindmapPreviewData;
 }
 
+interface AiModelInstallProgress {
+  model_id: string;
+  status: "not-started" | "preparing" | "installing" | "completed" | "failed" | "cancelled";
+  progress: number;
+  detail?: string | null;
+}
+
+const TERMINAL_INSTALL_STATUSES = new Set<AiModelInstallProgress["status"]>([
+  "not-started",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
 const ACCENT_PRESET_COLORS: Record<string, string> = {
   blue: "#2d86a5",
   emerald: "#059669",
@@ -106,7 +128,7 @@ const PAPER_TONE_OPTIONS: Array<{ value: PaperTone; label: string }> = [
   { value: "dark", label: "Dark" },
 ];
 
-type SettingsSection = "appearance" | "defaults" | "advanced";
+type SettingsSection = "appearance" | "defaults" | "ai" | "advanced";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -546,6 +568,23 @@ export function Sidebar() {
     setShowActionButtonLabels,
     subjects,
     setSubjects,
+    aiEnabled,
+    setAiEnabled,
+    aiProvider,
+    aiDefaultModelId,
+    setAiDefaultModelId,
+    aiPersistChats,
+    setAiPersistChats,
+    aiChatHistoryLimit,
+    setAiChatHistoryLimit,
+    aiTemperature,
+    setAiTemperature,
+    aiSystemPrompt,
+    setAiSystemPrompt,
+    aiTranslateTargetLanguage,
+    setAiTranslateTargetLanguage,
+    aiModelInstallState,
+    setAiModelInstallState,
   } = useAppStore();
 
   const [expandedMaterialFolders, setExpandedMaterialFolders] = useState<Record<string, boolean>>({});
@@ -566,8 +605,282 @@ export function Sidebar() {
   });
   const materialPreviewRef = useRef<HTMLDivElement | null>(null);
   const [expandedTrashFolders, setExpandedTrashFolders] = useState<Record<string, boolean>>({});
+  const [aiActionBusy, setAiActionBusy] = useState<string | null>(null);
+  const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
+  const [aiInfoMessage, setAiInfoMessage] = useState<string | null>(null);
+  const [aiInstalledModelIds, setAiInstalledModelIds] = useState<string[]>([]);
+  const [aiInstallProgress, setAiInstallProgress] = useState<Record<string, AiModelInstallProgress>>({});
+  const aiInstallPollersRef = useRef<Record<string, number>>({});
   const currentAccentPickerColor = resolveAccentColorValue(accentColor);
   const hasCustomAccent = !Object.prototype.hasOwnProperty.call(ACCENT_PRESET_COLORS, accentColor);
+
+  const getModelInstallState = (modelId: string) => aiModelInstallState[modelId] || "not-installed";
+
+  const clearInstallPoller = useCallback((modelId: string) => {
+    const timerId = aiInstallPollersRef.current[modelId];
+    if (timerId) {
+      window.clearInterval(timerId);
+      delete aiInstallPollersRef.current[modelId];
+    }
+  }, []);
+
+  const handleInstallProgressUpdate = useCallback(
+    (progress: AiModelInstallProgress) => {
+      const modelId = progress.model_id;
+
+      setAiInstallProgress((previous) => ({
+        ...previous,
+        [modelId]: progress,
+      }));
+
+      if (progress.status === "preparing" || progress.status === "installing") {
+        setAiModelInstallState(modelId, "installing");
+        return;
+      }
+
+      if (progress.status === "completed") {
+        clearInstallPoller(modelId);
+        setAiModelInstallState(modelId, "installed");
+        setAiDefaultModelId(modelId);
+        setAiInfoMessage(`Installed ${modelId}.`);
+        void syncInstalledModels();
+        return;
+      }
+
+      if (progress.status === "cancelled") {
+        clearInstallPoller(modelId);
+        setAiModelInstallState(modelId, "not-installed");
+        setAiInfoMessage(`Cancelled install for ${modelId}.`);
+        return;
+      }
+
+      if (progress.status === "failed") {
+        clearInstallPoller(modelId);
+        setAiModelInstallState(modelId, "error");
+        setAiErrorMessage(progress.detail || `Failed to install ${modelId}.`);
+      }
+    },
+    [clearInstallPoller, setAiDefaultModelId, setAiModelInstallState],
+  );
+
+  const pollModelInstallProgress = useCallback(
+    async (modelId: string) => {
+      try {
+        const progress = await invoke<AiModelInstallProgress>("ai_get_model_install_progress", { modelId });
+        handleInstallProgressUpdate(progress);
+
+        if (TERMINAL_INSTALL_STATUSES.has(progress.status)) {
+          clearInstallPoller(modelId);
+        }
+      } catch (error) {
+        clearInstallPoller(modelId);
+        setAiModelInstallState(modelId, "error");
+        setAiErrorMessage(`Could not track install progress for ${modelId}: ${String(error)}`);
+      }
+    },
+    [clearInstallPoller, handleInstallProgressUpdate, setAiModelInstallState],
+  );
+
+  const startInstallPolling = useCallback(
+    (modelId: string) => {
+      clearInstallPoller(modelId);
+
+      aiInstallPollersRef.current[modelId] = window.setInterval(() => {
+        void pollModelInstallProgress(modelId);
+      }, 750);
+
+      void pollModelInstallProgress(modelId);
+    },
+    [clearInstallPoller, pollModelInstallProgress],
+  );
+
+  const buildHuggingFaceGemma4DownloadUrl = (modelId: string) =>
+    `https://huggingface.co/models?sort=trending&search=${encodeURIComponent(`${modelId} gguf`)}`;
+
+  const buildKaggleGemma4DownloadUrl = (modelId: string) =>
+    `https://kaggle.com/models?query=${encodeURIComponent(modelId.replace("gemma4:", "gemma 4 "))}`;
+
+  const syncInstalledModels = async () => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+    setAiActionBusy("refresh-models");
+
+    try {
+      const installedModels = await invoke<string[]>("ai_list_models");
+      const installed = new Set(installedModels || []);
+      setAiInstalledModelIds(Array.from(installed));
+
+      for (const model of AI_MODEL_CATALOG) {
+        setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
+      }
+
+      // Auto-correct a stale default model: if the saved default isn't installed,
+      // switch to the first installed catalog model, or the first installed model overall.
+      const currentDefault = useAppStore.getState().aiDefaultModelId;
+      if (!installed.has(currentDefault)) {
+        const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
+        const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
+        if (corrected) setAiDefaultModelId(corrected);
+      }
+    } catch (error) {
+      setAiErrorMessage(`Could not refresh models: ${String(error)}`);
+    } finally {
+      setAiActionBusy(null);
+    }
+  };
+
+  const handleInstallModel = async (modelId: string) => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+    setAiModelInstallState(modelId, "installing");
+    setAiInstallProgress((previous) => ({
+      ...previous,
+      [modelId]: {
+        model_id: modelId,
+        status: "preparing",
+        progress: 0,
+        detail: "Preparing local runtime...",
+      },
+    }));
+
+    try {
+      const progress = await invoke<AiModelInstallProgress>("ai_start_model_install", { modelId });
+      handleInstallProgressUpdate(progress);
+
+      if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) {
+        startInstallPolling(modelId);
+      }
+    } catch (error) {
+      setAiModelInstallState(modelId, "error");
+      setAiErrorMessage(`Failed to install ${modelId}: ${String(error)}`);
+    }
+  };
+
+  const handleCancelInstallModel = async (modelId: string) => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+    setAiActionBusy(`cancel:${modelId}`);
+
+    try {
+      const progress = await invoke<AiModelInstallProgress>("ai_cancel_model_install", { modelId });
+      handleInstallProgressUpdate(progress);
+      clearInstallPoller(modelId);
+    } catch (error) {
+      setAiErrorMessage(`Failed to cancel install for ${modelId}: ${String(error)}`);
+    } finally {
+      setAiActionBusy(null);
+    }
+  };
+
+  const handleRemoveModel = async (modelId: string) => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+    setAiActionBusy(`remove:${modelId}`);
+
+    try {
+      await invoke("ai_remove_model", { modelId });
+      setAiModelInstallState(modelId, "not-installed");
+      if (aiDefaultModelId === modelId) {
+        setAiDefaultModelId(DEFAULT_AI_MODEL_ID);
+      }
+      setAiInfoMessage(`Removed ${modelId}.`);
+      void syncInstalledModels();
+    } catch (error) {
+      setAiModelInstallState(modelId, "error");
+      setAiErrorMessage(`Failed to remove ${modelId}: ${String(error)}`);
+    } finally {
+      setAiActionBusy(null);
+    }
+  };
+
+  const handleEnsureRuntime = async () => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+    setAiActionBusy("ensure-runtime");
+
+    try {
+      const result = await invoke<string>("ai_ensure_runtime");
+      setAiInfoMessage(result || "Local runtime is ready.");
+    } catch (error) {
+      setAiErrorMessage(`Automatic runtime setup failed: ${String(error)}`);
+    } finally {
+      setAiActionBusy(null);
+    }
+  };
+
+  const openExternalModelSource = async (url: string) => {
+    setAiErrorMessage(null);
+
+    try {
+      await invoke("open_file_in_default_app", { path: url });
+    } catch (error) {
+      setAiErrorMessage(`Could not open model source link: ${String(error)}`);
+    }
+  };
+
+  const handleImportGguf = async (modelId: string) => {
+    setAiInfoMessage(null);
+    setAiErrorMessage(null);
+
+    let selected: string | null = null;
+    try {
+      const result = await openFileDialog({
+        title: "Select a .gguf model file",
+        filters: [{ name: "GGUF Model", extensions: ["gguf"] }],
+        multiple: false,
+        directory: false,
+      });
+      selected = typeof result === "string" ? result : (result as { path?: string } | null)?.path ?? null;
+    } catch {
+      // user cancelled the picker
+      return;
+    }
+
+    if (!selected) return;
+
+    setAiModelInstallState(modelId, "installing");
+    setAiInstallProgress((previous) => ({
+      ...previous,
+      [modelId]: {
+        model_id: modelId,
+        status: "preparing",
+        progress: 0,
+        detail: "Preparing runtime for GGUF import...",
+      },
+    }));
+
+    try {
+      const progress = await invoke<AiModelInstallProgress>("ai_import_local_model", {
+        ggufPath: selected,
+        modelId,
+      });
+      handleInstallProgressUpdate(progress);
+
+      if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) {
+        startInstallPolling(modelId);
+      }
+    } catch (error) {
+      setAiModelInstallState(modelId, "error");
+      setAiErrorMessage(`Failed to import ${modelId}: ${String(error)}`);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      Object.values(aiInstallPollersRef.current).forEach((timerId) => {
+        window.clearInterval(timerId);
+      });
+      aiInstallPollersRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!settingsOpen || settingsSection !== "ai") {
+      return;
+    }
+
+    void syncInstalledModels();
+  }, [settingsOpen, settingsSection, aiProvider]);
 
   useEffect(() => {
     return () => {
@@ -714,16 +1027,10 @@ export function Sidebar() {
           ? 4
           : 3;
     const estimatedHeight = estimatedItemCount * 36 + 12;
-    const padding = 8;
-
-    const x = Math.max(
-      padding,
-      Math.min(event.clientX, window.innerWidth - estimatedWidth - padding),
-    );
-    const y = Math.max(
-      padding,
-      Math.min(event.clientY, window.innerHeight - estimatedHeight - padding),
-    );
+    const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+      estimatedWidth,
+      estimatedHeight,
+    });
 
     setContextMenu({ x, y, target });
   };
@@ -1711,7 +2018,7 @@ export function Sidebar() {
             <div className="px-6 py-4 border-b border-[#2d2d2d] flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-base font-semibold text-gray-100">Settings</h3>
-                <p className="text-xs text-gray-400 mt-1">Customize appearance, defaults, and diagnostics.</p>
+                <p className="text-xs text-gray-400 mt-1">Customize appearance, defaults, local AI, and diagnostics.</p>
               </div>
               <button
                 onClick={() => setSettingsOpen(false)}
@@ -1723,7 +2030,7 @@ export function Sidebar() {
             </div>
 
             <div className="px-6 pt-3 pb-2 border-b border-[#2d2d2d]">
-              <div className="grid grid-cols-3 gap-1.5 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
+              <div className="grid grid-cols-4 gap-1.5 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
                 <button
                   onClick={() => setSettingsSection("appearance")}
                   className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
@@ -1743,6 +2050,16 @@ export function Sidebar() {
                   }`}
                 >
                   Defaults
+                </button>
+                <button
+                  onClick={() => setSettingsSection("ai")}
+                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                    settingsSection === "ai"
+                      ? "bg-[#232323] text-white"
+                      : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
+                  }`}
+                >
+                  AI
                 </button>
                 <button
                   onClick={() => setSettingsSection("advanced")}
@@ -1961,6 +2278,308 @@ export function Sidebar() {
                 </button>
               </div>
             )}
+
+            {settingsSection === "ai" && (
+              <>
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">AI Runtime</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setAiEnabled(!aiEnabled)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors ${
+                        aiEnabled
+                          ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                          : "border-[#333] text-gray-300 hover:bg-[#222]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" /> Enable Local AI
+                      </span>
+                      <span className="text-xs uppercase tracking-wider">{aiEnabled ? "On" : "Off"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium">Chat Behavior</div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Memory (turns)</label>
+                      <select
+                        value={aiChatHistoryLimit}
+                        onChange={(e) => setAiChatHistoryLimit(Number(e.target.value))}
+                        className="w-full h-8 px-2 rounded-md bg-[#202020] border border-[#333] text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors appearance-none cursor-pointer"
+                      >
+                        <option value={4}>4</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20 (default)</option>
+                        <option value={40}>40</option>
+                        <option value={9999}>All</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Creativity</label>
+                      <select
+                        value={aiTemperature}
+                        onChange={(e) => setAiTemperature(Number(e.target.value))}
+                        className="w-full h-8 px-2 rounded-md bg-[#202020] border border-[#333] text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors appearance-none cursor-pointer"
+                      >
+                        <option value={0.1}>Precise (0.1)</option>
+                        <option value={0.4}>Focused (0.4)</option>
+                        <option value={0.7}>Balanced (0.7)</option>
+                        <option value={1.0}>Creative (1.0)</option>
+                        <option value={1.4}>Wild (1.4)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setAiPersistChats(!aiPersistChats)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm border transition-colors mb-2 ${
+                      aiPersistChats
+                        ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                        : "border-[#333] text-gray-300 hover:bg-[#222]"
+                    }`}
+                  >
+                    <span>Remember chat when switching lessons</span>
+                    <span className="text-xs uppercase tracking-wider">{aiPersistChats ? "On" : "Off"}</span>
+                  </button>
+
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1">
+                      Custom AI personality <span className="text-gray-600">(leave blank for default)</span>
+                    </label>
+                    <textarea
+                      value={aiSystemPrompt}
+                      onChange={(e) => setAiSystemPrompt(e.target.value)}
+                      placeholder="e.g. You are a helpful teaching assistant. Be brief and use simple language."
+                      rows={3}
+                      className="w-full rounded-md bg-[#202020] border border-[#333] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 outline-none focus:border-[var(--tp-accent)] resize-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium">Translation Target</div>
+                  <select
+                    value={aiTranslateTargetLanguage}
+                    onChange={(e) => setAiTranslateTargetLanguage(e.target.value)}
+                    className="w-full h-9 px-3 rounded-md bg-[#202020] border border-[#333] text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="English">English</option>
+                    <option value="German">German</option>
+                    <option value="French">French</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Dutch">Dutch</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Russian">Russian</option>
+                    <option value="Chinese">Chinese</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Korean">Korean</option>
+                    <option value="Turkish">Turkish</option>
+                    <option value="Arabic">Arabic</option>
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">Select the default target language for the 'AI Translate' action in the lesson editor.</p>
+                </div>
+
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      void handleEnsureRuntime();
+                    }}
+                    disabled={aiActionBusy === "ensure-runtime"}
+                    className="px-2.5 py-1.5 text-xs rounded-md border border-[#3d3d3d] text-gray-300 hover:bg-[#252525] disabled:opacity-60"
+                  >
+                    {aiActionBusy === "ensure-runtime" ? "Preparing Runtime..." : "Set Up Runtime Automatically"}
+                  </button>
+                  <span className="text-[11px] text-gray-500">Optional: you can skip this and just press Install on any model.</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs uppercase tracking-wider text-gray-500">Gemma 4 Catalog</div>
+                    <button
+                      onClick={() => {
+                        void syncInstalledModels();
+                      }}
+                      disabled={aiActionBusy === "refresh-models"}
+                      className="px-2 py-1 text-xs rounded border border-[#333] text-gray-300 hover:bg-[#222] disabled:opacity-60"
+                    >
+                      {aiActionBusy === "refresh-models" ? "Refreshing..." : "Refresh"}
+                    </button>
+                  </div>
+
+                  {aiInstalledModelIds.length > 0 && (
+                    <div className="mb-2 rounded-md border border-[#333] bg-[#202020] px-2.5 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-1 font-medium">Detected Installed Models</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiInstalledModelIds.map((modelId) => (
+                          <div key={modelId} className="flex items-center">
+                            <button
+                              onClick={() => setAiDefaultModelId(modelId)}
+                              className={`px-2 py-1 text-[11px] rounded-l border-y border-l transition-colors ${
+                                aiDefaultModelId === modelId
+                                  ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                                  : "border-[#3d3d3d] text-gray-300 hover:bg-[#252525]"
+                              }`}
+                              title="Set as default model"
+                            >
+                              {modelId}
+                            </button>
+                            <button
+                              onClick={() => {
+                                void handleRemoveModel(modelId);
+                              }}
+                              disabled={aiActionBusy === `remove:${modelId}`}
+                              className={`px-1.5 py-1 text-[11px] rounded-r border transition-colors ${
+                                aiDefaultModelId === modelId
+                                  ? "border-[var(--tp-accent)] border-l-[#3d3d3d] text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                                  : "border-[#3d3d3d] text-gray-400 hover:text-red-400 hover:bg-red-400/10"
+                              }`}
+                              title={`Remove ${modelId}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    {AI_MODEL_CATALOG.map((model) => {
+                      const installState = getModelInstallState(model.id);
+                      const installProgress = aiInstallProgress[model.id];
+                      const isInstalling =
+                        installState === "installing" ||
+                        installProgress?.status === "preparing" ||
+                        installProgress?.status === "installing";
+                      const isInstalled = installState === "installed";
+                      const isDefault = aiDefaultModelId === model.id;
+                      const isCanceling = aiActionBusy === `cancel:${model.id}`;
+                      const isRemoving = aiActionBusy === `remove:${model.id}`;
+                      const isBusy = isRemoving || isCanceling;
+                      const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
+                      const progressText =
+                        installProgress?.detail ||
+                        (isInstalling
+                          ? `Downloading... ${Math.round(progressValue)}%`
+                          : undefined);
+
+                      return (
+                        <div key={model.id} className="rounded-lg border border-[#333] bg-[#1b1b1b] px-3 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-gray-100">{model.label}</span>
+                                <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-[#3b3b3b] text-gray-400">
+                                  {model.tier}
+                                </span>
+                                {model.recommended && (
+                                  <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-[var(--tp-accent)] text-[var(--tp-accent)]">
+                                    Recommended
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">{model.description}</div>
+                              <div className="mt-2 flex items-center gap-3 text-[11px] text-gray-500">
+                                <span className="inline-flex items-center gap-1"><HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}</span>
+                                <span>RAM: {model.recommendedRam}</span>
+                                <span>Source: Ollama</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
+                              {!isInstalling && installState === "error" && <AlertCircle className="w-4 h-4 text-amber-300" />}
+                              {!isInstalling && isInstalled && <CheckCircle2 className="w-4 h-4 text-emerald-300" />}
+                            </div>
+                          </div>
+
+                          {isInstalling && (
+                            <div className="mt-2">
+                              <div className="h-1.5 w-full rounded bg-[#2a2a2a] overflow-hidden">
+                                <div
+                                  className="h-full bg-[var(--tp-accent)] transition-all duration-300"
+                                  style={{ width: `${Math.max(progressValue, 3)}%` }}
+                                />
+                              </div>
+                              {progressText && <div className="mt-1 text-[11px] text-gray-500 truncate">{progressText}</div>}
+                            </div>
+                          )}
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {!isInstalled ? (
+                              <>
+                                <button
+                                  onClick={() => { void handleInstallModel(model.id); }}
+                                  disabled={isInstalling || isBusy || aiActionBusy === "refresh-models"}
+                                  className="px-2.5 py-1.5 text-xs rounded-md border border-[var(--tp-accent)] text-white bg-[#232323] hover:opacity-90 disabled:opacity-60"
+                                >
+                                  {isInstalling ? "Installing..." : "Install"}
+                                </button>
+                                <button
+                                  onClick={() => { void handleImportGguf(model.id); }}
+                                  disabled={isInstalling || isBusy}
+                                  className="px-2.5 py-1.5 text-xs rounded-md border border-[#3d3d3d] text-gray-300 hover:bg-[#252525] disabled:opacity-60"
+                                >
+                                  {isInstalling ? "Importing..." : "Import .gguf"}
+                                </button>
+                                {isInstalling && (
+                                  <button
+                                    onClick={() => { void handleCancelInstallModel(model.id); }}
+                                    disabled={isCanceling}
+                                    className="px-2.5 py-1.5 text-xs rounded-md border border-[#3d3d3d] text-gray-400 hover:bg-[#252525] disabled:opacity-60"
+                                  >
+                                    {isCanceling ? "Cancelling..." : "Cancel"}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setAiDefaultModelId(model.id)}
+                                  className={`px-2.5 py-1.5 text-xs rounded-md border ${
+                                    isDefault
+                                      ? "border-[var(--tp-accent)] text-white bg-[#232323]"
+                                      : "border-[#3d3d3d] text-gray-300 hover:bg-[#252525]"
+                                  }`}
+                                >
+                                  {isDefault ? "Default" : "Set Default"}
+                                </button>
+                                <button
+                                  onClick={() => { void handleRemoveModel(model.id); }}
+                                  disabled={isBusy || isInstalling}
+                                  className="px-2.5 py-1.5 text-xs rounded-md border border-[#3d3d3d] text-gray-300 hover:bg-[#252525] disabled:opacity-60"
+                                >
+                                  Remove
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    Models are installed via Ollama. Use <strong className="text-gray-400">Install</strong> to download from the Ollama registry, or <strong className="text-gray-400">Import .gguf</strong> to load a file you already downloaded (e.g. from Hugging Face or Kaggle). RAM values are estimated ranges.
+                  </p>
+
+                  {aiInfoMessage && (
+                    <div className="mt-2 text-xs text-emerald-300 border border-emerald-300/30 bg-emerald-400/10 rounded-md px-2 py-1.5">
+                      {aiInfoMessage}
+                    </div>
+                  )}
+
+                  {aiErrorMessage && (
+                    <div className="mt-2 text-xs text-amber-300 border border-amber-300/30 bg-amber-400/10 rounded-md px-2 py-1.5">
+                      {aiErrorMessage}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
             </div>
           </div>
         </div>
@@ -2008,7 +2627,7 @@ export function Sidebar() {
 
       {contextMenu && (
         <div
-          className="tp-menu-surface fixed z-[60] min-w-[170px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className={buildContextMenuClassName("z-[60] min-w-[170px]")}
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >

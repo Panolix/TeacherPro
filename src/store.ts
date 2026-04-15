@@ -13,6 +13,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { load } from '@tauri-apps/plugin-store';
+import { DEFAULT_AI_MODEL_ID } from "./ai/modelCatalog";
 
 export interface LessonMetadata {
   teacher: string;
@@ -64,6 +65,8 @@ export type ThemeMode = "dark" | "light";
 export type AccentColor = string;
 export type PaperTone = "light" | "dark";
 export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials" | "trash";
+export type AiProvider = "ollama" | "direct-download";
+export type AiModelInstallState = "not-installed" | "installing" | "installed" | "error";
 
 export interface SubjectConfig {
   name: string;
@@ -85,6 +88,15 @@ interface UISettings {
   defaultTeacherName: string;
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  aiDefaultModelId: string;
+  aiPersistChats: boolean;
+  aiChatHistoryLimit: number;
+  aiTemperature: number;
+  aiSystemPrompt: string;
+  aiThinkingEnabled: boolean;
+  aiTranslateTargetLanguage: string;
 }
 
 interface AppState {
@@ -107,6 +119,15 @@ interface AppState {
   defaultTeacherName: string;
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
+  aiEnabled: boolean;
+  aiProvider: AiProvider;
+  aiDefaultModelId: string;
+  aiPersistChats: boolean;
+  aiChatHistoryLimit: number;
+  aiTemperature: number;
+  aiSystemPrompt: string;
+  aiTranslateTargetLanguage: string;
+  aiModelInstallState: Record<string, AiModelInstallState>;
   lessonSubjectIndex: Record<string, string>;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
@@ -129,6 +150,16 @@ interface AppState {
   setDefaultTeacherName: (name: string) => void;
   setShowActionButtonLabels: (enabled: boolean) => void;
   setSubjects: (subjects: SubjectConfig[]) => void;
+  setAiEnabled: (enabled: boolean) => void;
+  setAiProvider: (provider: AiProvider) => void;
+  setAiDefaultModelId: (modelId: string) => void;
+  setAiPersistChats: (enabled: boolean) => void;
+  setAiChatHistoryLimit: (limit: number) => void;
+  setAiTemperature: (temp: number) => void;
+  setAiSystemPrompt: (prompt: string) => void;
+  setAiThinkingEnabled: (enabled: boolean) => void;
+  setAiTranslateTargetLanguage: (language: string) => void;
+  setAiModelInstallState: (modelId: string, state: AiModelInstallState) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
@@ -177,6 +208,15 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   defaultTeacherName: "",
   showActionButtonLabels: false,
   subjects: [],
+  aiEnabled: false,
+  aiProvider: "ollama",
+  aiDefaultModelId: DEFAULT_AI_MODEL_ID,
+  aiPersistChats: true,
+  aiChatHistoryLimit: 20,
+  aiTemperature: 0.7,
+  aiSystemPrompt: "",
+  aiThinkingEnabled: true,
+  aiTranslateTargetLanguage: "English",
 };
 
 function createTrashName(originalName: string): string {
@@ -484,6 +524,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   defaultTeacherName: DEFAULT_UI_SETTINGS.defaultTeacherName,
   showActionButtonLabels: DEFAULT_UI_SETTINGS.showActionButtonLabels,
   subjects: DEFAULT_UI_SETTINGS.subjects,
+  aiEnabled: DEFAULT_UI_SETTINGS.aiEnabled,
+  aiProvider: DEFAULT_UI_SETTINGS.aiProvider,
+  aiDefaultModelId: DEFAULT_UI_SETTINGS.aiDefaultModelId,
+  aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
+  aiTranslateTargetLanguage: DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
+  aiModelInstallState: {},
   lessonSubjectIndex: {},
   debugEvents: [],
   draggedMaterial: null,
@@ -518,6 +564,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           subjects: Array.isArray(savedSettings.subjects)
             ? savedSettings.subjects
             : DEFAULT_UI_SETTINGS.subjects,
+          aiEnabled: savedSettings.aiEnabled ?? DEFAULT_UI_SETTINGS.aiEnabled,
+          aiProvider: savedSettings.aiProvider ?? DEFAULT_UI_SETTINGS.aiProvider,
+          aiDefaultModelId: savedSettings.aiDefaultModelId ?? DEFAULT_UI_SETTINGS.aiDefaultModelId,
+          aiPersistChats: savedSettings.aiPersistChats ?? DEFAULT_UI_SETTINGS.aiPersistChats,
+          aiChatHistoryLimit: savedSettings.aiChatHistoryLimit ?? DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
+          aiTemperature: savedSettings.aiTemperature ?? DEFAULT_UI_SETTINGS.aiTemperature,
+          aiSystemPrompt: savedSettings.aiSystemPrompt ?? DEFAULT_UI_SETTINGS.aiSystemPrompt,
+          aiThinkingEnabled: savedSettings.aiThinkingEnabled ?? DEFAULT_UI_SETTINGS.aiThinkingEnabled,
+          aiTranslateTargetLanguage: savedSettings.aiTranslateTargetLanguage ?? DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
         });
       }
       
@@ -577,6 +632,50 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSubjects: (subjects) => {
     set({ subjects });
     void persistUiSettings({ subjects });
+  },
+  setAiEnabled: (enabled) => {
+    set({ aiEnabled: enabled });
+    void persistUiSettings({ aiEnabled: enabled });
+  },
+  setAiProvider: (provider) => {
+    set({ aiProvider: provider });
+    void persistUiSettings({ aiProvider: provider });
+  },
+  setAiDefaultModelId: (modelId) => {
+    set({ aiDefaultModelId: modelId });
+    void persistUiSettings({ aiDefaultModelId: modelId });
+  },
+  setAiPersistChats: (enabled) => {
+    set({ aiPersistChats: enabled });
+    void persistUiSettings({ aiPersistChats: enabled });
+  },
+  setAiChatHistoryLimit: (limit) => {
+    set({ aiChatHistoryLimit: limit });
+    void persistUiSettings({ aiChatHistoryLimit: limit });
+  },
+  setAiTemperature: (temp) => {
+    set({ aiTemperature: temp });
+    void persistUiSettings({ aiTemperature: temp });
+  },
+  setAiSystemPrompt: (prompt) => {
+    set({ aiSystemPrompt: prompt });
+    void persistUiSettings({ aiSystemPrompt: prompt });
+  },
+  setAiThinkingEnabled: (enabled) => {
+    set({ aiThinkingEnabled: enabled });
+    void persistUiSettings({ aiThinkingEnabled: enabled });
+  },
+  setAiTranslateTargetLanguage: (language) => {
+    set({ aiTranslateTargetLanguage: language });
+    void persistUiSettings({ aiTranslateTargetLanguage: language });
+  },
+  setAiModelInstallState: (modelId, installState) => {
+    set((state) => ({
+      aiModelInstallState: {
+        ...state.aiModelInstallState,
+        [modelId]: installState,
+      },
+    }));
   },
   logDebug: (source, action, detail) => {
     const { debugMode } = get();

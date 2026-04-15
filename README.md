@@ -76,6 +76,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, and resize them freely.
 - **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
 - **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
+- **Contextual AI Chat Dock:** Toggle AI chat directly from the editor action buttons; when active, it stays docked at the bottom so it remains visible while you scroll.
 - **Material Linking:** Drag and drop external files (PDFs, Word Docs, Images) directly into the editor to create clickable links. Double-clicking the link opens the file in your computer's default native application.
 
 ### 🧠 Mindmap Editor
@@ -111,7 +112,15 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Viewport-Safe Context Menus:** Right-click menus in sidebar, editor tables, mindmaps, and material links auto-reposition near window edges so actions remain fully visible.
 - **Stable Scrolling Layout:** Scrollbar gutters are stabilized to avoid content width shifts while scrolling; scrollbar visuals are slimmer and neutral gray.
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
-- **Compact Action Buttons:** Save/Preview/Print/Export actions are icon-first by default, with an optional setting to show text labels.
+- **Compact Action Buttons:** AI Chat, Save, Preview, Print, and Export actions are icon-first by default, with an optional setting to show text labels.
+
+### 🤖 Local AI Assistant (Experimental Foundation)
+- **Local-First Runtime:** AI integration is being implemented on top of Tauri with local model execution (no required cloud account).
+- **Model Source:** Gemma 4 catalog cards now use valid published tags (`gemma4:e2b`, `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`) with updated per-model disk/RAM guidance.
+- **Direct Download Mode:** You can use download-only mode so Install opens external Gemma 4 download pages (Hugging Face / Kaggle) without starting or managing Ollama.
+- **Settings Integration:** A new AI settings tab is available for enable/disable, chat persistence policy, default model selection, and model install/remove actions with progress + cancel.
+- **Source Discovery:** AI settings include quick links to external Gemma catalogs (e.g., Hugging Face and Kaggle) for newer variants.
+- **Privacy Boundary:** Lesson and mindmap content remains in your Vault; AI runtime metadata is managed outside the Vault.
 
 ---
 
@@ -202,6 +211,7 @@ The compiled files will appear under `src-tauri/target/release/bundle/`.
 TeacherPro uses a live documentation system to track design decisions, remaining gaps, and app features. If you are developing or modifying the codebase, please refer to:
 - [FEATURE_TRACKER.md](FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
 - [PROJECT_PLAN.md](PROJECT_PLAN.md) - The initial architectural phase planning map.
+- [AI_IMPLEMENTATION_PLAN.md](AI_IMPLEMENTATION_PLAN.md) - The implementation roadmap and acceptance criteria for local AI features.
 
 ---
 
