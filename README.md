@@ -126,6 +126,30 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 Pre-compiled, ready-to-run installers for **Windows**, **macOS**, and **Linux** are available in the [Releases](https://github.com/Panolix/TeacherPro/releases) tab.
 
+### 🔖 Automated Release Flow (Recommended)
+
+TeacherPro now uses a tag-driven release pipeline with version synchronization across:
+
+- `package.json`
+- `package-lock.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/tauri.conf.json`
+
+To publish a new installer release:
+
+1. Prepare notes in `RELEASE_NOTES_vX.Y.Z.md` (for example `RELEASE_NOTES_v1.2.2.md`).
+2. Push your code changes.
+3. Create and push a matching tag:
+
+   ```bash
+   git tag v1.2.2
+   git push origin v1.2.2
+   ```
+
+4. GitHub Actions workflow **Release** builds installers for Windows, macOS, and Linux and uploads them as assets to the draft release.
+
+If you need to rebuild installers for an existing version tag, run **Build Installers** manually from the Actions tab and provide `version` (without the `v` prefix, e.g. `1.2.2`).
+
 ### 🍎 macOS Users: "App is damaged" Error
 Because TeacherPro is an open-source app and not currently signed with a paid Apple Developer certificate, macOS Gatekeeper may flag the downloaded app as "damaged" and tell you to move it to the trash. 
 

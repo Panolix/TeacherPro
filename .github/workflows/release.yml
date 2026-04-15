@@ -41,7 +41,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          name: TeacherPro ${{ env.VERSION }}
+          name: TeacherPro v${{ env.VERSION }}
           body: ${{ env.RELEASE_BODY }}
 
   publish-tauri:
@@ -82,23 +82,22 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: install frontend dependencies
-        run: npm install
+        run: npm ci
 
-      # Syncs versions dynamically with whatever the Github tag is 
-      # e.g., strips "v" from "v1.2.3" -> "1.2.3"
-      - name: Update versions from tag
+      - name: Validate and sync versions from tag
         shell: bash
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           echo "Setting version to $VERSION"
-          npm version $VERSION --no-git-tag-version --allow-same-version || true
-          
-          # Update src-tauri/tauri.conf.json and Cargo.toml dynamically
-          jq ".version = \"$VERSION\"" src-tauri/tauri.conf.json > src-tauri/tauri.conf.tmp.json && mv src-tauri/tauri.conf.tmp.json src-tauri/tauri.conf.json
-          sed -i.bak -e "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml && rm src-tauri/Cargo.toml.bak
+          node scripts/sync-version.mjs "$VERSION"
 
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          releaseDraft: true
+          prerelease: false
+          retryAttempts: 2
           args: ${{ matrix.args }}
