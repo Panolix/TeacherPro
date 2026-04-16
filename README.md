@@ -94,7 +94,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Drag to Reschedule:** Drag a lesson card to another day column to move it. TeacherPro updates the lesson's planned date and file date so it appears under the new day immediately.
 
 ### 🧭 Sidebar Productivity Tools
-- **Fast Search (On Demand):** Open per-section search fields from the magnifier icon when needed, then filter Lesson Plans and Mindmaps by file names and indexed document content.
+- **Unified Smart Search:** Open one collapsible search block in the sidebar and filter Lesson Plans, Mindmaps, Materials, and Trash from a single query (including indexed document content for lessons/mindmaps).
 - **Material Search:** Find copied/imported materials quickly by file name or nested relative path.
 - **Duplicate Plan:** Right-click any lesson and duplicate it for recurring classes.
 - **Safe Deletion + Recovery:** Deleted lessons/mindmaps/materials are moved to the Vault's `Trash` folder, where you can restore items later or permanently delete them.
@@ -118,9 +118,19 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### 🤖 Local AI Assistant (Experimental Foundation)
 - **Local-First Runtime:** AI integration is being implemented on top of Tauri with local model execution (no required cloud account).
-- **Model Source:** Gemma 4 catalog cards now use valid published tags (`gemma4:e2b`, `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`) with updated per-model disk/RAM guidance.
+- **Model Catalog:** Includes current practical local families (Gemma 4, Qwen 3, Llama 3.2, DeepSeek R1 8B, Mistral Small 3.1, Phi 4) with per-model disk/RAM/VRAM guidance and runtime defaults.
+- **Capability Chips:** Model cards provide neutral capability hints (`reasoning`, `multilingual`, `low-latency`, `long-context`, `english-focused`) instead of hard recommendations.
+- **Thinking Mode Awareness:** Chat thinking toggle is model-aware and only sends thinking requests for supported models.
+- **No Terminal Popups (Windows):** Runtime setup, model installs, imports, and chat-related runtime calls execute with hidden process flags so random command windows do not flash while using AI features.
+- **Runtime Diagnostics Panel:** AI Settings now show runtime availability, server status, preferred backend, detected hardware, and active model processor usage from `ollama ps` (for example, CPU-only vs GPU usage).
+- **Cross-Platform Backend Strategy:**
+  - Windows: prefers `cuda` when NVIDIA tooling is detected, otherwise CPU fallback.
+  - macOS Intel + Apple Silicon: prefers `metal`.
+  - Linux: prefers `cuda` for NVIDIA, `rocm` for AMD ROCm environments, otherwise CPU fallback.
+  - Hybrid GPU systems: when backend is `cuda`, inference targets NVIDIA GPUs (for example, RTX 4090) instead of integrated AMD graphics.
 - **Direct Download Mode:** You can use download-only mode so Install opens external Gemma 4 download pages (Hugging Face / Kaggle) without starting or managing Ollama.
 - **Settings Integration:** A new AI settings tab is available for enable/disable, chat persistence policy, default model selection, and model install/remove actions with progress + cancel.
+- **Settings Durability:** UI preferences are persisted in app storage and mirrored to a Vault backup file (`.teacherpro/ui-settings.backup.json`) for easier recovery across app updates.
 - **Source Discovery:** AI settings include quick links to external Gemma catalogs (e.g., Hugging Face and Kaggle) for newer variants.
 - **Privacy Boundary:** Lesson and mindmap content remains in your Vault; AI runtime metadata is managed outside the Vault.
 

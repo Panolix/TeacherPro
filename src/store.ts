@@ -93,6 +93,7 @@ interface UISettings {
   aiEnabled: boolean;
   aiProvider: AiProvider;
   aiDefaultModelId: string;
+  aiRewriteTranslateModelId: string;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -125,6 +126,7 @@ interface AppState {
   aiEnabled: boolean;
   aiProvider: AiProvider;
   aiDefaultModelId: string;
+  aiRewriteTranslateModelId: string;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -158,6 +160,7 @@ interface AppState {
   setAiEnabled: (enabled: boolean) => void;
   setAiProvider: (provider: AiProvider) => void;
   setAiDefaultModelId: (modelId: string) => void;
+  setAiRewriteTranslateModelId: (modelId: string) => void;
   setAiPersistChats: (enabled: boolean) => void;
   setAiChatHistoryLimit: (limit: number) => void;
   setAiTemperature: (temp: number) => void;
@@ -198,6 +201,8 @@ interface AppState {
 }
 
 const STORE_KEY = "teacherpro-settings.json";
+const SETTINGS_BACKUP_DIR = ".teacherpro";
+const SETTINGS_BACKUP_FILE = "ui-settings.backup.json";
 
 const MIN_DEFAULT_LESSON_TABLE_BODY_ROWS = 1;
 const MAX_DEFAULT_LESSON_TABLE_BODY_ROWS = 12;
@@ -240,6 +245,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiEnabled: false,
   aiProvider: "ollama",
   aiDefaultModelId: DEFAULT_AI_MODEL_ID,
+  aiRewriteTranslateModelId: DEFAULT_AI_MODEL_ID,
   aiPersistChats: true,
   aiChatHistoryLimit: 20,
   aiTemperature: 0.7,
@@ -247,6 +253,90 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiThinkingEnabled: true,
   aiTranslateTargetLanguage: "English",
 };
+
+function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISettings {
+  const source = raw || {};
+  const legacySource = source as Partial<UISettings> & {
+    aiRewriteModelId?: string;
+    aiTranslateModelId?: string;
+  };
+  const sectionSource: Partial<Record<SidebarSectionKey, boolean>> = source.sectionCollapsed || {};
+  const rewriteTranslateModelCandidate =
+    typeof source.aiRewriteTranslateModelId === "string" && source.aiRewriteTranslateModelId.trim()
+      ? source.aiRewriteTranslateModelId
+      : typeof legacySource.aiRewriteModelId === "string" && legacySource.aiRewriteModelId.trim()
+        ? legacySource.aiRewriteModelId
+        : typeof legacySource.aiTranslateModelId === "string" && legacySource.aiTranslateModelId.trim()
+          ? legacySource.aiTranslateModelId
+          : typeof source.aiDefaultModelId === "string" && source.aiDefaultModelId.trim()
+            ? source.aiDefaultModelId
+            : DEFAULT_UI_SETTINGS.aiRewriteTranslateModelId;
+
+  return {
+    ...DEFAULT_UI_SETTINGS,
+    ...source,
+    themeMode:
+      source.themeMode === "light" || source.themeMode === "dark"
+        ? source.themeMode
+        : DEFAULT_UI_SETTINGS.themeMode,
+    defaultLessonTableBodyRows: clampDefaultLessonTableBodyRows(source.defaultLessonTableBodyRows),
+    sectionCollapsed: {
+      lessonPlans: sectionSource.lessonPlans ?? DEFAULT_UI_SETTINGS.sectionCollapsed.lessonPlans,
+      mindmaps: sectionSource.mindmaps ?? DEFAULT_UI_SETTINGS.sectionCollapsed.mindmaps,
+      materials: sectionSource.materials ?? DEFAULT_UI_SETTINGS.sectionCollapsed.materials,
+      trash: sectionSource.trash ?? DEFAULT_UI_SETTINGS.sectionCollapsed.trash,
+    },
+    subjects: Array.isArray(source.subjects) ? source.subjects : DEFAULT_UI_SETTINGS.subjects,
+    aiProvider:
+      source.aiProvider === "direct-download" || source.aiProvider === "ollama"
+        ? source.aiProvider
+        : DEFAULT_UI_SETTINGS.aiProvider,
+    aiDefaultModelId:
+      typeof source.aiDefaultModelId === "string" && source.aiDefaultModelId.trim()
+        ? source.aiDefaultModelId
+        : DEFAULT_UI_SETTINGS.aiDefaultModelId,
+    aiRewriteTranslateModelId: rewriteTranslateModelCandidate,
+    aiTranslateTargetLanguage:
+      typeof source.aiTranslateTargetLanguage === "string" && source.aiTranslateTargetLanguage.trim()
+        ? source.aiTranslateTargetLanguage
+        : DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
+  };
+}
+
+async function writeUiSettingsBackup(vaultPath: string, uiSettings: UISettings): Promise<void> {
+  const backupDirPath = await join(vaultPath, SETTINGS_BACKUP_DIR);
+  await mkdir(backupDirPath, { recursive: true });
+
+  const backupFilePath = await join(backupDirPath, SETTINGS_BACKUP_FILE);
+  const payload = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    uiSettings,
+  };
+
+  await writeTextFile(backupFilePath, JSON.stringify(payload, null, 2));
+}
+
+async function readUiSettingsBackup(vaultPath: string): Promise<Partial<UISettings> | null> {
+  try {
+    const backupDirPath = await join(vaultPath, SETTINGS_BACKUP_DIR);
+    const backupFilePath = await join(backupDirPath, SETTINGS_BACKUP_FILE);
+    if (!(await exists(backupFilePath))) {
+      return null;
+    }
+
+    const raw = await readTextFile(backupFilePath);
+    const parsed = JSON.parse(raw) as { uiSettings?: Partial<UISettings> };
+    if (!parsed || typeof parsed !== "object" || !parsed.uiSettings) {
+      return null;
+    }
+
+    return parsed.uiSettings;
+  } catch (error) {
+    console.warn("Could not read settings backup", error);
+    return null;
+  }
+}
 
 function createTrashName(originalName: string): string {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -427,19 +517,42 @@ let searchIndexBuildVersion = 0;
 async function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
   const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
   const current = (await store.get<Partial<UISettings>>("uiSettings")) || {};
-  const next: UISettings = {
-    ...DEFAULT_UI_SETTINGS,
+  const mergedSectionCollapsed: Record<SidebarSectionKey, boolean> = {
+    lessonPlans:
+      patch.sectionCollapsed?.lessonPlans ??
+      current.sectionCollapsed?.lessonPlans ??
+      DEFAULT_UI_SETTINGS.sectionCollapsed.lessonPlans,
+    mindmaps:
+      patch.sectionCollapsed?.mindmaps ??
+      current.sectionCollapsed?.mindmaps ??
+      DEFAULT_UI_SETTINGS.sectionCollapsed.mindmaps,
+    materials:
+      patch.sectionCollapsed?.materials ??
+      current.sectionCollapsed?.materials ??
+      DEFAULT_UI_SETTINGS.sectionCollapsed.materials,
+    trash:
+      patch.sectionCollapsed?.trash ??
+      current.sectionCollapsed?.trash ??
+      DEFAULT_UI_SETTINGS.sectionCollapsed.trash,
+  };
+
+  const next = normalizeUiSettings({
     ...current,
     ...patch,
-    sectionCollapsed: {
-      ...DEFAULT_UI_SETTINGS.sectionCollapsed,
-      ...((current as Partial<UISettings>).sectionCollapsed || {}),
-      ...(patch.sectionCollapsed || {}),
-    },
-  };
+    sectionCollapsed: mergedSectionCollapsed,
+  });
 
   await store.set("uiSettings", next);
   await store.save();
+
+  const savedVault = await store.get<{ path: string }>("vault");
+  if (savedVault?.path) {
+    try {
+      await writeUiSettingsBackup(savedVault.path, next);
+    } catch (error) {
+      console.warn("Could not update settings backup", error);
+    }
+  }
 }
 
 const byName = (a: { name?: string }, b: { name?: string }) =>
@@ -618,6 +731,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiEnabled: DEFAULT_UI_SETTINGS.aiEnabled,
   aiProvider: DEFAULT_UI_SETTINGS.aiProvider,
   aiDefaultModelId: DEFAULT_UI_SETTINGS.aiDefaultModelId,
+  aiRewriteTranslateModelId: DEFAULT_UI_SETTINGS.aiRewriteTranslateModelId,
   aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
   aiChatHistoryLimit: DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
   aiTemperature: DEFAULT_UI_SETTINGS.aiTemperature,
@@ -640,41 +754,49 @@ export const useAppStore = create<AppState>((set, get) => ({
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
       const savedVault = await store.get<{ path: string }>("vault");
       const savedSettings = await store.get<Partial<UISettings>>("uiSettings");
+      let loadedSettings = savedSettings || null;
 
-      if (savedSettings) {
-        set({
-          themeMode: "dark",
-          accentColor: savedSettings.accentColor || DEFAULT_UI_SETTINGS.accentColor,
-          lessonPaperTone: savedSettings.lessonPaperTone || DEFAULT_UI_SETTINGS.lessonPaperTone,
-          mindmapPaperTone: savedSettings.mindmapPaperTone || DEFAULT_UI_SETTINGS.mindmapPaperTone,
-          defaultLessonTableBodyRows: clampDefaultLessonTableBodyRows(
-            savedSettings.defaultLessonTableBodyRows,
-          ),
-          calendarCollapsed: savedSettings.calendarCollapsed ?? DEFAULT_UI_SETTINGS.calendarCollapsed,
-          sectionCollapsed: {
-            ...DEFAULT_UI_SETTINGS.sectionCollapsed,
-            ...(savedSettings.sectionCollapsed || {}),
-          },
-          debugMode: savedSettings.debugMode ?? DEFAULT_UI_SETTINGS.debugMode,
-          defaultTeacherName: savedSettings.defaultTeacherName ?? DEFAULT_UI_SETTINGS.defaultTeacherName,
-          showActionButtonLabels:
-            savedSettings.showActionButtonLabels ?? DEFAULT_UI_SETTINGS.showActionButtonLabels,
-          subjects: Array.isArray(savedSettings.subjects)
-            ? savedSettings.subjects
-            : DEFAULT_UI_SETTINGS.subjects,
-          aiEnabled: savedSettings.aiEnabled ?? DEFAULT_UI_SETTINGS.aiEnabled,
-          aiProvider: savedSettings.aiProvider ?? DEFAULT_UI_SETTINGS.aiProvider,
-          aiDefaultModelId: savedSettings.aiDefaultModelId ?? DEFAULT_UI_SETTINGS.aiDefaultModelId,
-          aiPersistChats: savedSettings.aiPersistChats ?? DEFAULT_UI_SETTINGS.aiPersistChats,
-          aiChatHistoryLimit: savedSettings.aiChatHistoryLimit ?? DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
-          aiTemperature: savedSettings.aiTemperature ?? DEFAULT_UI_SETTINGS.aiTemperature,
-          aiSystemPrompt: savedSettings.aiSystemPrompt ?? DEFAULT_UI_SETTINGS.aiSystemPrompt,
-          aiThinkingEnabled: savedSettings.aiThinkingEnabled ?? DEFAULT_UI_SETTINGS.aiThinkingEnabled,
-          aiTranslateTargetLanguage: savedSettings.aiTranslateTargetLanguage ?? DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
-        });
+      if (!loadedSettings && savedVault?.path) {
+        loadedSettings = await readUiSettingsBackup(savedVault.path);
+      }
+
+      const normalizedSettings = normalizeUiSettings(loadedSettings);
+      set({
+        themeMode: normalizedSettings.themeMode,
+        accentColor: normalizedSettings.accentColor,
+        lessonPaperTone: normalizedSettings.lessonPaperTone,
+        mindmapPaperTone: normalizedSettings.mindmapPaperTone,
+        defaultLessonTableBodyRows: normalizedSettings.defaultLessonTableBodyRows,
+        calendarCollapsed: normalizedSettings.calendarCollapsed,
+        sectionCollapsed: normalizedSettings.sectionCollapsed,
+        debugMode: normalizedSettings.debugMode,
+        defaultTeacherName: normalizedSettings.defaultTeacherName,
+        showActionButtonLabels: normalizedSettings.showActionButtonLabels,
+        subjects: normalizedSettings.subjects,
+        aiEnabled: normalizedSettings.aiEnabled,
+        aiProvider: normalizedSettings.aiProvider,
+        aiDefaultModelId: normalizedSettings.aiDefaultModelId,
+        aiRewriteTranslateModelId: normalizedSettings.aiRewriteTranslateModelId,
+        aiPersistChats: normalizedSettings.aiPersistChats,
+        aiChatHistoryLimit: normalizedSettings.aiChatHistoryLimit,
+        aiTemperature: normalizedSettings.aiTemperature,
+        aiSystemPrompt: normalizedSettings.aiSystemPrompt,
+        aiThinkingEnabled: normalizedSettings.aiThinkingEnabled,
+        aiTranslateTargetLanguage: normalizedSettings.aiTranslateTargetLanguage,
+      });
+
+      if (!savedSettings && loadedSettings) {
+        await store.set("uiSettings", normalizedSettings);
+        await store.save();
       }
       
       if (savedVault && savedVault.path) {
+        try {
+          await writeUiSettingsBackup(savedVault.path, normalizedSettings);
+        } catch (error) {
+          console.warn("Could not refresh settings backup", error);
+        }
+
         set({ vaultPath: savedVault.path });
         await get().refreshVault();
       }
@@ -686,9 +808,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setSidebarOpen: (isOpen) => set({ sidebarOpen: isOpen }),
-  setThemeMode: () => {
-    set({ themeMode: "dark" });
-    void persistUiSettings({ themeMode: "dark" });
+  setThemeMode: (mode) => {
+    set({ themeMode: mode });
+    void persistUiSettings({ themeMode: mode });
   },
   setAccentColor: (color) => {
     set({ accentColor: color });
@@ -747,6 +869,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAiDefaultModelId: (modelId) => {
     set({ aiDefaultModelId: modelId });
     void persistUiSettings({ aiDefaultModelId: modelId });
+  },
+  setAiRewriteTranslateModelId: (modelId) => {
+    set({ aiRewriteTranslateModelId: modelId });
+    void persistUiSettings({ aiRewriteTranslateModelId: modelId });
   },
   setAiPersistChats: (enabled) => {
     set({ aiPersistChats: enabled });
@@ -818,7 +944,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         try {
           const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
           await store.set("vault", { path: selected });
+
+          const currentSettings = await store.get<Partial<UISettings>>("uiSettings");
+          const normalizedSettings = normalizeUiSettings(currentSettings);
+          await store.set("uiSettings", normalizedSettings);
           await store.save();
+
+          await writeUiSettingsBackup(selected, normalizedSettings);
         } catch(e) {
           console.error("Could not persist vault path", e);
         }

@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.5.0] - 2026-04-16
+### Added
+- New `ai_runtime_diagnostics` backend command and AI Settings diagnostics panel fields for server source, active model processor usage, and backend policy text.
+- Vault-backed settings durability backup at `.teacherpro/ui-settings.backup.json`, with automatic fallback restore when app-local settings are missing.
+- AI model cards now include neutral capability chips (`reasoning`, `multilingual`, `low-latency`, `long-context`, `english-focused`) for lightweight guidance.
+- Unified, collapsible sidebar search block with one global query applied across lesson plans, mindmaps, materials, and trash.
+- Model-aware thinking support map in chat; unsupported models now disable the thinking toggle and never send thinking requests.
+
+### Changed
+- AI model catalog is modernized around current practical Ollama families/tags including Gemma 4, Qwen 3, Llama 3.2, DeepSeek R1 8B, Mistral Small 3.1, and Phi 4.
+- AI generation now accepts model-aware runtime defaults (`num_ctx`, `num_predict`) and raises the prompt guardrail to 30,000 characters for richer lesson-context chat prompts.
+- AI settings now expose separate routing selectors: one model for lesson chat and one shared model for rewrite + translation.
+- Gemma 4 guidance now uses practical RAM/VRAM estimates and labels memory guidance consistently as `RAM/VRAM`.
+- Runtime diagnostics now describe hybrid GPU behavior explicitly (CUDA backend targets NVIDIA GPU when available).
+- Sidebar section actions were visually simplified to cleaner icon-ghost controls, and Materials now uses one `+` action with a compact add-files/add-folder menu.
+- Material image previews now use blob URLs with extension-to-MIME mapping for broader cross-file compatibility.
+- Settings modal size and tab/card typography were increased for better readability on high-resolution displays.
+
+### Fixed
+- Mini sidebar calendar date cells now use fixed dimensions and stable border sizing to prevent jumpy day-gap shifts while changing selected dates.
+- Theme mode setter now persists the selected mode value instead of forcing a hardcoded dark value.
+- Windows AI runtime/model process launches now consistently run with hidden process flags to prevent random command-window flashes.
+- App-managed Ollama runtime now self-corrects CPU-only fallback by restarting with the preferred GPU backend when diagnostics detect the selected model running on CPU despite GPU-capable hardware.
+- Material preview reliability improved for more image file types (`png`, `jpg`, `jpeg`, `gif`, `webp`, `svg`, `bmp`, `avif`, `tif`, `tiff`, `ico`).
+
 ## [1.4.1] - 2026-04-16
 ### Added
 - New release guard script `npm run verify:scrollbars` to enforce thin dark scrollbar invariants before packaging.

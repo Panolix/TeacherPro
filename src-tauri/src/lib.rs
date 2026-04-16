@@ -1,5 +1,6 @@
 use serde::Serialize;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -29,6 +30,37 @@ struct AiModelInstallProgress {
     detail: Option<String>,
 }
 
+#[derive(Serialize, Clone)]
+struct AiRuntimeModelProcessor {
+    model_id: String,
+    processor: String,
+    size: Option<String>,
+    until: Option<String>,
+}
+
+#[derive(Serialize)]
+struct AiRuntimeDiagnostics {
+    provider: &'static str,
+    available: bool,
+    version: Option<String>,
+    server_running: bool,
+    server_managed_by_app: bool,
+    platform: &'static str,
+    architecture: &'static str,
+    preferred_backend: String,
+    backend_policy: String,
+    detected_hardware: Vec<String>,
+    active_models: Vec<AiRuntimeModelProcessor>,
+    recommendation: Option<String>,
+    detail: Option<String>,
+}
+
+#[derive(Clone)]
+struct HardwareProbe {
+    preferred_backend: String,
+    detected_hardware: Vec<String>,
+}
+
 static AI_INSTALL_STATES: LazyLock<Mutex<HashMap<String, AiInstallStateInternal>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static AI_INSTALL_CHILDREN: LazyLock<Mutex<HashMap<String, Arc<Mutex<Child>>>>> =
@@ -40,6 +72,124 @@ static OLLAMA_SERVER_CHILD: LazyLock<Mutex<Option<Child>>> =
 /// Set to true only when WE spawned Ollama (not when it was already running).
 static OLLAMA_WE_STARTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+static AI_HARDWARE_PROBE: LazyLock<HardwareProbe> = LazyLock::new(probe_hardware);
+
+fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
+    let mut command = Command::new(program);
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command
+}
+
+fn query_nvidia_gpu_names() -> Vec<String> {
+    match command_for("nvidia-smi")
+        .args(["--query-gpu=name", "--format=csv,noheader"])
+        .output()
+    {
+        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(|line| format!("NVIDIA GPU: {line}"))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn probe_hardware() -> HardwareProbe {
+    #[cfg(target_os = "windows")]
+    {
+        let detected_hardware = query_nvidia_gpu_names();
+        if !detected_hardware.is_empty() {
+            return HardwareProbe {
+                preferred_backend: "cuda".to_string(),
+                detected_hardware,
+            };
+        }
+
+        return HardwareProbe {
+            preferred_backend: "cpu".to_string(),
+            detected_hardware: vec![
+                "No NVIDIA GPU detected via nvidia-smi; Ollama will likely run on CPU.".to_string(),
+            ],
+        };
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let detected_hardware = if std::env::consts::ARCH == "aarch64" {
+            vec!["Apple Silicon GPU detected (Metal backend preferred).".to_string()]
+        } else {
+            vec!["macOS GPU detected (Metal backend preferred on Intel Macs).".to_string()]
+        };
+
+        return HardwareProbe {
+            preferred_backend: "metal".to_string(),
+            detected_hardware,
+        };
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let detected_nvidia = query_nvidia_gpu_names();
+        if !detected_nvidia.is_empty() {
+            return HardwareProbe {
+                preferred_backend: "cuda".to_string(),
+                detected_hardware: detected_nvidia,
+            };
+        }
+
+        let rocm_present = command_for("rocm-smi")
+            .arg("--showproductname")
+            .output()
+            .map(|output| output.status.success())
+            .unwrap_or(false)
+            || command_for("rocminfo")
+                .arg("--help")
+                .output()
+                .is_ok();
+
+        if rocm_present {
+            return HardwareProbe {
+                preferred_backend: "rocm".to_string(),
+                detected_hardware: vec![
+                    "AMD GPU tooling detected (ROCm backend preferred).".to_string(),
+                ],
+            };
+        }
+
+        return HardwareProbe {
+            preferred_backend: "cpu".to_string(),
+            detected_hardware: vec![
+                "No CUDA/ROCm GPU tooling detected; Ollama will likely run on CPU.".to_string(),
+            ],
+        };
+    }
+
+    #[allow(unreachable_code)]
+    HardwareProbe {
+        preferred_backend: "cpu".to_string(),
+        detected_hardware: vec!["Unknown platform; using CPU fallback.".to_string()],
+    }
+}
+
+fn apply_preferred_backend_env(command: &mut Command) {
+    if std::env::var("OLLAMA_LLM_LIBRARY").is_ok() {
+        return;
+    }
+
+    let probe = &*AI_HARDWARE_PROBE;
+    if probe.preferred_backend != "cpu" {
+        command.env("OLLAMA_LLM_LIBRARY", &probe.preferred_backend);
+    }
+}
 
 /// Check if the Ollama HTTP server is already accepting connections.
 fn is_ollama_server_running() -> bool {
@@ -59,7 +209,10 @@ fn ensure_ollama_server_started() {
         return;
     }
     let binary = resolve_ollama_binary();
-    match Command::new(&binary)
+    let mut command = command_for(&binary);
+    apply_preferred_backend_env(&mut command);
+
+    match command
         .arg("serve")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -104,21 +257,62 @@ fn stop_ollama_server() {
         // The official Ollama.app runs as "Ollama" (capital O) in the menu bar.
         // The Homebrew/CLI install runs as "ollama" (lowercase).
         // Quit the app bundle gracefully first, then force-kill any remnant.
-        let _ = Command::new("osascript")
+        let _ = command_for("osascript")
             .args(["-e", "tell application \"Ollama\" to quit"])
             .output();
-        let _ = Command::new("pkill").args(["-ix", "ollama"]).output();
+        let _ = command_for("pkill").args(["-ix", "ollama"]).output();
     }
     #[cfg(target_os = "linux")]
     {
-        let _ = Command::new("pkill").args(["-x", "ollama"]).output();
+        let _ = command_for("pkill").args(["-x", "ollama"]).output();
     }
     #[cfg(windows)]
     {
-        let _ = Command::new("taskkill")
+        let _ = command_for("taskkill")
             .args(["/F", "/IM", "ollama.exe"])
             .output();
     }
+
+    OLLAMA_WE_STARTED.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn processor_is_cpu_only(processor: &str) -> bool {
+    let normalized = processor.to_ascii_lowercase();
+    normalized.contains("cpu") && !normalized.contains("gpu")
+}
+
+fn maybe_realign_managed_runtime_backend(selected_model_id: &str) {
+    let probe = &*AI_HARDWARE_PROBE;
+    if probe.preferred_backend == "cpu" {
+        return;
+    }
+
+    // Do not interfere with externally managed Ollama instances.
+    if !OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+
+    if !is_ollama_server_running() {
+        return;
+    }
+
+    let active_models = match run_ollama_command(&["ps"]) {
+        Ok(raw) => parse_ollama_ps(&raw),
+        Err(_) => return,
+    };
+
+    let selected_model_cpu_only = active_models
+        .iter()
+        .find(|model| model.model_id == selected_model_id)
+        .map(|model| processor_is_cpu_only(&model.processor))
+        .unwrap_or(false);
+
+    if !selected_model_cpu_only {
+        return;
+    }
+
+    stop_ollama_server();
+    ensure_ollama_server_started();
 }
 
 fn is_safe_model_id(model_id: &str) -> bool {
@@ -131,7 +325,7 @@ fn is_safe_model_id(model_id: &str) -> bool {
 fn run_ollama_command(args: &[&str]) -> Result<String, String> {
     let binary = resolve_ollama_binary();
 
-    let output = Command::new(&binary)
+    let output = command_for(&binary)
         .args(args)
         .output()
         .map_err(|error| format!("Failed to execute {binary}: {error}"))?;
@@ -177,7 +371,7 @@ fn resolve_ollama_binary() -> String {
             if Path::new(&candidate).exists() {
                 return candidate;
             }
-        } else if Command::new(&candidate).arg("--version").output().is_ok() {
+        } else if command_for(&candidate).arg("--version").output().is_ok() {
             return candidate;
         }
     }
@@ -186,7 +380,7 @@ fn resolve_ollama_binary() -> String {
 }
 
 fn run_command(binary: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(binary)
+    let output = command_for(binary)
         .args(args)
         .output()
         .map_err(|error| format!("Failed to execute {binary}: {error}"))?;
@@ -398,7 +592,7 @@ where
 }
 
 fn command_exists(binary: &str) -> bool {
-    Command::new(binary).arg("--version").output().is_ok()
+    command_for(binary).arg("--version").output().is_ok()
 }
 
 fn install_ollama_runtime() -> Result<String, String> {
@@ -495,6 +689,139 @@ fn parse_ollama_models(raw: &str) -> Vec<String> {
         .collect()
 }
 
+fn split_table_columns(line: &str) -> Vec<String> {
+    let mut columns = Vec::new();
+    let mut current = String::new();
+    let mut consecutive_spaces = 0usize;
+
+    for ch in line.chars() {
+        if ch.is_whitespace() {
+            consecutive_spaces += 1;
+            if consecutive_spaces >= 2 {
+                if !current.trim().is_empty() {
+                    columns.push(current.trim().to_string());
+                    current.clear();
+                }
+                continue;
+            }
+            current.push(' ');
+        } else {
+            consecutive_spaces = 0;
+            current.push(ch);
+        }
+    }
+
+    if !current.trim().is_empty() {
+        columns.push(current.trim().to_string());
+    }
+
+    columns
+}
+
+fn parse_ollama_ps(raw: &str) -> Vec<AiRuntimeModelProcessor> {
+    raw.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.to_ascii_lowercase().starts_with("name "))
+        .filter_map(|line| {
+            let columns = split_table_columns(line);
+            if columns.len() < 4 {
+                return None;
+            }
+
+            let model_id = columns[0].clone();
+            let size = columns.get(2).cloned();
+            let processor = columns[3].clone();
+            let until = if columns.len() >= 5 {
+                Some(columns[4..].join(" "))
+            } else {
+                None
+            };
+
+            Some(AiRuntimeModelProcessor {
+                model_id,
+                processor,
+                size,
+                until,
+            })
+        })
+        .collect()
+}
+
+fn build_runtime_recommendation(
+    probe: &HardwareProbe,
+    active_models: &[AiRuntimeModelProcessor],
+    runtime_available: bool,
+    server_running: bool,
+) -> Option<String> {
+    if !runtime_available {
+        return Some("Ollama runtime is not available. Install or set up Ollama first.".to_string());
+    }
+
+    if !server_running {
+        return Some(
+            "Runtime is installed but the Ollama server is not running. Start any AI action to launch it."
+                .to_string(),
+        );
+    }
+
+    if active_models.is_empty() {
+        return Some(
+            "No model is currently loaded. Start AI chat and refresh to see CPU/GPU processor usage."
+                .to_string(),
+        );
+    }
+
+    let cpu_only_models: Vec<&AiRuntimeModelProcessor> = active_models
+        .iter()
+        .filter(|model| {
+            let processor = model.processor.to_ascii_lowercase();
+            processor.contains("cpu") && !processor.contains("gpu")
+        })
+        .collect();
+
+    if !cpu_only_models.is_empty() {
+        if probe.preferred_backend != "cpu" {
+            let model_list = cpu_only_models
+                .iter()
+                .map(|model| model.model_id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            return Some(format!(
+                "{model_list} is currently running on CPU only. Detected hardware suggests '{}' should be available. Restart Ollama and verify GPU drivers/runtime.",
+                probe.preferred_backend
+            ));
+        }
+
+        return Some("CPU execution is expected on this hardware profile.".to_string());
+    }
+
+    if active_models
+        .iter()
+        .any(|model| model.processor.to_ascii_lowercase().contains("gpu"))
+    {
+        return Some("GPU acceleration is active for the currently loaded model(s).".to_string());
+    }
+
+    Some("Processor usage is available but could not be classified as CPU or GPU.".to_string())
+}
+
+fn build_backend_policy_text(preferred_backend: &str) -> String {
+    let normalized = preferred_backend.trim().to_ascii_lowercase();
+
+    match normalized.as_str() {
+        "cuda" => "CUDA backend uses NVIDIA GPUs. On hybrid systems (for example AMD iGPU + NVIDIA dGPU), inference runs on NVIDIA when CUDA is active.".to_string(),
+        "metal" => "Metal backend uses Apple GPU cores on macOS (Intel and Apple Silicon).".to_string(),
+        "rocm" => "ROCm backend uses supported AMD GPUs.".to_string(),
+        "cpu" => "CPU backend uses system CPU cores and system RAM.".to_string(),
+        _ => format!(
+            "Backend '{}' is requested via OLLAMA_LLM_LIBRARY override.",
+            preferred_backend
+        ),
+    }
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -505,7 +832,7 @@ fn greet(name: &str) -> String {
 fn open_file_in_default_app(path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        Command::new("open")
+        command_for("open")
             .arg(&path)
             .spawn()
             .map_err(|error| format!("Failed to open path: {error}"))?;
@@ -513,7 +840,7 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        Command::new("cmd")
+        command_for("cmd")
             .args(["/C", "start", "", &path])
             .spawn()
             .map_err(|error| format!("Failed to open path: {error}"))?;
@@ -521,7 +848,7 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open")
+        command_for("xdg-open")
             .arg(&path)
             .spawn()
             .map_err(|error| format!("Failed to open path: {error}"))?;
@@ -541,7 +868,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
              end tell", path
         );
         
-        Command::new("osascript")
+        command_for("osascript")
             .arg("-e")
             .arg(&script)
             .spawn()
@@ -557,7 +884,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
             "$ErrorActionPreference='Stop'; Start-Process -FilePath '{escaped_path}' -Verb Print -ErrorAction Stop"
         );
 
-        let print_attempt = Command::new("powershell")
+        let print_attempt = command_for("powershell")
             .args([
                 "-NoProfile",
                 "-NonInteractive",
@@ -570,7 +897,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
             .map_err(|error| format!("Failed to run print command: {error}"))?;
 
         if !print_attempt.status.success() {
-            let open_attempt = Command::new("cmd")
+            let open_attempt = command_for("cmd")
                 .args(["/C", "start", "", &path])
                 .status()
                 .map_err(|error| format!("Failed to print or open file: {error}"))?;
@@ -588,7 +915,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        Command::new("lpr")
+        command_for("lpr")
             .arg(&path)
             .spawn()
             .map_err(|error| format!("Failed to print file: {error}"))?;
@@ -613,6 +940,58 @@ fn ai_runtime_status() -> AiRuntimeStatus {
             version: None,
             detail: Some(error),
         },
+    }
+}
+
+#[tauri::command]
+fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
+    let probe = &*AI_HARDWARE_PROBE;
+    let version_result = run_ollama_command(&["--version"]);
+    let runtime_available = version_result.is_ok();
+    let version = version_result
+        .as_ref()
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let detail = version_result.err();
+    let server_running = is_ollama_server_running();
+
+    let active_models = if server_running {
+        match run_ollama_command(&["ps"]) {
+            Ok(raw) => parse_ollama_ps(&raw),
+            Err(_) => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+
+    let recommendation = build_runtime_recommendation(
+        probe,
+        &active_models,
+        runtime_available,
+        server_running,
+    );
+
+    let preferred_backend = std::env::var("OLLAMA_LLM_LIBRARY")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| probe.preferred_backend.clone());
+    let backend_policy = build_backend_policy_text(&preferred_backend);
+
+    AiRuntimeDiagnostics {
+        provider: "ollama",
+        available: runtime_available,
+        version,
+        server_running,
+        server_managed_by_app: OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst),
+        platform: std::env::consts::OS,
+        architecture: std::env::consts::ARCH,
+        preferred_backend,
+        backend_policy,
+        detected_hardware: probe.detected_hardware.clone(),
+        active_models,
+        recommendation,
+        detail,
     }
 }
 
@@ -672,7 +1051,7 @@ fn ai_start_model_install(model_id: String) -> Result<AiModelInstallProgress, St
         );
 
         let binary = resolve_ollama_binary();
-        let mut child = match Command::new(&binary)
+        let mut child = match command_for(&binary)
             .args(["pull", &task_model_id])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -895,7 +1274,7 @@ fn ai_import_local_model(gguf_path: String, model_id: String) -> Result<AiModelI
         let binary = resolve_ollama_binary();
         let modelfile_str = modelfile_path.to_string_lossy().to_string();
 
-        let result = Command::new(&binary)
+        let result = command_for(&binary)
             .args(["create", &task_model_id, "-f", &modelfile_str])
             .output();
 
@@ -935,7 +1314,15 @@ fn ai_import_local_model(gguf_path: String, model_id: String) -> Result<AiModelI
 }
 
 #[tauri::command]
-async fn ai_generate_text(model_id: String, prompt: String, temperature: Option<f64>, system_prompt: Option<String>, enable_thinking: Option<bool>) -> Result<String, String> {
+async fn ai_generate_text(
+    model_id: String,
+    prompt: String,
+    temperature: Option<f64>,
+    system_prompt: Option<String>,
+    enable_thinking: Option<bool>,
+    num_ctx: Option<u32>,
+    num_predict: Option<i32>,
+) -> Result<String, String> {
     if !is_safe_model_id(&model_id) {
         return Err("Invalid model ID format.".to_string());
     }
@@ -945,7 +1332,7 @@ async fn ai_generate_text(model_id: String, prompt: String, temperature: Option<
         return Err("Prompt is empty.".to_string());
     }
 
-    if trimmed_prompt.len() > 20_000 {
+    if trimmed_prompt.len() > 30_000 {
         return Err("Prompt is too large. Please reduce selection size.".to_string());
     }
 
@@ -954,9 +1341,12 @@ async fn ai_generate_text(model_id: String, prompt: String, temperature: Option<
     let task_temperature = temperature.unwrap_or(0.7).clamp(0.0, 2.0);
     let task_system = system_prompt.unwrap_or_default();
     let task_thinking = enable_thinking.unwrap_or(false);
+    let task_num_ctx = num_ctx.unwrap_or(8_192).clamp(1_024, 131_072);
+    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 4_096);
 
     tauri::async_runtime::spawn_blocking(move || {
         let _ = ensure_ollama_runtime()?;
+        maybe_realign_managed_runtime_backend(&task_model_id);
 
         let base_url = std::env::var("OLLAMA_HOST")
             .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
@@ -980,6 +1370,8 @@ async fn ai_generate_text(model_id: String, prompt: String, temperature: Option<
             "think": task_thinking,
             "options": {
                 "temperature": task_temperature,
+                "num_ctx": task_num_ctx,
+                "num_predict": task_num_predict,
             }
         });
 
@@ -1020,6 +1412,7 @@ pub fn run() {
             open_file_in_default_app,
             print_pdf_file,
             ai_runtime_status,
+            ai_runtime_diagnostics,
             ai_ensure_runtime,
             ai_list_models,
             ai_start_model_install,

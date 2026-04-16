@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-16 (cross-OS scrollbar hardening + release workflow guard)
+Last updated: 2026-04-16 (v1.5.0: unified sidebar search, model capability chips, diagnostics + runtime polish)
 
 ## Purpose
 
@@ -15,6 +15,8 @@ Update this file whenever behavior changes in editor, sidebar, calendar, mindmap
 - Auto-creates core folders: Lesson Plans, Mindmaps, Materials, Exports, Trash.
 - Reads/writes lessons and mindmaps as JSON.
 - Material tree loading with folder/file ordering.
+- UI settings persistence now includes a vault-side backup mirror at `.teacherpro/ui-settings.backup.json` for easier recovery after reinstalls/profile resets.
+- On startup, settings now fall back to the vault backup when app-local `uiSettings` are missing, then rehydrate app-local storage automatically.
 
 Primary implementation:
 
@@ -46,6 +48,7 @@ Primary implementation:
 - AI rewrite and translate actions are now available for selected text from both the editor toolbar and the table right-click menu.
 - AI chat toggle is now integrated directly into the main lesson action button row (icon-first, matching Save/Preview/Print/Export behavior).
 - Lesson AI chat now opens as a fixed bottom dock while active, staying visible during editor scrolling.
+- AI chat thinking toggle is now model-aware: unsupported models disable the toggle and skip thinking requests.
 - Scrollbars are globally enforced as thin, dark track/thumb styling across app scroll containers with WKWebView-safe root fallbacks.
 - Release and cross-platform installer workflows now run a scrollbar invariant check (`npm run verify:scrollbars`) before packaging.
 
@@ -58,18 +61,21 @@ Primary implementation:
 
 - Sectioned sidebar for lesson plans, mindmaps, materials.
 - New lesson and new mindmap actions.
-- Search inputs for lesson plans and mindmaps with live filtering.
-- Sidebar search fields are optional/on-demand and opened from section-level magnifier toggles (Lesson Plans, Mindmaps, Materials, Trash).
+- Unified collapsible sidebar search block applies one query across Lesson Plans, Mindmaps, Materials, and Trash.
 - Lesson and mindmap search now includes indexed JSON content (TipTap text + metadata for lessons, node labels/material paths for mindmaps), not only filenames.
 - Material search supports both file/folder names and relative paths (including nested entries).
 - Section headers for Lesson Plans, Mindmaps, Materials, and Trash now use larger/more readable sidebar typography.
 - Appearance settings now include independent paper-tone controls for lesson plans and mindmaps.
 - Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
 - Settings now open as a centered modal overlay with stronger spacing, dimmed/blurred backdrop, and Escape/backdrop dismiss.
+- Settings modal dimensions and tab/card text sizing were increased for better readability on higher-resolution displays.
 - Defaults tab includes a Subjects block: up to 4 named subjects each with a custom color picker. Subjects are persisted to vault settings.
 - Defaults tab includes a persisted numeric setting for default inserted lesson-table body rows (range 1-12, default 4).
-- Settings now include an AI tab for local-first configuration, including AI enablement, chat persistence, and a curated Gemma 4 model catalog with selectable providers (Ollama runtime or direct-download mode).
+- Settings now include an AI tab for local-first configuration, including AI enablement, chat persistence, and a curated multi-family model catalog with selectable providers (Ollama runtime or direct-download mode).
 - AI catalog cards support install/remove/default actions with local status indicators and manual refresh.
+- AI settings now include runtime diagnostics showing server source (TeacherPro-managed vs external), backend policy text, and active model processor usage.
+- AI settings now expose model routing controls with separate selections for lesson chat model and shared rewrite+translation model.
+- AI settings now use neutral per-model capability chips instead of benchmark recommendation cards.
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
 - Lesson context menu includes duplicate action.
@@ -88,18 +94,28 @@ Primary implementation:
 ### AI Foundations (Experimental)
 
 - Local AI configuration state is now persisted in app settings (enabled flag, provider, default model, chat persistence).
-- Initial model catalog now targets valid Gemma 4 tags (`gemma4:e2b`, `gemma4:e4b`, `gemma4:26b`, `gemma4:31b`) with updated local disk and RAM guidance.
+- Model catalog now includes current practical local options across families (Gemma 4, Qwen 3, Llama 3.2, DeepSeek R1 8B, Mistral Small 3.1, Phi 4) with per-model disk, RAM/VRAM guidance, recommended context, and runtime defaults.
+- Catalog now carries neutral capability metadata for lightweight UI guidance (`reasoning`, `multilingual`, `low-latency`, `long-context`, `english-focused`).
 - Tauri backend now exposes AI runtime/model commands for status, list, install, and remove operations through local Ollama.
 - Model installation now attempts one-click runtime bootstrap (install Ollama automatically when missing), so users can install from settings without manual pre-setup.
 - Model installs now run as tracked background jobs with live progress polling and cancellation controls in the AI catalog cards.
 - AI settings now include a direct-download provider mode where Install opens external Gemma 4 download pages without starting Ollama.
 - Tauri backend now exposes a generic text generation command (`ai_generate_text`) used by editor rewrite/translate actions.
+- `ai_generate_text` now accepts per-request `num_ctx` and `num_predict` runtime options so selected model defaults are actually applied during inference.
 - AI rewrite/translate now enforce safe single-textblock selection and apply plain-text insertion. Rewrites are now also permitted inside table cells and list items (guard only blocks cross-textblock selections).
 - AI rewrite context menu expands into six tone options: Improve, More Formal, More Casual, Simpler, More Engaging, More Concise.
 - AI translate context menu expands into a 12-language picker; the configured target language is pinned at top with a ★ indicator.
 - Rewrite prompt uses a dedicated system prompt per mode with explicit instructions to change wording and apply the requested tone.
 - AI generation runs on a blocking worker thread to keep UI responsive during longer local model inference.
 - AI model catalog now targets parameter-labeled Gemma 4 variants (E2B/E4B/26B/31B) with refreshed local resource guidance and default model selection.
+- Runtime diagnostics now include `ai_runtime_diagnostics` data: provider availability, version, server running state, preferred backend, backend policy, detected hardware, and active model processor usage parsed from `ollama ps`.
+- Windows runtime/model process calls now use hidden creation flags to avoid random terminal popups during AI runtime setup, model download/import, and related command execution.
+- Cross-platform backend strategy is now explicit in-app:
+  - Windows prefers CUDA when NVIDIA tooling is detected, else CPU fallback.
+  - macOS (Intel/Apple Silicon) prefers Metal.
+  - Linux prefers CUDA (NVIDIA) or ROCm (AMD) when tooling is detected, else CPU fallback.
+  - Hybrid systems with integrated AMD + dedicated NVIDIA follow CUDA/NVIDIA when backend is CUDA.
+- For TeacherPro-managed Ollama runtime, backend alignment now auto-recovers CPU-only fallbacks: if a selected model is detected on CPU while GPU backend is preferred, runtime is restarted with preferred backend before inference.
 - AI Settings now auto-detect already-installed models when opening the AI tab and after install/remove operations.
 - Lesson AI Chat is a conversational assistant that reads the full lesson (body + teacher/subject/date metadata) and can summarize, discuss themes, identify learning objectives, and suggest improvements.
 - Chat quick-action chips (Summarize, Key themes, Check learning objectives, Suggest improvements, Activity ideas) appear when chat is empty for one-click prompts.
@@ -128,6 +144,7 @@ Primary implementation:
 - Create lesson directly for a selected day.
 - Select/unselect lessons for bulk move-to-trash.
 - Day-level move-all-to-trash action.
+- Mini sidebar calendar day-cell layout is stabilized with fixed-size date cells to prevent gap jitter while changing selected date.
 
 Primary implementation:
 
@@ -188,13 +205,17 @@ Primary implementation:
 - `refreshVault()` syncs folders and file trees; rebuilds `lessonSubjectIndex` (filename → subject name) alongside search indexes.
 - `setSubjects(subjects)` persists up to 4 `SubjectConfig { name, color }` entries to vault settings.
 - `setDefaultLessonTableBodyRows(rows)` persists the default number of body rows for inserted lesson tables.
+- `normalizeUiSettings(raw)` normalizes partial/missing settings and enforces stable defaults.
+- `writeUiSettingsBackup(vaultPath, uiSettings)` mirrors settings into vault backup storage.
+- `readUiSettingsBackup(vaultPath)` restores settings from vault backup when local settings are missing.
 - `createNewLesson(plannedDate?)`, `duplicateLesson(fileName)`, `rescheduleLesson(fileName, plannedDate)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?, notes?)`.
 - `createNewMindmap()`, `openMindmap(fileName)`, `saveActiveMindmap(nodes, edges)`.
 - Search indexing runs during vault refresh to keep lesson/mindmap content queries local and fast.
 - `addMaterialFiles()`, `addMaterialDirectory()`, `renameMaterialEntry(...)`, `deleteMaterialEntry(...)`.
 - `setThemeMode(mode)` (dark-only guard), `setAccentColor(color)`, `setDebugMode(enabled)`, `setShowActionButtonLabels(enabled)`.
+- `setThemeMode(mode)` now persists the passed mode instead of forcing a hardcoded value.
 - AI settings and runtime state methods:
-  - `setAiEnabled(enabled)`, `setAiProvider(provider)`, `setAiDefaultModelId(modelId)`, `setAiPersistChats(enabled)`.
+  - `setAiEnabled(enabled)`, `setAiProvider(provider)`, `setAiDefaultModelId(modelId)`, `setAiRewriteTranslateModelId(modelId)`, `setAiPersistChats(enabled)`.
   - `setAiModelInstallState(modelId, state)` for in-app model install status tracking.
 - `logDebug(source, action, detail?)` and `clearDebugEvents()`.
 
@@ -210,7 +231,7 @@ Primary implementation:
 - Toolbar now includes underline toggle, text-color picker/reset, underline-color picker/reset, and highlight-color picker/reset.
 - `runAiSelectionAction(mode, explicitSelection?, options?)` executes rewrite/translate transforms with optional `tone` and `language` options; applies normalized result via `tr.insertText`.
 - `normalizeAiFragmentOutput(rawOutput, originalSelection)` strips think blocks, code fences, and normalizes whitespace/lists to match the input shape.
-- `buildLessonContextText()` walks the TipTap doc and emits structured plain text (headings, paragraphs, lists, tables) capped at 8000 chars.
+- `buildLessonContextText()` walks the TipTap doc and emits structured plain text (headings, paragraphs, lists, tables) capped at 10000 chars.
 - `handleSubmitChat(overrideText?)` sends lesson metadata + body + conversation history to the AI; accepts an optional override for quick-action chip prompts.
 - Lesson notes are edited in a dedicated side drawer and persisted via the same autosave/manual save flow as lesson metadata/content.
 - `AiMarkdown` renders block-level markdown (headings, lists) and inline formatting (bold, italic, code) from AI chat responses.
@@ -232,16 +253,19 @@ Primary implementation:
   - `syncInstalledModels()`.
   - `handleInstallModel(modelId)`.
   - `handleRemoveModel(modelId)`.
+  - `availableRoutingModels` builds selector options from installed and currently selected models for stable chat/rewrite routing.
 - `renderMaterialEntries(...)` renders recursive tree.
 - `renderTrashEntries(...)` renders trash tree with restore/permanent-delete operations.
 
 ### AI Backend (`src-tauri/src/lib.rs`)
 
 - `ai_runtime_status()` reports local Ollama availability.
+- `ai_runtime_diagnostics()` reports runtime health + hardware/backend diagnostics including active model processor usage.
 - `ai_list_models()` returns locally installed model IDs.
 - `ai_install_model(modelId)` executes local model pull.
 - `ai_remove_model(modelId)` removes local models.
-- `ai_generate_text(modelId, prompt)` generates local model output for editor task flows.
+- `ai_generate_text(modelId, prompt, num_ctx, num_predict)` generates local model output for editor task flows using model-aware runtime defaults.
+- `build_backend_policy_text(preferredBackend)` explains expected processor usage behavior by backend.
 
 ### Mindmap (`src/components/MindmapView.tsx`)
 
@@ -286,6 +310,8 @@ Primary implementation:
 
 - Native open command: `open_file_in_default_app(path)` in Rust backend.
 - AI runtime commands (Ollama): `ai_runtime_status`, `ai_list_models`, `ai_install_model`, `ai_remove_model`.
+- AI diagnostics command: `ai_runtime_diagnostics` (backend/processor visibility).
+- Rust process launcher helper `command_for(...)` applies hidden process flags on Windows to suppress terminal flashes for GUI-triggered commands.
 - Tauri capabilities include opener, dialog, fs, os, and store permissions with broad fs scope.
 - Runtime app branding uses `TeacherPro` (window/product title), while the Tauri identifier remains `com.pano.temp-app` for profile/store compatibility with existing local data.
 

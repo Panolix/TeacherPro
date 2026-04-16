@@ -23,6 +23,7 @@ import {
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
@@ -727,6 +728,7 @@ export function Editor() {
     subjects,
     aiEnabled,
     aiDefaultModelId,
+    aiRewriteTranslateModelId,
     aiChatHistoryLimit,
     aiTemperature,
     aiSystemPrompt,
@@ -756,6 +758,7 @@ export function Editor() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
+  const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
 
   // Auto-close chat when AI is turned off in settings.
   useEffect(() => {
@@ -1272,19 +1275,30 @@ export function Editor() {
           : `You translate text into ${targetLang}. Output ONLY the translation.`;
 
       const statusLabel = mode === "translate"
-        ? `AI translating to ${targetLang}...`
-        : tone === "improve" ? "AI rewriting selection..." : `AI rewriting (${tone})...`;
+        ? `AI translating to ${targetLang} with ${aiRewriteTranslateModelId}...`
+        : tone === "improve"
+          ? `AI rewriting selection with ${aiRewriteTranslateModelId}...`
+          : `AI rewriting (${tone}) with ${aiRewriteTranslateModelId}...`;
+
+      const rewriteRuntimeDefaults = getAiModelRuntimeDefaults(aiRewriteTranslateModelId);
 
       setIsAiBusy(true);
       setAiStatusMessage(statusLabel);
+      logDebug(
+        "ai",
+        "rewrite-translate-invoke",
+        `${mode} | model=${aiRewriteTranslateModelId} | ctx=${rewriteRuntimeDefaults.defaultNumCtx} | predict=${rewriteRuntimeDefaults.defaultNumPredict}`,
+      );
 
       try {
         const response = await tauriInvoke<string>("ai_generate_text", {
-          modelId: aiDefaultModelId,
+          modelId: aiRewriteTranslateModelId,
           prompt,
           temperature: aiTemperature,
           systemPrompt: rewriteSystemPrompt,
           enableThinking: false,
+          numCtx: rewriteRuntimeDefaults.defaultNumCtx,
+          numPredict: rewriteRuntimeDefaults.defaultNumPredict,
         });
 
         console.log("[AI rewrite] raw response:", JSON.stringify(response));
@@ -1315,7 +1329,11 @@ export function Editor() {
         editor.view.dispatch(transaction);
         editor.view.focus();
 
-        setAiStatusMessage(mode === "rewrite" ? "AI rewrite applied." : "AI translation applied.");
+        setAiStatusMessage(
+          mode === "rewrite"
+            ? `AI rewrite applied (${aiRewriteTranslateModelId}).`
+            : `AI translation applied (${aiRewriteTranslateModelId}).`,
+        );
       } catch (error) {
         console.error("AI action failed:", error);
         setAiStatusMessage(`AI action failed: ${String(error)}`);
@@ -1324,17 +1342,18 @@ export function Editor() {
       }
     },
     [
-      aiDefaultModelId,
       aiEnabled,
+      aiRewriteTranslateModelId,
       aiTemperature,
       aiTranslateTargetLanguage,
       editor,
       getSelectedTextRange,
       getSelectionValidationError,
+      logDebug,
     ],
   );
 
-  const buildLessonContextText = useCallback((): string => {
+  const buildLessonContextText = useCallback((maxChars = 10000): string => {
     if (!editor) {
       return "";
     }
@@ -1391,10 +1410,11 @@ export function Editor() {
 
     const structured = nodeToText(editor.getJSON()).trim();
 
-    // Cap at 8000 chars — generous enough for any real lesson plan.
-    const body = structured.length <= 8000
+    // Cap lesson context to preserve room for metadata + history + user prompt.
+    const safeMaxChars = Math.max(5000, Math.min(10000, Math.floor(maxChars)));
+    const body = structured.length <= safeMaxChars
       ? structured
-      : `${structured.slice(0, 8000)}\n\n[Content truncated at 8000 characters]`;
+      : `${structured.slice(0, safeMaxChars)}\n\n[Content truncated at ${safeMaxChars} characters]`;
 
     return body || "(no body content yet)";
   }, [editor]);
@@ -1420,10 +1440,15 @@ export function Editor() {
     setChatMessages((previous) => [...previous, userMessage]);
     setChatInput("");
     setIsChatBusy(true);
-    setAiStatusMessage("AI chat is thinking...");
+    setAiStatusMessage(`AI chat is thinking with ${aiDefaultModelId}...`);
 
     try {
-      const contextText = buildLessonContextText();
+      const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
+      const chatContextCharLimit = Math.max(
+        5000,
+        Math.min(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 2)),
+      );
+      const contextText = buildLessonContextText(chatContextCharLimit);
 
       // Build metadata header from local state fields.
       const metaLines: string[] = [];
@@ -1465,12 +1490,20 @@ You can help with:
 
 Be concise but thorough. Use bullet points when listing multiple items. Never modify the lesson plan directly — only discuss and advise.`;
 
+      logDebug(
+        "ai",
+        "chat-invoke",
+        `model=${aiDefaultModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
+      );
+
       const response = await tauriInvoke<string>("ai_generate_text", {
         modelId: aiDefaultModelId,
         prompt,
         temperature: aiTemperature,
         systemPrompt: effectiveSystemPrompt,
-        enableThinking: aiThinkingEnabled,
+        enableThinking: aiThinkingEnabled && modelSupportsThinking,
+        numCtx: chatRuntimeDefaults.defaultNumCtx,
+        numPredict: chatRuntimeDefaults.defaultNumPredict,
       });
 
       const { thinking: thinkingContent, response: cleanResponse } = parseThinkingFromResponse(response);
@@ -1486,7 +1519,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           timestamp: Date.now(),
         },
       ]);
-      setAiStatusMessage("AI chat response ready.");
+      setAiStatusMessage(`AI chat response ready (${aiDefaultModelId}).`);
     } catch (error) {
       console.error("AI chat failed:", error);
       setAiStatusMessage(`AI chat failed: ${String(error)}`);
@@ -1502,7 +1535,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput]);
+  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
 
   useEffect(() => {
     if (!chatOpen) {
@@ -2647,13 +2680,26 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => setAiThinkingEnabled(!aiThinkingEnabled)}
-                  title={aiThinkingEnabled ? "Thinking mode on — click to disable" : "Thinking mode off — click to enable"}
+                  onClick={() => {
+                    if (modelSupportsThinking) {
+                      setAiThinkingEnabled(!aiThinkingEnabled);
+                    }
+                  }}
+                  title={
+                    !modelSupportsThinking
+                      ? "This model does not expose thinking traces in TeacherPro."
+                      : aiThinkingEnabled
+                        ? "Thinking mode requested (supported models only) — click to disable"
+                        : "Enable thinking mode request (supported models only)"
+                  }
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                    aiThinkingEnabled
+                    modelSupportsThinking && aiThinkingEnabled
                       ? "text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)]"
-                      : "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)]"
+                      : modelSupportsThinking
+                        ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)]"
+                        : "text-[var(--tp-border-strong)] cursor-not-allowed"
                   }`}
+                  aria-disabled={!modelSupportsThinking}
                 >
                   <Brain className="w-3.5 h-3.5" />
                 </button>

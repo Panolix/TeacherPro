@@ -30,11 +30,15 @@ import {
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { AccentColor, MaterialEntry, MindmapData, PaperTone, useAppStore } from "../store";
 import { MiniCalendar } from "./MiniCalendar";
-import { AI_MODEL_CATALOG, DEFAULT_AI_MODEL_ID } from "../ai/modelCatalog";
+import {
+  AI_MODEL_CATALOG,
+  DEFAULT_AI_MODEL_ID,
+  type AiModelCapability,
+} from "../ai/modelCatalog";
 import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
 
 type SidebarMenuTarget =
@@ -102,6 +106,29 @@ interface AiModelInstallProgress {
   detail?: string | null;
 }
 
+interface AiRuntimeModelProcessor {
+  model_id: string;
+  processor: string;
+  size?: string | null;
+  until?: string | null;
+}
+
+interface AiRuntimeDiagnostics {
+  provider: string;
+  available: boolean;
+  version?: string | null;
+  server_running: boolean;
+  server_managed_by_app: boolean;
+  platform: string;
+  architecture: string;
+  preferred_backend: string;
+  backend_policy: string;
+  detected_hardware: string[];
+  active_models: AiRuntimeModelProcessor[];
+  recommendation?: string | null;
+  detail?: string | null;
+}
+
 const TERMINAL_INSTALL_STATUSES = new Set<AiModelInstallProgress["status"]>([
   "not-started",
   "completed",
@@ -129,6 +156,36 @@ const PAPER_TONE_OPTIONS: Array<{ value: PaperTone; label: string }> = [
 ];
 
 type SettingsSection = "appearance" | "defaults" | "ai" | "advanced";
+
+const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  bmp: "image/bmp",
+  avif: "image/avif",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  ico: "image/x-icon",
+};
+
+const IMAGE_PREVIEW_EXTENSIONS = new Set(Object.keys(IMAGE_MIME_BY_EXTENSION));
+
+const SIDEBAR_SECTION_ACTION_BUTTON_CLASS =
+  "h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#232323] transition-colors";
+
+const SIDEBAR_TOGGLE_ICON_BUTTON_CLASS =
+  "h-6 w-6 inline-flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-[#232323] transition-colors";
+
+const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
+  multilingual: "Multilingual",
+  reasoning: "Reasoning",
+  "low-latency": "Low-Latency",
+  "long-context": "Long-Context",
+  "english-focused": "English-Focused",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -524,7 +581,6 @@ export function Sidebar() {
     mindmaps,
     lessonSearchIndex,
     mindmapSearchIndex,
-    isSearchIndexing,
     createNewLesson,
     duplicateLesson,
     openLesson,
@@ -575,6 +631,8 @@ export function Sidebar() {
     aiProvider,
     aiDefaultModelId,
     setAiDefaultModelId,
+    aiRewriteTranslateModelId,
+    setAiRewriteTranslateModelId,
     aiPersistChats,
     setAiPersistChats,
     aiChatHistoryLimit,
@@ -595,16 +653,9 @@ export function Sidebar() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("appearance");
   const [materialPreview, setMaterialPreview] = useState<MaterialPreviewState | null>(null);
   const [renameDialog, setRenameDialog] = useState<RenameDialogState | null>(null);
-  const [lessonSearch, setLessonSearch] = useState("");
-  const [mindmapSearch, setMindmapSearch] = useState("");
-  const [materialSearch, setMaterialSearch] = useState("");
-  const [trashSearch, setTrashSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState({
-    lessonPlans: false,
-    mindmaps: false,
-    materials: false,
-    trash: false,
-  });
+  const [sidebarGlobalSearch, setSidebarGlobalSearch] = useState("");
+  const [sidebarSearchCollapsed, setSidebarSearchCollapsed] = useState(false);
+  const [materialsActionsOpen, setMaterialsActionsOpen] = useState(false);
   const materialPreviewRef = useRef<HTMLDivElement | null>(null);
   const [expandedTrashFolders, setExpandedTrashFolders] = useState<Record<string, boolean>>({});
   const [aiActionBusy, setAiActionBusy] = useState<string | null>(null);
@@ -612,6 +663,8 @@ export function Sidebar() {
   const [aiInfoMessage, setAiInfoMessage] = useState<string | null>(null);
   const [aiInstalledModelIds, setAiInstalledModelIds] = useState<string[]>([]);
   const [aiInstallProgress, setAiInstallProgress] = useState<Record<string, AiModelInstallProgress>>({});
+  const [aiRuntimeDiagnostics, setAiRuntimeDiagnostics] = useState<AiRuntimeDiagnostics | null>(null);
+  const [aiRuntimeBusy, setAiRuntimeBusy] = useState(false);
   const aiInstallPollersRef = useRef<Record<string, number>>({});
   const currentAccentPickerColor = resolveAccentColorValue(accentColor);
   const hasCustomAccent = !Object.prototype.hasOwnProperty.call(ACCENT_PRESET_COLORS, accentColor);
@@ -710,18 +763,38 @@ export function Sidebar() {
         setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
       }
 
-      // Auto-correct a stale default model: if the saved default isn't installed,
-      // switch to the first installed catalog model, or the first installed model overall.
-      const currentDefault = useAppStore.getState().aiDefaultModelId;
-      if (!installed.has(currentDefault)) {
-        const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
-        const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
-        if (corrected) setAiDefaultModelId(corrected);
+      // Auto-correct stale routed models if saved selections are no longer installed.
+      const currentState = useAppStore.getState();
+      const currentChatModel = currentState.aiDefaultModelId;
+      const currentRewriteModel = currentState.aiRewriteTranslateModelId;
+      const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
+      const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
+
+      if (corrected && !installed.has(currentChatModel)) {
+        setAiDefaultModelId(corrected);
+      }
+
+      if (corrected && !installed.has(currentRewriteModel)) {
+        setAiRewriteTranslateModelId(corrected);
       }
     } catch (error) {
       setAiErrorMessage(`Could not refresh models: ${String(error)}`);
     } finally {
       setAiActionBusy(null);
+    }
+  };
+
+  const syncRuntimeDiagnostics = async () => {
+    setAiRuntimeBusy(true);
+
+    try {
+      const diagnostics = await invoke<AiRuntimeDiagnostics>("ai_runtime_diagnostics");
+      setAiRuntimeDiagnostics(diagnostics);
+    } catch (error) {
+      setAiRuntimeDiagnostics(null);
+      setAiErrorMessage(`Could not refresh runtime diagnostics: ${String(error)}`);
+    } finally {
+      setAiRuntimeBusy(false);
     }
   };
 
@@ -779,6 +852,9 @@ export function Sidebar() {
       if (aiDefaultModelId === modelId) {
         setAiDefaultModelId(DEFAULT_AI_MODEL_ID);
       }
+      if (aiRewriteTranslateModelId === modelId) {
+        setAiRewriteTranslateModelId(DEFAULT_AI_MODEL_ID);
+      }
       setAiInfoMessage(`Removed ${modelId}.`);
       void syncInstalledModels();
     } catch (error) {
@@ -797,12 +873,56 @@ export function Sidebar() {
     try {
       const result = await invoke<string>("ai_ensure_runtime");
       setAiInfoMessage(result || "Local runtime is ready.");
+      void syncRuntimeDiagnostics();
     } catch (error) {
       setAiErrorMessage(`Automatic runtime setup failed: ${String(error)}`);
     } finally {
       setAiActionBusy(null);
     }
   };
+
+  const modelLabelById = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const model of AI_MODEL_CATALOG) {
+      lookup.set(model.id, model.label);
+    }
+    return lookup;
+  }, []);
+
+  const availableRoutingModels = useMemo(() => {
+    const ids = new Set<string>(aiInstalledModelIds);
+
+    if (aiDefaultModelId) {
+      ids.add(aiDefaultModelId);
+    }
+
+    if (aiRewriteTranslateModelId) {
+      ids.add(aiRewriteTranslateModelId);
+    }
+
+    if (ids.size === 0) {
+      ids.add(DEFAULT_AI_MODEL_ID);
+    }
+
+    return Array.from(ids).sort((left, right) => {
+      const leftIndex = AI_MODEL_CATALOG.findIndex((model) => model.id === left);
+      const rightIndex = AI_MODEL_CATALOG.findIndex((model) => model.id === right);
+
+      if (leftIndex !== -1 && rightIndex !== -1) {
+        return leftIndex - rightIndex;
+      }
+
+      if (leftIndex !== -1) {
+        return -1;
+      }
+
+      if (rightIndex !== -1) {
+        return 1;
+      }
+
+      return left.localeCompare(right);
+    });
+  }, [aiInstalledModelIds, aiDefaultModelId, aiRewriteTranslateModelId]);
 
 
 
@@ -868,6 +988,7 @@ export function Sidebar() {
     }
 
     void syncInstalledModels();
+    void syncRuntimeDiagnostics();
   }, [settingsOpen, settingsSection, aiProvider]);
 
   useEffect(() => {
@@ -888,10 +1009,14 @@ export function Sidebar() {
   };
 
   useEffect(() => {
-    const closeMenu = () => setContextMenu(null);
+    const closeMenu = () => {
+      setContextMenu(null);
+      setMaterialsActionsOpen(false);
+    };
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setContextMenu(null);
+        setMaterialsActionsOpen(false);
         setRenameDialog(null);
         setPreviewState(null);
         setSettingsOpen(false);
@@ -906,6 +1031,12 @@ export function Sidebar() {
       window.removeEventListener("keydown", onEscape, true);
     };
   }, []);
+
+  useEffect(() => {
+    if (sectionCollapsed.materials || !sidebarOpen) {
+      setMaterialsActionsOpen(false);
+    }
+  }, [sectionCollapsed.materials, sidebarOpen]);
 
   useEffect(() => {
     if (!materialPreview) {
@@ -1175,12 +1306,20 @@ export function Sidebar() {
         return;
       }
 
-      if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
-        logDebug("sidebar", "preview-image-success", target.relativePath);
+      if (IMAGE_PREVIEW_EXTENSIONS.has(extension)) {
+        const bytes = await readFile(absolutePath);
+        const mimeType = IMAGE_MIME_BY_EXTENSION[extension] || "application/octet-stream";
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+        logDebug(
+          "sidebar",
+          "preview-image-success",
+          `${target.relativePath} | bytes=${bytes.length} | mime=${mimeType}`,
+        );
         setPreviewState({
           title: fileName,
           kind: "image",
-          src: convertFileSrc(absolutePath),
+          src: blobUrl,
+          blobUrl,
         });
         return;
       }
@@ -1329,13 +1468,19 @@ export function Sidebar() {
     }
   };
 
-  const normalizedLessonSearch = lessonSearch.trim().toLowerCase();
-  const normalizedMindmapSearch = mindmapSearch.trim().toLowerCase();
-  const normalizedMaterialSearch = materialSearch.trim().toLowerCase();
-  const normalizedTrashSearch = trashSearch.trim().toLowerCase();
+  const normalizedGlobalSearch = sidebarGlobalSearch.trim().toLowerCase();
+  const globalSearchTerms = useMemo(
+    () => (normalizedGlobalSearch ? normalizedGlobalSearch.split(/\s+/).filter(Boolean) : []),
+    [normalizedGlobalSearch],
+  );
+
+  const lessonSearchTerms = globalSearchTerms;
+  const mindmapSearchTerms = globalSearchTerms;
+  const materialSearchTerms = globalSearchTerms;
+  const trashSearchTerms = globalSearchTerms;
 
   const filteredLessonPlans = useMemo(() => {
-    if (!normalizedLessonSearch) {
+    if (lessonSearchTerms.length === 0) {
       return lessonPlans;
     }
 
@@ -1344,14 +1489,24 @@ export function Sidebar() {
       .map((entry) => {
         const name = entry.name || "";
         const nameLower = name.toLowerCase();
-        const nameMatch = nameLower.includes(normalizedLessonSearch);
-        const contentMatch = (lessonSearchIndex[name] || "").includes(normalizedLessonSearch);
-        return { entry, nameMatch, contentMatch };
+        const indexedContent = lessonSearchIndex[name] || "";
+        const nameMatchCount = lessonSearchTerms.filter((term) => nameLower.includes(term)).length;
+        const contentMatchCount = lessonSearchTerms.filter((term) => indexedContent.includes(term)).length;
+        const allTermsMatch = lessonSearchTerms.every(
+          (term) => nameLower.includes(term) || indexedContent.includes(term),
+        );
+
+        return {
+          entry,
+          nameMatchCount,
+          contentMatchCount,
+          allTermsMatch,
+        };
       })
-      .filter((candidate) => candidate.nameMatch || candidate.contentMatch)
+      .filter((candidate) => candidate.allTermsMatch)
       .sort((left, right) => {
-        const leftScore = (left.nameMatch ? 2 : 0) + (left.contentMatch ? 1 : 0);
-        const rightScore = (right.nameMatch ? 2 : 0) + (right.contentMatch ? 1 : 0);
+        const leftScore = left.nameMatchCount * 2 + left.contentMatchCount;
+        const rightScore = right.nameMatchCount * 2 + right.contentMatchCount;
         if (leftScore !== rightScore) {
           return rightScore - leftScore;
         }
@@ -1359,10 +1514,10 @@ export function Sidebar() {
       });
 
     return scored.map((candidate) => candidate.entry);
-  }, [lessonPlans, normalizedLessonSearch, lessonSearchIndex]);
+  }, [lessonPlans, lessonSearchTerms, lessonSearchIndex]);
 
   const filteredMindmaps = useMemo(() => {
-    if (!normalizedMindmapSearch) {
+    if (mindmapSearchTerms.length === 0) {
       return mindmaps;
     }
 
@@ -1371,14 +1526,24 @@ export function Sidebar() {
       .map((entry) => {
         const name = entry.name || "";
         const nameLower = name.toLowerCase();
-        const nameMatch = nameLower.includes(normalizedMindmapSearch);
-        const contentMatch = (mindmapSearchIndex[name] || "").includes(normalizedMindmapSearch);
-        return { entry, nameMatch, contentMatch };
+        const indexedContent = mindmapSearchIndex[name] || "";
+        const nameMatchCount = mindmapSearchTerms.filter((term) => nameLower.includes(term)).length;
+        const contentMatchCount = mindmapSearchTerms.filter((term) => indexedContent.includes(term)).length;
+        const allTermsMatch = mindmapSearchTerms.every(
+          (term) => nameLower.includes(term) || indexedContent.includes(term),
+        );
+
+        return {
+          entry,
+          nameMatchCount,
+          contentMatchCount,
+          allTermsMatch,
+        };
       })
-      .filter((candidate) => candidate.nameMatch || candidate.contentMatch)
+      .filter((candidate) => candidate.allTermsMatch)
       .sort((left, right) => {
-        const leftScore = (left.nameMatch ? 2 : 0) + (left.contentMatch ? 1 : 0);
-        const rightScore = (right.nameMatch ? 2 : 0) + (right.contentMatch ? 1 : 0);
+        const leftScore = left.nameMatchCount * 2 + left.contentMatchCount;
+        const rightScore = right.nameMatchCount * 2 + right.contentMatchCount;
         if (leftScore !== rightScore) {
           return rightScore - leftScore;
         }
@@ -1386,10 +1551,10 @@ export function Sidebar() {
       });
 
     return scored.map((candidate) => candidate.entry);
-  }, [mindmaps, normalizedMindmapSearch, mindmapSearchIndex]);
+  }, [mindmaps, mindmapSearchTerms, mindmapSearchIndex]);
 
-  const filterTreeEntries = (entries: MaterialEntry[], query: string): MaterialEntry[] => {
-    if (!query) {
+  const filterTreeEntries = (entries: MaterialEntry[], queries: string[]): MaterialEntry[] => {
+    if (queries.length === 0) {
       return entries;
     }
 
@@ -1397,8 +1562,11 @@ export function Sidebar() {
       const filteredChildren = entry.children
         .map((child) => visit(child))
         .filter((child): child is MaterialEntry => !!child);
-      const selfMatch =
-        entry.name.toLowerCase().includes(query) || entry.relativePath.toLowerCase().includes(query);
+      const nameLower = entry.name.toLowerCase();
+      const pathLower = entry.relativePath.toLowerCase();
+      const selfMatch = queries.every(
+        (query) => nameLower.includes(query) || pathLower.includes(query),
+      );
 
       if (!selfMatch && filteredChildren.length === 0) {
         return null;
@@ -1416,13 +1584,13 @@ export function Sidebar() {
   };
 
   const visibleMaterials = useMemo(
-    () => filterTreeEntries(materials, normalizedMaterialSearch),
-    [materials, normalizedMaterialSearch],
+    () => filterTreeEntries(materials, materialSearchTerms),
+    [materials, materialSearchTerms],
   );
 
   const visibleTrashEntries = useMemo(
-    () => filterTreeEntries(trashEntries, normalizedTrashSearch),
-    [trashEntries, normalizedTrashSearch],
+    () => filterTreeEntries(trashEntries, trashSearchTerms),
+    [trashEntries, trashSearchTerms],
   );
 
   const handleSettingsClick = () => {
@@ -1450,27 +1618,6 @@ export function Sidebar() {
     }
   };
 
-  const toggleSearchField = (section: "lessonPlans" | "mindmaps" | "materials" | "trash") => {
-    setSearchOpen((previous) => {
-      const nextOpen = !previous[section];
-      if (!nextOpen) {
-        if (section === "lessonPlans") {
-          setLessonSearch("");
-        } else if (section === "mindmaps") {
-          setMindmapSearch("");
-        } else if (section === "materials") {
-          setMaterialSearch("");
-        } else {
-          setTrashSearch("");
-        }
-      }
-      return {
-        ...previous,
-        [section]: nextOpen,
-      };
-    });
-  };
-
   const renderSectionHeader = ({
     title,
     collapsed,
@@ -1484,21 +1631,23 @@ export function Sidebar() {
     actions?: ReactNode;
     marginTop?: string;
   }) => (
-    <div className={`px-2 flex items-center justify-between text-sm text-gray-400 mb-2 ${marginTop}`}>
-      <button
-        onClick={onToggle}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
-      >
-        {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        <span>{title}</span>
-      </button>
-      {actions}
+    <div className={`px-2 mb-2 ${marginTop}`}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+        <button
+          onClick={onToggle}
+          className="h-8 w-full flex items-center gap-2 px-2 rounded-md text-sm text-gray-400 text-left hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          <span className="truncate">{title}</span>
+        </button>
+        <div className="h-8 min-w-[40px] flex items-center justify-end gap-1">{actions}</div>
+      </div>
     </div>
   );
 
   const renderMaterialEntries = (entries: typeof materials, depth = 0) =>
     entries.map((entry) => {
-      const isExpanded = !!normalizedMaterialSearch || !!expandedMaterialFolders[entry.relativePath];
+      const isExpanded = materialSearchTerms.length > 0 || !!expandedMaterialFolders[entry.relativePath];
       const hasChildren = entry.isDirectory && entry.children.length > 0;
 
       return (
@@ -1507,7 +1656,7 @@ export function Sidebar() {
             draggable
             onDragStart={(event) => handleDragStart(event, entry.relativePath, entry.isDirectory)}
             onDragEnd={(event) => handleDragEnd(event, entry.relativePath, entry.isDirectory)}
-            onClick={() => entry.isDirectory && !normalizedMaterialSearch && toggleFolder(entry.relativePath)}
+            onClick={() => entry.isDirectory && materialSearchTerms.length === 0 && toggleFolder(entry.relativePath)}
             onDoubleClick={() => queueMaterialInsertAtCursor(entry.relativePath, entry.isDirectory)}
             onContextMenu={(event) =>
               handleItemContextMenu(event, {
@@ -1549,13 +1698,13 @@ export function Sidebar() {
 
   const renderTrashEntries = (entries: MaterialEntry[], depth = 0) =>
     entries.map((entry) => {
-      const isExpanded = !!normalizedTrashSearch || !!expandedTrashFolders[entry.relativePath];
+      const isExpanded = trashSearchTerms.length > 0 || !!expandedTrashFolders[entry.relativePath];
       const hasChildren = entry.isDirectory && entry.children.length > 0;
 
       return (
         <li key={`trash-${entry.relativePath}`}>
           <button
-            onClick={() => entry.isDirectory && !normalizedTrashSearch && toggleTrashFolder(entry.relativePath)}
+            onClick={() => entry.isDirectory && trashSearchTerms.length === 0 && toggleTrashFolder(entry.relativePath)}
             onContextMenu={(event) =>
               handleItemContextMenu(event, {
                 kind: "trash",
@@ -1666,17 +1815,22 @@ export function Sidebar() {
       </div>
 
       {sidebarOpen && vaultPath && (
-        <div className="px-3 pt-2 border-b border-[#333333] pb-2">
+        <div className="px-2 pt-2 border-b border-[#333333] pb-2">
           <button
             onClick={() => setCalendarCollapsed(!calendarCollapsed)}
             className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] rounded-md transition-colors"
           >
-            <span className="uppercase tracking-wider font-semibold">Mini Calendar</span>
-            {calendarCollapsed ? (
-              <PanelTopOpen className="w-3.5 h-3.5" />
-            ) : (
-              <PanelTopClose className="w-3.5 h-3.5" />
-            )}
+            <span className="uppercase tracking-wider font-semibold inline-flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              Mini Calendar
+            </span>
+            <span className={SIDEBAR_TOGGLE_ICON_BUTTON_CLASS}>
+              {calendarCollapsed ? (
+                <PanelTopOpen className="w-3.5 h-3.5" />
+              ) : (
+                <PanelTopClose className="w-3.5 h-3.5" />
+              )}
+            </span>
           </button>
         </div>
       )}
@@ -1686,55 +1840,67 @@ export function Sidebar() {
       {/* Vault Contents */}
       {vaultPath && sidebarOpen && (
         <div className="flex-1 overflow-y-auto py-2">
+          <div className="px-2 mb-2">
+            <button
+              onClick={() => setSidebarSearchCollapsed((previous) => !previous)}
+              className="w-full flex items-center justify-between px-2 py-1.5 text-xs text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] rounded-md transition-colors"
+            >
+              <span className="uppercase tracking-wider font-semibold inline-flex items-center gap-1.5">
+                <Search className="w-3.5 h-3.5" />
+                Sidebar Search
+              </span>
+              <span className={SIDEBAR_TOGGLE_ICON_BUTTON_CLASS}>
+                {sidebarSearchCollapsed ? (
+                  <PanelTopOpen className="w-3.5 h-3.5" />
+                ) : (
+                  <PanelTopClose className="w-3.5 h-3.5" />
+                )}
+              </span>
+            </button>
+
+            {!sidebarSearchCollapsed && (
+              <div className="mt-1.5 px-2 pb-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={sidebarGlobalSearch}
+                    onChange={(event) => setSidebarGlobalSearch(event.target.value)}
+                    placeholder="Search lesson plans, mindmaps, materials, trash"
+                    className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-8 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
+                  />
+                  {sidebarGlobalSearch && (
+                    <button
+                      onClick={() => setSidebarGlobalSearch("")}
+                      className="absolute right-1.5 top-1.5 h-6 w-6 inline-flex items-center justify-center rounded text-gray-500 hover:text-gray-200 hover:bg-[#2a2a2a]"
+                      title="Clear sidebar search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Lesson Plans Section */}
           {renderSectionHeader({
             title: "Lesson Plans",
             collapsed: sectionCollapsed.lessonPlans,
             onToggle: () => toggleSectionCollapsed("lessonPlans"),
             actions: vaultPath ? (
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={() => toggleSearchField("lessonPlans")}
-                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
-                    searchOpen.lessonPlans || !!normalizedLessonSearch
-                      ? "text-[var(--tp-accent)] bg-[#232323]"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
-                  }`}
-                  title={searchOpen.lessonPlans ? "Hide lesson search" : "Show lesson search"}
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => createNewLesson()}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
-                  title="New lesson plan"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => createNewLesson()}
+                className={SIDEBAR_SECTION_ACTION_BUTTON_CLASS}
+                title="New lesson plan"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             ) : null,
             marginTop: "mt-3",
           })}
           {!sectionCollapsed.lessonPlans && (
             <ul className="space-y-1 px-2 mb-4">
-              {(searchOpen.lessonPlans || !!normalizedLessonSearch) && (
-                <li className="px-1 pb-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={lessonSearch}
-                      onChange={(event) => setLessonSearch(event.target.value)}
-                      placeholder="Search lesson plans"
-                      autoFocus
-                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
-                    />
-                  </div>
-                  {isSearchIndexing && normalizedLessonSearch && (
-                    <div className="text-[10px] text-gray-500 mt-1 px-1">Indexing lesson content...</div>
-                  )}
-                </li>
-              )}
               {filteredLessonPlans.map((entry, idx) => {
                 const isActive = activeFilePath?.endsWith(entry.name);
                 return (
@@ -1773,7 +1939,7 @@ export function Sidebar() {
               })}
               {filteredLessonPlans.length === 0 && (
                 <div className="px-2 py-2 text-sm text-gray-500 italic">
-                  {normalizedLessonSearch ? "No lesson matches" : "No plans yet"}
+                  {lessonSearchTerms.length > 0 ? "No lesson matches" : "No plans yet"}
                 </div>
               )}
             </ul>
@@ -1785,49 +1951,18 @@ export function Sidebar() {
             collapsed: sectionCollapsed.mindmaps,
             onToggle: () => toggleSectionCollapsed("mindmaps"),
             actions: vaultPath ? (
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={() => toggleSearchField("mindmaps")}
-                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
-                    searchOpen.mindmaps || !!normalizedMindmapSearch
-                      ? "text-[var(--tp-accent)] bg-[#232323]"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
-                  }`}
-                  title={searchOpen.mindmaps ? "Hide mindmap search" : "Show mindmap search"}
-                >
-                  <Search className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => createNewMindmap()}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
-                  title="New mindmap"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => createNewMindmap()}
+                className={SIDEBAR_SECTION_ACTION_BUTTON_CLASS}
+                title="New mindmap"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             ) : null,
             marginTop: "mt-3",
           })}
           {!sectionCollapsed.mindmaps && (
             <ul className="space-y-1 px-2 mb-4">
-              {(searchOpen.mindmaps || !!normalizedMindmapSearch) && (
-                <li className="px-1 pb-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={mindmapSearch}
-                      onChange={(event) => setMindmapSearch(event.target.value)}
-                      placeholder="Search mindmaps"
-                      autoFocus
-                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
-                    />
-                  </div>
-                  {isSearchIndexing && normalizedMindmapSearch && (
-                    <div className="text-[10px] text-gray-500 mt-1 px-1">Indexing mindmap content...</div>
-                  )}
-                </li>
-              )}
               {filteredMindmaps.map((entry, idx) => {
                 const isActive = activeFilePath?.endsWith(entry.name);
                 return (
@@ -1862,7 +1997,7 @@ export function Sidebar() {
               })}
               {filteredMindmaps.length === 0 && (
                 <div className="px-2 py-2 text-sm text-gray-500 italic">
-                  {normalizedMindmapSearch ? "No mindmap matches" : "No mindmaps yet"}
+                  {mindmapSearchTerms.length > 0 ? "No mindmap matches" : "No mindmaps yet"}
                 </div>
               )}
             </ul>
@@ -1872,59 +2007,60 @@ export function Sidebar() {
           {renderSectionHeader({
             title: "Materials",
             collapsed: sectionCollapsed.materials,
-            onToggle: () => toggleSectionCollapsed("materials"),
+            onToggle: () => {
+              setMaterialsActionsOpen(false);
+              toggleSectionCollapsed("materials");
+            },
             actions: (
-              <div className="flex items-center gap-0.5">
+              <div
+                className="relative"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <button
-                  onClick={() => toggleSearchField("materials")}
-                  title={searchOpen.materials ? "Hide material search" : "Show material search"}
-                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
-                    searchOpen.materials || !!normalizedMaterialSearch
-                      ? "text-[var(--tp-accent)] bg-[#232323]"
-                      : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
-                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setMaterialsActionsOpen((previous) => !previous);
+                  }}
+                  title="Add material"
+                  className={SIDEBAR_SECTION_ACTION_BUTTON_CLASS}
                 >
-                  <Search className="w-4 h-4" />
+                  <Plus className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => addMaterialFiles()}
-                  title="Add files"
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
-                >
-                  <FilePlus className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => addMaterialDirectory()}
-                  title="Add folder"
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] transition-colors"
-                >
-                  <FolderPlus className="w-4 h-4" />
-                </button>
+
+                {materialsActionsOpen && (
+                  <div className="absolute right-0 top-8 z-[60] min-w-[140px] rounded-md border border-[#333] bg-[#171717] shadow-lg p-1">
+                    <button
+                      onClick={() => {
+                        setMaterialsActionsOpen(false);
+                        void addMaterialFiles();
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-300 hover:text-gray-100 hover:bg-[#232323] transition-colors"
+                    >
+                      <FilePlus className="w-3.5 h-3.5" />
+                      <span>Add files</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMaterialsActionsOpen(false);
+                        void addMaterialDirectory();
+                      }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-gray-300 hover:text-gray-100 hover:bg-[#232323] transition-colors"
+                    >
+                      <FolderPlus className="w-3.5 h-3.5" />
+                      <span>Add folder</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ),
             marginTop: "mt-3",
           })}
           {!sectionCollapsed.materials && (
             <ul className="space-y-1 px-2 pb-4 mb-4">
-              {(searchOpen.materials || !!normalizedMaterialSearch) && (
-                <li className="px-1 pb-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={materialSearch}
-                      onChange={(event) => setMaterialSearch(event.target.value)}
-                      placeholder="Search materials (name or path)"
-                      autoFocus
-                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
-                    />
-                  </div>
-                </li>
-              )}
               {renderMaterialEntries(visibleMaterials)}
               {visibleMaterials.length === 0 && (
                 <div className="px-2 py-2 text-sm text-gray-500 italic">
-                  {normalizedMaterialSearch ? "No material matches" : "Empty folder"}
+                  {materialSearchTerms.length > 0 ? "No material matches" : "Empty folder"}
                 </div>
               )}
             </ul>
@@ -1934,42 +2070,15 @@ export function Sidebar() {
             title: "Trash",
             collapsed: sectionCollapsed.trash,
             onToggle: () => toggleSectionCollapsed("trash"),
-            actions: (
-              <button
-                onClick={() => toggleSearchField("trash")}
-                title={searchOpen.trash ? "Hide trash search" : "Show trash search"}
-                className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors ${
-                  searchOpen.trash || !!normalizedTrashSearch
-                    ? "text-[var(--tp-accent)] bg-[#232323]"
-                    : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
-                }`}
-              >
-                <Search className="w-4 h-4" />
-              </button>
-            ),
+            actions: null,
             marginTop: "mt-3",
           })}
           {!sectionCollapsed.trash && (
             <ul className="space-y-1 px-2 pb-4">
-              {(searchOpen.trash || !!normalizedTrashSearch) && (
-                <li className="px-1 pb-2">
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={trashSearch}
-                      onChange={(event) => setTrashSearch(event.target.value)}
-                      placeholder="Search trash"
-                      autoFocus
-                      className="w-full bg-[#202020] border border-[#333] rounded-md pl-8 pr-2 py-2 text-xs text-gray-200 outline-none focus:border-[var(--tp-accent)]"
-                    />
-                  </div>
-                </li>
-              )}
               {renderTrashEntries(visibleTrashEntries)}
               {visibleTrashEntries.length === 0 && (
                 <div className="px-2 py-2 text-sm text-gray-500 italic">
-                  {normalizedTrashSearch ? "No trash matches" : "Trash is empty"}
+                  {trashSearchTerms.length > 0 ? "No trash matches" : "Trash is empty"}
                 </div>
               )}
             </ul>
@@ -2000,7 +2109,7 @@ export function Sidebar() {
           <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
 
           <div
-            className="tp-settings-panel relative w-[min(760px,calc(100vw-2rem))] h-[min(620px,calc(100vh-2.5rem))] rounded-2xl border border-[#343434] bg-[#181818] shadow-2xl overflow-hidden flex flex-col"
+            className="tp-settings-panel relative w-[min(900px,calc(100vw-1.5rem))] h-[min(740px,calc(100vh-1.5rem))] rounded-2xl border border-[#343434] bg-[#181818] shadow-2xl overflow-hidden flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[#2d2d2d] flex items-start justify-between gap-4">
@@ -2021,7 +2130,7 @@ export function Sidebar() {
               <div className="grid grid-cols-4 gap-1.5 bg-[#141414] border border-[#2a2a2a] rounded-lg p-1">
                 <button
                   onClick={() => setSettingsSection("appearance")}
-                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                     settingsSection === "appearance"
                       ? "bg-[#232323] text-white"
                       : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
@@ -2031,7 +2140,7 @@ export function Sidebar() {
                 </button>
                 <button
                   onClick={() => setSettingsSection("defaults")}
-                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                     settingsSection === "defaults"
                       ? "bg-[#232323] text-white"
                       : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
@@ -2041,7 +2150,7 @@ export function Sidebar() {
                 </button>
                 <button
                   onClick={() => setSettingsSection("ai")}
-                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                     settingsSection === "ai"
                       ? "bg-[#232323] text-white"
                       : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
@@ -2051,7 +2160,7 @@ export function Sidebar() {
                 </button>
                 <button
                   onClick={() => setSettingsSection("advanced")}
-                  className={`px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-2 py-2 rounded-md text-sm font-medium transition-colors ${
                     settingsSection === "advanced"
                       ? "bg-[#232323] text-white"
                       : "text-gray-400 hover:text-gray-200 hover:bg-[#1f1f1f]"
@@ -2318,6 +2427,159 @@ export function Sidebar() {
                   </div>
                 </div>
 
+                <div className="mt-3 rounded-lg border border-[#333] bg-[#1b1b1b] px-3 py-3">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="text-xs uppercase tracking-wider text-gray-500">Runtime Diagnostics</div>
+                    <button
+                      onClick={() => {
+                        void syncRuntimeDiagnostics();
+                      }}
+                      disabled={aiRuntimeBusy}
+                      className="px-2 py-1 text-xs rounded border border-[#333] text-gray-300 hover:bg-[#222] disabled:opacity-60"
+                    >
+                      {aiRuntimeBusy ? "Refreshing..." : "Refresh Diagnostics"}
+                    </button>
+                  </div>
+
+                  {aiRuntimeDiagnostics ? (
+                    <>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                        <div className="rounded border border-[#2f2f2f] bg-[#202020] px-2 py-1.5">
+                          <div className="text-gray-500 uppercase tracking-wider">Runtime</div>
+                          <div className={aiRuntimeDiagnostics.available ? "text-emerald-300" : "text-amber-300"}>
+                            {aiRuntimeDiagnostics.available ? "Available" : "Unavailable"}
+                          </div>
+                        </div>
+                        <div className="rounded border border-[#2f2f2f] bg-[#202020] px-2 py-1.5">
+                          <div className="text-gray-500 uppercase tracking-wider">Server</div>
+                          <div className={aiRuntimeDiagnostics.server_running ? "text-emerald-300" : "text-amber-300"}>
+                            {aiRuntimeDiagnostics.server_running ? "Running" : "Stopped"}
+                          </div>
+                        </div>
+                        <div className="rounded border border-[#2f2f2f] bg-[#202020] px-2 py-1.5">
+                          <div className="text-gray-500 uppercase tracking-wider">Preferred Backend</div>
+                          <div className="text-gray-200">{aiRuntimeDiagnostics.preferred_backend.toUpperCase()}</div>
+                        </div>
+                        <div className="rounded border border-[#2f2f2f] bg-[#202020] px-2 py-1.5">
+                          <div className="text-gray-500 uppercase tracking-wider">Platform</div>
+                          <div className="text-gray-200">{aiRuntimeDiagnostics.platform}/{aiRuntimeDiagnostics.architecture}</div>
+                        </div>
+                      </div>
+
+                      {aiRuntimeDiagnostics.version && (
+                        <div className="mt-2 text-[11px] text-gray-500">Version: {aiRuntimeDiagnostics.version}</div>
+                      )}
+
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        Server source: {aiRuntimeDiagnostics.server_managed_by_app ? "TeacherPro-managed" : "External or pre-existing Ollama process"}
+                      </div>
+
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        Backend policy: {aiRuntimeDiagnostics.backend_policy}
+                      </div>
+
+                      {aiRuntimeDiagnostics.detected_hardware.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="text-[11px] uppercase tracking-wider text-gray-500">Detected Hardware</div>
+                          {aiRuntimeDiagnostics.detected_hardware.map((item, index) => (
+                            <div key={`hw-${index}`} className="text-[11px] text-gray-300">
+                              {item}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="mt-2 space-y-1">
+                        <div className="text-[11px] uppercase tracking-wider text-gray-500">Active Model Processor Usage</div>
+                        {aiRuntimeDiagnostics.active_models.length === 0 ? (
+                          <div className="text-[11px] text-gray-500">No active models loaded yet.</div>
+                        ) : (
+                          aiRuntimeDiagnostics.active_models.map((model, index) => {
+                            const processorLower = model.processor.toLowerCase();
+                            const cpuOnly = processorLower.includes("cpu") && !processorLower.includes("gpu");
+
+                            return (
+                              <div
+                                key={`model-processor-${model.model_id}-${index}`}
+                                className={`text-[11px] rounded border px-2 py-1.5 ${
+                                  cpuOnly
+                                    ? "border-amber-300/40 bg-amber-400/10 text-amber-200"
+                                    : "border-[#2f2f2f] bg-[#202020] text-gray-300"
+                                }`}
+                              >
+                                <span className="text-gray-200">{model.model_id}</span>
+                                <span className="text-gray-500">{" -> "}</span>
+                                <span>{model.processor}</span>
+                                {model.size && <span className="text-gray-500">{` | ${model.size}`}</span>}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {aiRuntimeDiagnostics.recommendation && (
+                        <div className="mt-2 text-[11px] text-blue-200 border border-blue-300/25 bg-blue-400/10 rounded-md px-2 py-1.5">
+                          {aiRuntimeDiagnostics.recommendation}
+                        </div>
+                      )}
+
+                      {!aiRuntimeDiagnostics.available && aiRuntimeDiagnostics.detail && (
+                        <div className="mt-2 text-[11px] text-amber-300 border border-amber-300/30 bg-amber-400/10 rounded-md px-2 py-1.5">
+                          {aiRuntimeDiagnostics.detail}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-gray-500">Diagnostics are unavailable until runtime status is checked.</div>
+                  )}
+                </div>
+
+                <div className="mt-3">
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium">Model Routing</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Chat Model</label>
+                      <select
+                        value={aiDefaultModelId}
+                        onChange={(e) => setAiDefaultModelId(e.target.value)}
+                        className="w-full h-8 px-2 rounded-md bg-[#202020] border border-[#333] text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors appearance-none cursor-pointer"
+                      >
+                        {availableRoutingModels.map((modelId) => {
+                          const isInstalled = aiInstalledModelIds.includes(modelId);
+                          const label = modelLabelById.get(modelId) || modelId;
+                          return (
+                            <option key={`chat-${modelId}`} value={modelId}>
+                              {isInstalled ? label : `${label} (not installed)`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] text-gray-400 block mb-1">Rewrite + Translate Model</label>
+                      <select
+                        value={aiRewriteTranslateModelId}
+                        onChange={(e) => setAiRewriteTranslateModelId(e.target.value)}
+                        className="w-full h-8 px-2 rounded-md bg-[#202020] border border-[#333] text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors appearance-none cursor-pointer"
+                      >
+                        {availableRoutingModels.map((modelId) => {
+                          const isInstalled = aiInstalledModelIds.includes(modelId);
+                          const label = modelLabelById.get(modelId) || modelId;
+                          return (
+                            <option key={`rewrite-${modelId}`} value={modelId}>
+                              {isInstalled ? label : `${label} (not installed)`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Use one model for lesson chat and one shared model for both rewrite and translation actions.
+                  </p>
+                </div>
+
                 <div className="mt-3">
                   <div className="text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium">Chat Behavior</div>
                   <div className="grid grid-cols-2 gap-2 mb-2">
@@ -2416,7 +2678,7 @@ export function Sidebar() {
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-xs uppercase tracking-wider text-gray-500">Gemma 4 Catalog</div>
+                    <div className="text-xs uppercase tracking-wider text-gray-500">Model Catalog</div>
                     <button
                       onClick={() => {
                         void syncInstalledModels();
@@ -2441,7 +2703,7 @@ export function Sidebar() {
                                   ? "border-[var(--tp-accent)] text-white bg-[#232323]"
                                   : "border-[#3d3d3d] text-gray-300 hover:bg-[#252525]"
                               }`}
-                              title="Set as default model"
+                              title="Set as chat model"
                             >
                               {modelId}
                             </button>
@@ -2499,11 +2761,20 @@ export function Sidebar() {
                                     Recommended
                                   </span>
                                 )}
+                                {model.capabilities?.map((capability) => (
+                                  <span
+                                    key={`${model.id}-capability-${capability}`}
+                                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-[#3b3b3b] text-gray-300 bg-[#202020]"
+                                  >
+                                    {AI_MODEL_CAPABILITY_LABELS[capability]}
+                                  </span>
+                                ))}
                               </div>
-                              <div className="text-xs text-gray-500 mt-1">{model.description}</div>
-                              <div className="mt-2 flex items-center gap-3 text-[11px] text-gray-500">
+                              <div className="text-sm text-gray-400 mt-1">{model.description}</div>
+                              <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
                                 <span className="inline-flex items-center gap-1"><HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}</span>
-                                <span>RAM: {model.recommendedRam}</span>
+                                <span>RAM/VRAM: {model.recommendedRam}</span>
+                                <span>Context: {model.recommendedContext}</span>
                                 <span>Source: Ollama</span>
                               </div>
                             </div>
@@ -2581,7 +2852,7 @@ export function Sidebar() {
                   </div>
 
                   <p className="text-[11px] text-gray-500 mt-2">
-                    Models are installed via Ollama. Use <strong className="text-gray-400">Install</strong> to download from the Ollama registry, or <strong className="text-gray-400">Import .gguf</strong> to load a file you already downloaded (e.g. from Hugging Face or Kaggle). RAM values are estimated ranges.
+                    Models are installed via Ollama. Use <strong className="text-gray-400">Install</strong> to download from the Ollama registry, or <strong className="text-gray-400">Import .gguf</strong> to load a file you already downloaded (e.g. from Hugging Face or Kaggle). RAM/VRAM values are practical estimates and vary by context size, quantization, and background apps.
                   </p>
 
                   {aiInfoMessage && (

@@ -69,31 +69,28 @@ export function MiniCalendar() {
       </div>
 
       <div className="grid grid-cols-7 gap-1 text-xs">
-        {daysInMonth.map((day, idx) => {
+        {daysInMonth.map((day) => {
           const isSelected = isSameDay(day, selectedDate);
           const isCurrentMonth = isSameMonth(day, monthStart);
           const isCurrentDay = isToday(day);
 
           return (
             <button
-              key={idx}
+              key={format(day, "yyyy-MM-dd")}
               onClick={() => setSelectedDate(day)}
               className={`
-                p-1 rounded-md transition-colors flex items-center justify-center
-                ${!isCurrentMonth ? "text-gray-600" : "text-gray-300"}
-                ${
-                  isSelected
-                    ? "text-white font-bold"
-                    : "hover:bg-[#2d2d2d]"
-                }
-                ${isCurrentDay && !isSelected ? "border" : ""}
+                h-8 w-8 mx-auto rounded-md border box-border tabular-nums transition-colors flex items-center justify-center
+                ${!isCurrentMonth ? "text-gray-600 border-transparent" : "text-gray-300 border-transparent"}
+                ${isSelected ? "text-white" : "hover:bg-[#2d2d2d]"}
+                ${isCurrentDay && !isSelected ? "border-[var(--tp-accent)]" : ""}
               `}
               style={
                 isSelected
-                  ? { backgroundColor: "var(--tp-accent)" }
-                  : isCurrentDay
-                    ? { borderColor: "var(--tp-accent)" }
-                    : undefined
+                  ? {
+                      backgroundColor: "var(--tp-accent)",
+                      borderColor: "var(--tp-accent)",
+                    }
+                  : undefined
               }
             >
               {format(day, "d")}
