@@ -73,10 +73,11 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### 📝 Lesson Plan Editor
 - **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, Underline, Unordered/Ordered lists, text color, underline color, and multicolor highlighting.
-- **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, and resize them freely.
+- **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, resize them freely, and set the default inserted body-row count in Settings.
 - **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
 - **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
-- **Contextual AI Chat Dock:** Toggle AI chat directly from the editor action buttons; when active, it stays docked at the bottom so it remains visible while you scroll.
+- **Contextual AI Chat Dock:** Toggle AI chat directly from the editor action buttons; when active, it opens as a slide-out side dock so it remains visible while you work.
+- **Private Lesson Notes Drawer:** Open a dedicated notes panel per lesson from the editor header action row (right next to AI Chat). It uses the same left-side dock area as AI Chat, with only one panel open at a time. Notes autosave with the lesson, are searchable locally, and stay out of print/PDF export by default.
 - **Material Linking:** Drag and drop external files (PDFs, Word Docs, Images) directly into the editor to create clickable links. Double-clicking the link opens the file in your computer's default native application.
 
 ### 🧠 Mindmap Editor
@@ -90,6 +91,7 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Visual Scheduling:** See your upcoming week at a glance.
 - **Quick Reset to Current Week:** Use the built-in *Today* button to jump back instantly after browsing future/past weeks.
 - **Easy Access:** Click on any scheduled lesson directly from the calendar to instantly open it in the editor.
+- **Drag to Reschedule:** Drag a lesson card to another day column to move it. TeacherPro updates the lesson's planned date and file date so it appears under the new day immediately.
 
 ### 🧭 Sidebar Productivity Tools
 - **Fast Search (On Demand):** Open per-section search fields from the magnifier icon when needed, then filter Lesson Plans and Mindmaps by file names and indexed document content.

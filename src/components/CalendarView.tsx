@@ -1,12 +1,23 @@
 import { format, startOfWeek, addDays } from "date-fns";
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square } from "lucide-react";
+import { useEffect, useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
 import { useAppStore } from "../store";
 
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
-  const { lessonPlans, openLesson, deleteLesson, createNewLesson, subjects, lessonSubjectIndex } = useAppStore();
+  const [draggingLessonName, setDraggingLessonName] = useState<string | null>(null);
+  const [manualDraggingLessonName, setManualDraggingLessonName] = useState<string | null>(null);
+  const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
+  const {
+    lessonPlans,
+    openLesson,
+    deleteLesson,
+    createNewLesson,
+    rescheduleLesson,
+    subjects,
+    lessonSubjectIndex,
+  } = useAppStore();
 
   const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   
@@ -20,7 +31,26 @@ export function CalendarView() {
   useEffect(() => {
     // Reset selection when changing week to avoid accidental cross-week deletes.
     setSelectedLessons(new Set());
+    setDraggingLessonName(null);
+    setManualDraggingLessonName(null);
+    setDragOverDayKey(null);
   }, [start.getTime()]);
+
+  useEffect(() => {
+    if (!manualDraggingLessonName) {
+      return;
+    }
+
+    const clearManualDrag = () => {
+      setManualDraggingLessonName(null);
+      setDragOverDayKey(null);
+    };
+
+    window.addEventListener("mouseup", clearManualDrag);
+    return () => {
+      window.removeEventListener("mouseup", clearManualDrag);
+    };
+  }, [manualDraggingLessonName]);
 
   // We could filter `lessonPlans` by date if we stored it in the filename,
   // but for a robust system we would actually load the JSONs. Since loading all JSONs
@@ -28,6 +58,107 @@ export function CalendarView() {
   const getLessonsForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
     return lessonPlans.filter(p => p.name && p.name.includes(dateStr));
+  };
+
+  const getLessonDateToken = (lessonName: string): string | null => {
+    const match = lessonName.match(/\d{4}-\d{2}-\d{2}/);
+    return match ? match[0] : null;
+  };
+
+  const moveLessonToDate = async (lessonName: string, day: Date) => {
+    const targetDateStr = format(day, "yyyy-MM-dd");
+    if (getLessonDateToken(lessonName) === targetDateStr) {
+      return;
+    }
+
+    const nextFileName = await rescheduleLesson(lessonName, day);
+    if (!nextFileName) {
+      return;
+    }
+
+    setSelectedLessons((previous) => {
+      if (!previous.has(lessonName)) {
+        return previous;
+      }
+
+      const next = new Set(previous);
+      next.delete(lessonName);
+      next.add(nextFileName);
+      return next;
+    });
+  };
+
+  const handleLessonDragStart = (event: DragEvent<HTMLElement>, lessonName: string) => {
+    setDraggingLessonName(lessonName);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text", lessonName);
+    event.dataTransfer.setData("text/teacherpro-lesson", lessonName);
+    event.dataTransfer.setData("text/plain", lessonName);
+  };
+
+  const handleLessonDragEnd = () => {
+    setDraggingLessonName(null);
+    setDragOverDayKey(null);
+  };
+
+  const handleManualDragStart = (lessonName: string, event: MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setManualDraggingLessonName(lessonName);
+    setDraggingLessonName(lessonName);
+  };
+
+  const handleDayDragOver = (event: DragEvent<HTMLDivElement>, dayKey: string) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDragOverDayKey(dayKey);
+  };
+
+  const handleDayDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget as Node | null;
+    if (!event.currentTarget.contains(nextTarget)) {
+      setDragOverDayKey(null);
+    }
+  };
+
+  const handleDropOnDate = async (event: DragEvent<HTMLDivElement>, day: Date) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const droppedLessonName =
+      event.dataTransfer.getData("text/teacherpro-lesson") ||
+      event.dataTransfer.getData("text/plain") ||
+      event.dataTransfer.getData("text") ||
+      draggingLessonName;
+
+    setDragOverDayKey(null);
+    setDraggingLessonName(null);
+    setManualDraggingLessonName(null);
+
+    if (!droppedLessonName) {
+      return;
+    }
+
+    await moveLessonToDate(droppedLessonName, day);
+  };
+
+  const handleDayMouseEnter = (dayKey: string) => {
+    if (!manualDraggingLessonName) {
+      return;
+    }
+    setDragOverDayKey(dayKey);
+  };
+
+  const handleDayMouseUp = (day: Date) => {
+    if (!manualDraggingLessonName) {
+      return;
+    }
+
+    const lessonName = manualDraggingLessonName;
+    setManualDraggingLessonName(null);
+    setDraggingLessonName(null);
+    setDragOverDayKey(null);
+    void moveLessonToDate(lessonName, day);
   };
 
   const toggleSelectedLesson = (lessonName: string) => {
@@ -125,9 +256,23 @@ export function CalendarView() {
       <div className="flex-1 grid grid-cols-7 gap-4 min-h-0">
         {weekDays.map((day, idx) => {
           const lessons = getLessonsForDate(day);
+          const dayKey = format(day, "yyyy-MM-dd");
+          const isDropTarget = dragOverDayKey === dayKey;
           
           return (
-            <div key={idx} className="tp-calendar-day-card flex flex-col bg-[#191919] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-sm">
+            <div
+              key={idx}
+              className={`tp-calendar-day-card flex flex-col rounded-xl overflow-hidden shadow-sm border transition-colors ${
+                isDropTarget
+                  ? "bg-[#1c2230] border-[var(--tp-accent)]"
+                  : "bg-[#191919] border-[#2a2a2a]"
+              }`}
+              onMouseEnter={() => handleDayMouseEnter(dayKey)}
+              onMouseUp={() => handleDayMouseUp(day)}
+              onDragOver={(event) => handleDayDragOver(event, dayKey)}
+              onDragLeave={handleDayDragLeave}
+              onDrop={(event) => void handleDropOnDate(event, day)}
+            >
               <div className="p-3 border-b border-[#2a2a2a] bg-[#222] text-center">
                 <div className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{format(day, "EEEE")}</div>
                 <div className="text-2xl font-bold text-gray-200 mt-1">{format(day, "d")}</div>
@@ -145,14 +290,41 @@ export function CalendarView() {
                     return (
                       <div
                         key={lIdx}
+                        draggable={!!lessonName}
+                        onDragStart={(event) => lessonName && handleLessonDragStart(event, lessonName)}
+                        onDragEnd={handleLessonDragEnd}
+                        onMouseDown={(event) => {
+                          const target = event.target as HTMLElement;
+                          if (!lessonName || target.closest("button")) {
+                            return;
+                          }
+                          handleManualDragStart(lessonName, event);
+                        }}
                         className={`w-full p-2 border rounded-lg transition-colors ${
                           isSelected
                             ? "bg-[#2f2940] border-[var(--tp-accent)]"
                             : "bg-[#2d2d2d] border-[#444]"
-                        }`}
+                        } ${lessonName ? "cursor-grab active:cursor-grabbing" : ""}`}
                         style={subjectColor ? { borderLeftColor: subjectColor, borderLeftWidth: "3px" } : undefined}
                       >
                         <div className="flex items-center gap-2">
+                          {lessonName && (
+                            <button
+                              type="button"
+                              draggable
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              onMouseDown={(event) => handleManualDragStart(lessonName, event)}
+                              onDragStart={(event) => handleLessonDragStart(event, lessonName)}
+                              onDragEnd={handleLessonDragEnd}
+                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-100 hover:bg-[#3a3a3a] cursor-grab active:cursor-grabbing"
+                              title="Drag lesson to another day"
+                            >
+                              <GripVertical className="h-4 w-4" />
+                            </button>
+                          )}
                           <button
                             onClick={(event) => {
                               event.stopPropagation();

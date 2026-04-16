@@ -551,6 +551,8 @@ export function Sidebar() {
     setLessonPaperTone,
     mindmapPaperTone,
     setMindmapPaperTone,
+    defaultLessonTableBodyRows,
+    setDefaultLessonTableBodyRows,
     calendarCollapsed,
     setCalendarCollapsed,
     sectionCollapsed,
@@ -2185,6 +2187,36 @@ export function Sidebar() {
                         </button>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Default Table Body Rows</div>
+                  <p className="text-[11px] text-gray-500 mb-2">
+                    Controls how many empty body rows are created when you click Insert Lesson Table.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      step={1}
+                      value={defaultLessonTableBodyRows}
+                      onChange={(event) => {
+                        const parsed = Number(event.target.value);
+                        if (!Number.isNaN(parsed)) {
+                          setDefaultLessonTableBodyRows(parsed);
+                        }
+                      }}
+                      className="w-28 bg-[#202020] border border-[#333] rounded px-3 py-2 text-sm text-gray-200 outline-none focus:border-[var(--tp-accent)] transition-colors"
+                    />
+                    <button
+                      onClick={() => setDefaultLessonTableBodyRows(4)}
+                      className="px-2 py-1 text-xs rounded border border-[#333] text-gray-300 hover:bg-[#222]"
+                    >
+                      Reset
+                    </button>
+                    <span className="text-[11px] text-gray-500">Allowed: 1-12</span>
                   </div>
                 </div>
 

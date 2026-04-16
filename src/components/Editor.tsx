@@ -64,6 +64,7 @@ import {
   X,
   Brain,
   Trash2,
+  FileText,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -384,7 +385,9 @@ const MenuBar = ({
   onPrint,
   onExport,
   onToggleChat,
+  onToggleNotes,
   chatOpen,
+  notesOpen,
   isPdfBusy,
   showActionButtonLabels,
   aiEnabled,
@@ -395,7 +398,9 @@ const MenuBar = ({
   onPrint: () => void;
   onExport: () => void;
   onToggleChat: () => void;
+  onToggleNotes: () => void;
   chatOpen: boolean;
+  notesOpen: boolean;
   isPdfBusy: boolean;
   showActionButtonLabels: boolean;
   aiEnabled: boolean;
@@ -654,6 +659,19 @@ const MenuBar = ({
           </button>
         )}
         <button
+          onClick={onToggleNotes}
+          title={notesOpen ? "Hide Notes" : "Open Notes"}
+          aria-pressed={notesOpen}
+          className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
+            notesOpen
+              ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
+              : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          {showActionButtonLabels && <span>Notes</span>}
+        </button>
+        <button
           onClick={onPreview}
           title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
           disabled={isPdfBusy}
@@ -716,9 +734,12 @@ export function Editor() {
     setAiThinkingEnabled,
     aiPersistChats,
     aiTranslateTargetLanguage,
+    defaultLessonTableBodyRows,
+    setSidebarOpen,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
+  const [lessonNotes, setLessonNotes] = useState(activeFileContent?.notes || "");
   const [plannedForInput, setPlannedForInput] = useState(
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
@@ -732,6 +753,7 @@ export function Editor() {
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const [editorRevision, setEditorRevision] = useState(0);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
 
@@ -741,6 +763,29 @@ export function Editor() {
       setChatOpen(false);
     }
   }, [aiEnabled]);
+
+  const toggleChatPanel = useCallback(() => {
+    setChatOpen((previous) => {
+      const next = !previous;
+      if (next) {
+        setSidebarOpen(true);
+        setNotesOpen(false);
+      }
+      return next;
+    });
+  }, [setSidebarOpen]);
+
+  const toggleNotesPanel = useCallback(() => {
+    setNotesOpen((previous) => {
+      const next = !previous;
+      if (next) {
+        setSidebarOpen(true);
+        setChatOpen(false);
+      }
+      return next;
+    });
+  }, [setSidebarOpen]);
+
   const [chatInput, setChatInput] = useState("");
   const [isChatBusy, setIsChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
@@ -777,6 +822,7 @@ export function Editor() {
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
     setTeacher(activeFileContent?.metadata?.teacher || "");
+    setLessonNotes(activeFileContent?.notes || "");
     setPlannedForInput(formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor));
     const selectedDate = parseEuropeanDateToDate(
       formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
@@ -786,6 +832,7 @@ export function Editor() {
     activeFileContent?.metadata?.subject,
     activeFileContent?.metadata?.teacher,
     activeFileContent?.metadata?.plannedFor,
+    activeFileContent?.notes,
   ]);
 
   useEffect(() => {
@@ -936,6 +983,7 @@ export function Editor() {
       teacher: activeFileContent.metadata.teacher || "",
       subject: activeFileContent.metadata.subject || "",
       plannedFor: activeFileContent.metadata.plannedFor || null,
+      notes: activeFileContent.notes || "",
     });
   }, [editor, activeFilePath, activeFileContent]);
 
@@ -956,6 +1004,7 @@ export function Editor() {
         teacher,
         subject,
         plannedFor: parsedPlannedFor,
+        notes: lessonNotes,
       });
 
       if (nextSnapshot === lastSavedSnapshotRef.current) {
@@ -967,7 +1016,7 @@ export function Editor() {
           teacher,
           subject,
           plannedFor: parsedPlannedFor,
-        });
+        }, lessonNotes);
         lastSavedSnapshotRef.current = nextSnapshot;
       } catch (error) {
         console.error("Autosave failed:", error);
@@ -977,13 +1026,23 @@ export function Editor() {
     return () => {
       window.clearTimeout(autosaveTimer);
     };
-  }, [editor, activeFilePath, editorRevision, teacher, subject, plannedForInput, saveActiveLesson]);
+  }, [editor, activeFilePath, editorRevision, teacher, subject, plannedForInput, lessonNotes, saveActiveLesson]);
 
   const insertLessonTable = () => {
     if (!editor) return;
 
     // We define the column widths: Time (80px), Phase (120px), LTA (350px), Social (100px), Media (150px)
     const colWidths = [80, 120, 350, 100, 150];
+    const bodyRowCount = Math.max(1, Math.min(12, Math.round(defaultLessonTableBodyRows || 4)));
+
+    const bodyRows = Array.from({ length: bodyRowCount }, () => ({
+      type: "tableRow",
+      content: colWidths.map((width) => ({
+        type: "tableCell",
+        attrs: { colwidth: [width] },
+        content: [{ type: "paragraph" }],
+      })),
+    }));
 
     editor
       .chain()
@@ -1001,26 +1060,7 @@ export function Editor() {
               { type: "tableHeader", attrs: { colwidth: [colWidths[4]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Media" }] }] },
             ],
           },
-          {
-            type: "tableRow",
-            content: [
-              { type: "tableCell", attrs: { colwidth: [colWidths[0]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[1]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[2]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[3]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[4]] }, content: [{ type: "paragraph" }] },
-            ],
-          },
-          {
-            type: "tableRow",
-            content: [
-              { type: "tableCell", attrs: { colwidth: [colWidths[0]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[1]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[2]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[3]] }, content: [{ type: "paragraph" }] },
-              { type: "tableCell", attrs: { colwidth: [colWidths[4]] }, content: [{ type: "paragraph" }] },
-            ],
-          },
+          ...bodyRows,
         ],
       })
       .run();
@@ -1106,12 +1146,13 @@ export function Editor() {
       teacher,
       subject,
       plannedFor: parsedPlannedFor,
-    });
+    }, lessonNotes);
     lastSavedSnapshotRef.current = JSON.stringify({
       content: json,
       teacher,
       subject,
       plannedFor: parsedPlannedFor,
+      notes: lessonNotes,
     });
   };
 
@@ -2153,8 +2194,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           onPreview={handlePreviewPDF}
           onPrint={handlePrintPDF}
           onExport={handleExportPDF}
-          onToggleChat={() => setChatOpen((previous) => !previous)}
+          onToggleChat={toggleChatPanel}
+          onToggleNotes={toggleNotesPanel}
           chatOpen={chatOpen}
+          notesOpen={notesOpen}
           isPdfBusy={isPdfBusy}
           showActionButtonLabels={showActionButtonLabels}
           aiEnabled={aiEnabled}
@@ -2532,6 +2575,52 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      <div
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-64 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+          notesOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex flex-col h-full border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
+            <FileText className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
+            <span className="flex-1 truncate text-xs font-medium text-[var(--tp-text-primary)]">Lesson Notes</span>
+            <button
+              onClick={() => setLessonNotes("")}
+              title="Clear notes"
+              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+                lessonNotes.trim()
+                  ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
+                  : "text-[var(--tp-border-strong)] cursor-default pointer-events-none"
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setNotesOpen(false)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+              title="Close Notes"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="px-4 py-3 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)]">
+            <p className="text-[11px] leading-relaxed text-[var(--tp-text-muted)]">
+              Private notes for this lesson. They stay out of print and PDF export by default.
+            </p>
+          </div>
+
+          <div className="flex-1 p-3 bg-[var(--tp-app-bg)]">
+            <textarea
+              value={lessonNotes}
+              onChange={(event) => setLessonNotes(event.target.value)}
+              placeholder="Write your private lesson notes here..."
+              className="h-full w-full resize-none overflow-y-auto rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 py-3 text-sm leading-relaxed text-[var(--tp-text-primary)] outline-none focus:border-[var(--tp-accent)] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_transparent] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]"
+            />
+          </div>
         </div>
       </div>
 

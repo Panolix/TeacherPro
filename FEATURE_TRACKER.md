@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-15 (AI rewrite tones, translate picker, chat overhaul, markdown renderer, Ollama shutdown fix)
+Last updated: 2026-04-16 (weekly calendar drag-drop rescheduling, notes left dock alignment)
 
 ## Purpose
 
@@ -25,11 +25,14 @@ Primary implementation:
 - TipTap-based editor with headings, lists, formatting, and tables.
 - Extended rich-text controls now include underline, text color, underline color, and multicolor highlight.
 - Ordered list numbering visibility is explicitly styled to remain visible in the editor.
-- Lesson table insertion template with fixed planning columns.
+- Lesson table insertion template with fixed planning columns and configurable default body-row count.
 - Right-click table context menu:
   - Insert/delete row or column
   - Merge/split cells
   - Toggle header row/column
+- Notes button now sits in the same editor action-button row as AI Chat and uses matching button size/style.
+- Notes and AI Chat share the same left-side slide-out dock footprint and are mutually exclusive (only one can be open at a time).
+- Lesson notes are stored per lesson, included in local search indexing, and excluded from print/PDF output by default.
 - Metadata row: Teacher, Created, Planned For, Subject.
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
 - Material drag/drop insertion into editor content with table-cell targeting.
@@ -62,6 +65,7 @@ Primary implementation:
 - Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
 - Settings now open as a centered modal overlay with stronger spacing, dimmed/blurred backdrop, and Escape/backdrop dismiss.
 - Defaults tab includes a Subjects block: up to 4 named subjects each with a custom color picker. Subjects are persisted to vault settings.
+- Defaults tab includes a persisted numeric setting for default inserted lesson-table body rows (range 1-12, default 4).
 - Settings now include an AI tab for local-first configuration, including AI enablement, chat persistence, and a curated Gemma 4 model catalog with selectable providers (Ollama runtime or direct-download mode).
 - AI catalog cards support install/remove/default actions with local status indicators and manual refresh.
 - Material import: add files and add folders.
@@ -117,6 +121,8 @@ Primary implementation:
 - One-click "Today" jump to the current week.
 - Day cards with lesson listing by date.
 - Lesson cards show a colored left-border reflecting the subject color configured in settings (via `lessonSubjectIndex`).
+- Lesson cards are draggable between days in the current week.
+- Dropping a lesson on another day updates both `metadata.plannedFor` and the lesson filename date token so it appears under the new day immediately.
 - Create lesson directly for a selected day.
 - Select/unselect lessons for bulk move-to-trash.
 - Day-level move-all-to-trash action.
@@ -179,7 +185,8 @@ Primary implementation:
 - `openVault()` chooses and persists vault path.
 - `refreshVault()` syncs folders and file trees; rebuilds `lessonSubjectIndex` (filename → subject name) alongside search indexes.
 - `setSubjects(subjects)` persists up to 4 `SubjectConfig { name, color }` entries to vault settings.
-- `createNewLesson(plannedDate?)`, `duplicateLesson(fileName)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?)`.
+- `setDefaultLessonTableBodyRows(rows)` persists the default number of body rows for inserted lesson tables.
+- `createNewLesson(plannedDate?)`, `duplicateLesson(fileName)`, `rescheduleLesson(fileName, plannedDate)`, `openLesson(fileName)`, `saveActiveLesson(content, metadata?, notes?)`.
 - `createNewMindmap()`, `openMindmap(fileName)`, `saveActiveMindmap(nodes, edges)`.
 - Search indexing runs during vault refresh to keep lesson/mindmap content queries local and fast.
 - `addMaterialFiles()`, `addMaterialDirectory()`, `renameMaterialEntry(...)`, `deleteMaterialEntry(...)`.
@@ -192,6 +199,7 @@ Primary implementation:
 ### Lesson Editor (`src/components/Editor.tsx`)
 
 - `insertLessonTable()` inserts lesson planning table scaffold.
+- Table insertion body row count now reads from persisted settings (default 4, clamped 1-12).
 - `insertMaterialLinkAtSelection(payload, clientX?, clientY?)` inserts dropped material links.
 - `insertDroppedMaterial(dataTransfer, clientX?, clientY?)` resolves payload and executes insertion.
 - `handleMaterialDrop(...)` and native/window drop handlers coordinate drag/drop flow.
@@ -202,6 +210,7 @@ Primary implementation:
 - `normalizeAiFragmentOutput(rawOutput, originalSelection)` strips think blocks, code fences, and normalizes whitespace/lists to match the input shape.
 - `buildLessonContextText()` walks the TipTap doc and emits structured plain text (headings, paragraphs, lists, tables) capped at 8000 chars.
 - `handleSubmitChat(overrideText?)` sends lesson metadata + body + conversation history to the AI; accepts an optional override for quick-action chip prompts.
+- Lesson notes are edited in a dedicated side drawer and persisted via the same autosave/manual save flow as lesson metadata/content.
 - `AiMarkdown` renders block-level markdown (headings, lists) and inline formatting (bold, italic, code) from AI chat responses.
 - `createLessonPdf()`, `handlePreviewPDF()`, `handlePrintPDF()`, `handleExportPDF()`.
 
@@ -261,7 +270,9 @@ Primary implementation:
 - Deletion UX is now soft-delete semantics; lessons, mindmaps, and materials are moved to `Trash` rather than permanently removed.
 - Trash recovery is available in-app via sidebar context menu (Restore), with optional permanent deletion for cleanup.
 - Editor uses explicit table structure for lesson planning consistency.
+- Default inserted lesson-table body rows are configurable in Settings > Defaults.
 - Material links are visual chips inside lesson content to reduce plain-path clutter.
+- Lesson notes are intentionally private-by-default and remain outside print/PDF exports.
 - Preview modals use centered overlays with explicit close controls.
 - Escape key closes preview/context overlays across sidebar, editor, and mindmap previews.
 - Right-click menus across sidebar/editor/mindmap/material link enforce viewport clamping and max-height scroll behavior for accessibility near window edges.

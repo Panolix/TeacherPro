@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.4.0] - 2026-04-16
+### Added
+- Private per-lesson Notes drawer in the editor with autosave persistence and local search indexing support.
+- Configurable default lesson-table body row count in Settings > Defaults (range 1-12, default 4).
+- Weekly Calendar drag-and-drop lesson rescheduling across day columns.
+
+### Changed
+- Notes and AI Chat now share the same left slide-out dock footprint, with mutual exclusivity (only one can be open at a time).
+- Notes action button is now in the main editor action row, styled consistently with the other header actions.
+- Opening Notes or AI Chat now auto-expands the collapsible sidebar to avoid clipped dock layouts.
+
+### Fixed
+- Drag-rescheduling now updates both `metadata.plannedFor` and the lesson filename date token so cards move immediately to the correct day.
+- Rescheduling no longer drops selected subject values; subject metadata is preserved with robust fallback handling.
+- Notes textarea now explicitly uses the same thin dark scrollbar styling as the rest of the app for consistent WKWebView rendering.
+
 ## [1.3.2] - 2026-04-15
 ### Fixed
 - Scrollbar fix from v1.3.1 was never actually committed — the `index.html` stylesheet change was only applied locally. CSS is now properly committed and included in the release.

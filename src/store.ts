@@ -25,6 +25,7 @@ export interface LessonMetadata {
 export interface LessonData {
   version: 1;
   metadata: LessonMetadata;
+  notes?: string;
   content: any; // TipTap JSON
 }
 
@@ -82,6 +83,7 @@ interface UISettings {
   accentColor: AccentColor;
   lessonPaperTone: PaperTone;
   mindmapPaperTone: PaperTone;
+  defaultLessonTableBodyRows: number;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -113,6 +115,7 @@ interface AppState {
   accentColor: AccentColor;
   lessonPaperTone: PaperTone;
   mindmapPaperTone: PaperTone;
+  defaultLessonTableBodyRows: number;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -145,6 +148,7 @@ interface AppState {
   setAccentColor: (color: AccentColor) => void;
   setLessonPaperTone: (tone: PaperTone) => void;
   setMindmapPaperTone: (tone: PaperTone) => void;
+  setDefaultLessonTableBodyRows: (rows: number) => void;
   setCalendarCollapsed: (collapsed: boolean) => void;
   toggleSectionCollapsed: (section: SidebarSectionKey) => void;
   setDebugMode: (enabled: boolean) => void;
@@ -170,11 +174,13 @@ interface AppState {
   refreshVault: () => Promise<void>;
   createNewLesson: (plannedDate?: Date) => Promise<void>;
   duplicateLesson: (fileName: string) => Promise<void>;
+  rescheduleLesson: (fileName: string, plannedDate: Date) => Promise<string | null>;
   deleteLesson: (fileName: string) => Promise<void>;
   renameLesson: (oldFileName: string, newName: string) => Promise<void>;
   saveActiveLesson: (
     content: any,
     metadata?: Partial<LessonMetadata>,
+    notes?: string,
     options?: SaveLessonOptions,
   ) => Promise<void>;
   openLesson: (fileName: string) => Promise<void>;
@@ -193,11 +199,33 @@ interface AppState {
 
 const STORE_KEY = "teacherpro-settings.json";
 
+const MIN_DEFAULT_LESSON_TABLE_BODY_ROWS = 1;
+const MAX_DEFAULT_LESSON_TABLE_BODY_ROWS = 12;
+
+function clampDefaultLessonTableBodyRows(value: unknown): number {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(numericValue)) {
+    return 4;
+  }
+
+  return Math.max(
+    MIN_DEFAULT_LESSON_TABLE_BODY_ROWS,
+    Math.min(MAX_DEFAULT_LESSON_TABLE_BODY_ROWS, Math.round(numericValue)),
+  );
+}
+
 const DEFAULT_UI_SETTINGS: UISettings = {
   themeMode: "dark",
   accentColor: "blue",
   lessonPaperTone: "dark",
   mindmapPaperTone: "dark",
+  defaultLessonTableBodyRows: 4,
   calendarCollapsed: false,
   sectionCollapsed: {
     lessonPlans: false,
@@ -265,6 +293,7 @@ function buildLessonSearchText(rawLesson: unknown): string {
         subject?: unknown;
         plannedFor?: unknown;
       };
+      notes?: unknown;
       content?: unknown;
     };
 
@@ -279,6 +308,10 @@ function buildLessonSearchText(rawLesson: unknown): string {
       if (typeof metadata.plannedFor === "string" && metadata.plannedFor.trim()) {
         chunks.push(metadata.plannedFor.trim());
       }
+    }
+
+    if (typeof lesson.notes === "string" && lesson.notes.trim()) {
+      chunks.push(lesson.notes.trim());
     }
 
     collectTipTapText(lesson.content ?? lesson, chunks);
@@ -505,6 +538,62 @@ async function movePathToTrash(
   await rename(sourcePath, trashTargetPath);
 }
 
+function createPlannedForIso(plannedDate: Date): string {
+  const localNoon = new Date(
+    plannedDate.getFullYear(),
+    plannedDate.getMonth(),
+    plannedDate.getDate(),
+    12,
+    0,
+    0,
+    0,
+  );
+  return localNoon.toISOString();
+}
+
+function buildLessonFileNameForMetadata(currentFileName: string, metadata: LessonMetadata): string {
+  const sourceDate = metadata.plannedFor || metadata.createdAt;
+  const dateStr = sourceDate.split("T")[0];
+  const subject = metadata.subject.trim();
+
+  if (subject) {
+    const sanitizedSubject = subject.replace(/[^a-zA-Z0-9\-_ ]/g, "").replace(/\s+/g, "-");
+    return `${dateStr}-${sanitizedSubject}.json`;
+  }
+
+  const datePattern = /\d{4}-\d{2}-\d{2}/;
+  if (datePattern.test(currentFileName)) {
+    return currentFileName.replace(datePattern, dateStr);
+  }
+
+  const id = Date.now().toString().slice(-4);
+  return `Lesson-${dateStr}-${id}.json`;
+}
+
+function subjectToLessonFileToken(subject: string): string {
+  return subject.trim().replace(/[^a-zA-Z0-9\-_ ]/g, "").replace(/\s+/g, "-");
+}
+
+function fallbackSubjectFromLessonFileName(fileName: string, subjects: SubjectConfig[]): string {
+  const stem = fileName.replace(/\.json$/i, "");
+  const match = stem.match(/^\d{4}-\d{2}-\d{2}-(.+)$/);
+  if (!match) {
+    return "";
+  }
+
+  const token = match[1].trim();
+  if (!token || /^\d+$/.test(token)) {
+    return "";
+  }
+
+  const subjectFromSettings = subjects.find((entry) => subjectToLessonFileToken(entry.name) === token);
+  if (subjectFromSettings) {
+    return subjectFromSettings.name;
+  }
+
+  return token.replace(/-/g, " ");
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   vaultPath: null,
@@ -519,6 +608,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   accentColor: DEFAULT_UI_SETTINGS.accentColor,
   lessonPaperTone: DEFAULT_UI_SETTINGS.lessonPaperTone,
   mindmapPaperTone: DEFAULT_UI_SETTINGS.mindmapPaperTone,
+  defaultLessonTableBodyRows: DEFAULT_UI_SETTINGS.defaultLessonTableBodyRows,
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
@@ -557,6 +647,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           accentColor: savedSettings.accentColor || DEFAULT_UI_SETTINGS.accentColor,
           lessonPaperTone: savedSettings.lessonPaperTone || DEFAULT_UI_SETTINGS.lessonPaperTone,
           mindmapPaperTone: savedSettings.mindmapPaperTone || DEFAULT_UI_SETTINGS.mindmapPaperTone,
+          defaultLessonTableBodyRows: clampDefaultLessonTableBodyRows(
+            savedSettings.defaultLessonTableBodyRows,
+          ),
           calendarCollapsed: savedSettings.calendarCollapsed ?? DEFAULT_UI_SETTINGS.calendarCollapsed,
           sectionCollapsed: {
             ...DEFAULT_UI_SETTINGS.sectionCollapsed,
@@ -608,6 +701,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setMindmapPaperTone: (tone) => {
     set({ mindmapPaperTone: tone });
     void persistUiSettings({ mindmapPaperTone: tone });
+  },
+  setDefaultLessonTableBodyRows: (rows) => {
+    const clampedRows = clampDefaultLessonTableBodyRows(rows);
+    set({ defaultLessonTableBodyRows: clampedRows });
+    void persistUiSettings({ defaultLessonTableBodyRows: clampedRows });
   },
   setCalendarCollapsed: (collapsed) => {
     set({ calendarCollapsed: collapsed });
@@ -823,6 +921,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           plannedFor: plannedDate ? plannedDate.toISOString() : null,
           subject: ""
         },
+        notes: "",
         content: {
           type: "doc",
           content: [
@@ -875,6 +974,106 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       console.error("Failed to duplicate lesson:", error);
       alert("Error duplicating lesson: " + String(error));
+    }
+  },
+
+  rescheduleLesson: async (fileName: string, plannedDate: Date) => {
+    const { vaultPath, activeFilePath, defaultTeacherName, lessonSubjectIndex, subjects } = get();
+    if (!vaultPath) return null;
+
+    try {
+      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+      const sourcePath = await join(lessonPlansFolder, fileName);
+      const sourceText = await readTextFile(sourcePath);
+      const rawContent = JSON.parse(sourceText);
+      const indexedSubject = lessonSubjectIndex[fileName]?.trim() || "";
+      const filenameSubjectFallback = fallbackSubjectFromLessonFileName(fileName, subjects);
+      const fallbackSubject = indexedSubject || filenameSubjectFallback;
+
+      let lessonData: LessonData;
+
+      if (rawContent.type === "doc" && !rawContent.version) {
+        lessonData = {
+          version: 1,
+          metadata: {
+            teacher: defaultTeacherName,
+            createdAt: new Date().toISOString(),
+            plannedFor: null,
+            subject: fallbackSubject,
+          },
+          notes: "",
+          content: rawContent,
+        };
+      } else {
+        lessonData = rawContent as LessonData;
+        if (typeof lessonData.notes !== "string") {
+          lessonData = {
+            ...lessonData,
+            notes: "",
+          };
+        }
+      }
+
+      const rawMetadata = lessonData.metadata as Partial<LessonMetadata> | undefined;
+      const normalizedMetadata: LessonMetadata = {
+        teacher:
+          typeof rawMetadata?.teacher === "string"
+            ? rawMetadata.teacher
+            : defaultTeacherName,
+        createdAt:
+          typeof rawMetadata?.createdAt === "string" && rawMetadata.createdAt.trim()
+            ? rawMetadata.createdAt
+            : new Date().toISOString(),
+        plannedFor:
+          typeof rawMetadata?.plannedFor === "string" && rawMetadata.plannedFor.trim()
+            ? rawMetadata.plannedFor
+            : null,
+        subject:
+          typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
+            ? rawMetadata.subject
+            : fallbackSubject,
+      };
+
+      const nextLessonData: LessonData = {
+        ...lessonData,
+        metadata: {
+          ...normalizedMetadata,
+          plannedFor: createPlannedForIso(plannedDate),
+        },
+      };
+
+      const nextFileName = buildLessonFileNameForMetadata(fileName, nextLessonData.metadata);
+      let savePath = sourcePath;
+      let finalFileName = fileName;
+
+      if (nextFileName !== fileName) {
+        const requestedPath = await join(lessonPlansFolder, nextFileName);
+        let nextPath = requestedPath;
+
+        if (await exists(requestedPath)) {
+          nextPath = await ensureUniqueTargetPath(lessonPlansFolder, nextFileName);
+        }
+
+        await rename(sourcePath, nextPath);
+        savePath = nextPath;
+        finalFileName = extractBaseName(nextPath);
+      }
+
+      await writeTextFile(savePath, JSON.stringify(nextLessonData, null, 2));
+
+      if (activeFilePath?.endsWith(fileName)) {
+        set({
+          activeFilePath: savePath,
+          activeFileContent: nextLessonData,
+        });
+      }
+
+      await get().refreshVault();
+      return finalFileName;
+    } catch (error) {
+      console.error("Failed to reschedule lesson:", error);
+      alert("Error rescheduling lesson: " + String(error));
+      return null;
     }
   },
 
@@ -938,6 +1137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   saveActiveLesson: async (
     content: any,
     updatedMetadata?: Partial<LessonMetadata>,
+    updatedNotes?: string,
     options?: SaveLessonOptions,
   ) => {
     const { activeFilePath, activeFileContent, vaultPath } = get();
@@ -945,12 +1145,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const allowRename = options?.allowRename ?? true;
 
     try {
+      const nextNotes =
+        typeof updatedNotes === "string"
+          ? updatedNotes
+          : typeof activeFileContent.notes === "string"
+            ? activeFileContent.notes
+            : "";
+
       const newLessonData: LessonData = {
         ...activeFileContent,
         metadata: {
           ...activeFileContent.metadata,
           ...updatedMetadata
         },
+        notes: nextNotes,
         content: content
       };
 
@@ -1025,10 +1233,17 @@ export const useAppStore = create<AppState>((set, get) => ({
               plannedFor: null,
               subject: ""
             },
+            notes: "",
             content: rawContent
           };
         } else {
           lessonData = rawContent as LessonData;
+          if (typeof lessonData.notes !== "string") {
+            lessonData = {
+              ...lessonData,
+              notes: "",
+            };
+          }
         }
 
         set({
