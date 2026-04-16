@@ -2576,7 +2576,7 @@ export function Sidebar() {
                     </div>
                   </div>
                   <p className="text-[11px] text-gray-500 leading-relaxed">
-                    Use one model for lesson chat and one shared model for both rewrite and translation actions.
+                    "Set Default" in the catalog sets both slots at once. Use these selectors to assign each slot to a different installed model.
                   </p>
                 </div>
 
@@ -2697,13 +2697,13 @@ export function Sidebar() {
                         {aiInstalledModelIds.map((modelId) => (
                           <div key={modelId} className="flex items-center">
                             <button
-                              onClick={() => setAiDefaultModelId(modelId)}
+                              onClick={() => { setAiDefaultModelId(modelId); setAiRewriteTranslateModelId(modelId); }}
                               className={`px-2 py-1 text-[11px] rounded-l border-y border-l transition-colors ${
                                 aiDefaultModelId === modelId
                                   ? "border-[var(--tp-accent)] text-white bg-[#232323]"
                                   : "border-[#3d3d3d] text-gray-300 hover:bg-[#252525]"
                               }`}
-                              title="Set as chat model"
+                              title="Set as default for chat and rewrite/translate"
                             >
                               {modelId}
                             </button>
@@ -2827,12 +2827,13 @@ export function Sidebar() {
                             ) : (
                               <>
                                 <button
-                                  onClick={() => setAiDefaultModelId(model.id)}
+                                  onClick={() => { setAiDefaultModelId(model.id); setAiRewriteTranslateModelId(model.id); }}
                                   className={`px-2.5 py-1.5 text-xs rounded-md border ${
                                     isDefault
                                       ? "border-[var(--tp-accent)] text-white bg-[#232323]"
                                       : "border-[#3d3d3d] text-gray-300 hover:bg-[#252525]"
                                   }`}
+                                  title="Sets default for both chat and rewrite/translate. Use the Model Routing selectors below to assign each slot separately."
                                 >
                                   {isDefault ? "Default" : "Set Default"}
                                 </button>

@@ -1294,10 +1294,10 @@ export function Editor() {
         const response = await tauriInvoke<string>("ai_generate_text", {
           modelId: aiRewriteTranslateModelId,
           prompt,
-          temperature: aiTemperature,
+          temperature: 0.35,
           systemPrompt: rewriteSystemPrompt,
           enableThinking: false,
-          numCtx: rewriteRuntimeDefaults.defaultNumCtx,
+          numCtx: Math.min(rewriteRuntimeDefaults.defaultNumCtx, 8192),
           numPredict: rewriteRuntimeDefaults.defaultNumPredict,
         });
 
@@ -1444,9 +1444,9 @@ export function Editor() {
 
     try {
       const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
-      const chatContextCharLimit = Math.max(
-        5000,
-        Math.min(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 2)),
+      const chatContextCharLimit = Math.min(
+        20000,
+        Math.max(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 0.6)),
       );
       const contextText = buildLessonContextText(chatContextCharLimit);
 

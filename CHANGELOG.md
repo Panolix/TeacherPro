@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-04-16
+### Changed
+- AI model catalog context windows now reflect each model's actual architecture rather than hardware-specific assumptions: thinking models (Gemma 4 E4B, 26B, 31B, Qwen 3, DeepSeek R1) use 32K default context; edge/rewrite-focused models retain 16K.
+- `gemma4:31b` default context raised to match `gemma4:26b` (32768); `gemma4:e4b` raised to 32768 as the recommended default chat model.
+- `recommendedContext` display strings now state model maximum token counts only, without GPU-specific assumptions.
+- Lesson chat context injection ceiling raised from 10K to up to 20K characters, scaling with the selected model's context window.
+- Rewrite and translate tasks now use a capped 8K context window (sufficient for any selection-based task, avoids unnecessary KV cache allocation).
+- Rewrite and translate temperature fixed at 0.35 for deterministic, consistent output independent of the chat temperature setting.
+- "Set Default" AI button now sets both the chat model and rewrite/translate model slots simultaneously.
+
 ## [1.5.0] - 2026-04-16
 ### Added
 - New `ai_runtime_diagnostics` backend command and AI Settings diagnostics panel fields for server source, active model processor usage, and backend policy text.
