@@ -84,6 +84,9 @@ jobs:
       - name: install frontend dependencies
         run: npm ci
 
+      - name: Verify scrollbar style invariants
+        run: npm run verify:scrollbars
+
       - name: Validate and sync versions from tag
         shell: bash
         run: |

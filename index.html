@@ -9,12 +9,14 @@
       /* Injected early so WKWebView picks these up before any JS renders.
          Tailwind's * rules sometimes don't reach the root scroll container
          in a production Tauri/WKWebView build. */
-      ::-webkit-scrollbar { width: 4px; height: 4px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background-color: #3a3a3a; border-radius: 9999px; }
-      ::-webkit-scrollbar-thumb:hover { background-color: #555555; }
-      ::-webkit-scrollbar-corner { background: transparent; }
-      * { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+      :root { color-scheme: dark; }
+      html, body, #root { background: #121212; }
+      ::-webkit-scrollbar { -webkit-appearance: none; width: 6px !important; height: 6px !important; }
+      ::-webkit-scrollbar-track { background: #161616 !important; }
+      ::-webkit-scrollbar-thumb { background-color: #3a3a3a !important; border-radius: 9999px; border: 1px solid #161616; }
+      ::-webkit-scrollbar-thumb:hover { background-color: #555555 !important; }
+      ::-webkit-scrollbar-corner { background: #161616 !important; }
+      * { scrollbar-width: thin; scrollbar-color: #3a3a3a #161616; }
     </style>
   </head>
 

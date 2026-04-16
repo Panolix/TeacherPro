@@ -22,66 +22,69 @@
   --tp-text-primary: #f3f4f6;
   --tp-text-muted: #9ca3af;
   --tp-text-soft: #6b7280;
-  --tp-scrollbar-size: 4px;
+  --tp-scrollbar-size: 6px;
+  --tp-scrollbar-track: #161616;
+  --tp-scrollbar-thumb: #3a3a3a;
+  --tp-scrollbar-thumb-hover: #555555;
+  color-scheme: dark;
 }
 
 /* Thin, dark, minimal scrollbars throughout the app. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #3a3a3a transparent;
+  scrollbar-color: var(--tp-scrollbar-thumb) var(--tp-scrollbar-track);
 }
 
 *::-webkit-scrollbar {
+  -webkit-appearance: none;
   width: var(--tp-scrollbar-size);
   height: var(--tp-scrollbar-size);
 }
 
 *::-webkit-scrollbar-track {
-  background: transparent;
+  background-color: var(--tp-scrollbar-track);
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: #3a3a3a;
+  background-color: var(--tp-scrollbar-thumb);
   border-radius: 9999px;
-  border: none;
+  border: 1px solid var(--tp-scrollbar-track);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #555555;
+  background-color: var(--tp-scrollbar-thumb-hover);
 }
 
 *::-webkit-scrollbar-corner {
-  background: transparent;
+  background-color: var(--tp-scrollbar-track);
 }
 
 /* Force-override for Tauri WKWebView which sometimes ignores the * rule */
 html, body, #root {
   scrollbar-width: thin;
-  scrollbar-color: #3a3a3a transparent;
+  scrollbar-color: var(--tp-scrollbar-thumb) var(--tp-scrollbar-track);
 }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 #root::-webkit-scrollbar {
+  -webkit-appearance: none;
   width: var(--tp-scrollbar-size);
   height: var(--tp-scrollbar-size);
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+#root::-webkit-scrollbar-track {
+  background-color: var(--tp-scrollbar-track);
 }
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb,
 #root::-webkit-scrollbar-thumb {
-  background-color: #3a3a3a;
+  background-color: var(--tp-scrollbar-thumb);
   border-radius: 9999px;
-}
-
-.tp-main-scroll {
-  scrollbar-gutter: stable both-edges;
-}
-
-@supports not (scrollbar-gutter: stable) {
-  .tp-main-scroll {
-    overflow-y: scroll;
-  }
+  border: 1px solid var(--tp-scrollbar-track);
 }
 
 html[data-tp-theme="light"] {

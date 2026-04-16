@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.1] - 2026-04-16
+### Added
+- New release guard script `npm run verify:scrollbars` to enforce thin dark scrollbar invariants before packaging.
+- Both GitHub workflows (`release.yml` and `build-cross-platform.yml`) now run scrollbar invariant verification before building installers.
+
+### Changed
+- Component-level scrollbar overrides in main content, Notes, and AI Chat now use explicit dark track + thumb colors instead of transparent tracks.
+
+### Fixed
+- Packaged app builds no longer fall back to large white/native scrollbar gutters on macOS WKWebView.
+- Global scrollbar fallback CSS in `index.html` and `src/index.css` is now hardened for consistent thin dark rendering across installed app targets.
+
 ## [1.4.0] - 2026-04-16
 ### Added
 - Private per-lesson Notes drawer in the editor with autosave persistence and local search indexing support.

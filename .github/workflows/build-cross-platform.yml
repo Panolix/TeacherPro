@@ -42,6 +42,9 @@ jobs:
       - name: install app dependencies
         run: npm ci
 
+      - name: Verify scrollbar style invariants
+        run: npm run verify:scrollbars
+
       - name: Validate and sync versions from input
         shell: bash
         run: |

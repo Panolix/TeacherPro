@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-16 (weekly calendar drag-drop rescheduling, notes left dock alignment)
+Last updated: 2026-04-16 (cross-OS scrollbar hardening + release workflow guard)
 
 ## Purpose
 
@@ -46,6 +46,8 @@ Primary implementation:
 - AI rewrite and translate actions are now available for selected text from both the editor toolbar and the table right-click menu.
 - AI chat toggle is now integrated directly into the main lesson action button row (icon-first, matching Save/Preview/Print/Export behavior).
 - Lesson AI chat now opens as a fixed bottom dock while active, staying visible during editor scrolling.
+- Scrollbars are globally enforced as thin, dark track/thumb styling across app scroll containers with WKWebView-safe root fallbacks.
+- Release and cross-platform installer workflows now run a scrollbar invariant check (`npm run verify:scrollbars`) before packaging.
 
 Primary implementation:
 
