@@ -89,7 +89,7 @@ export function MainContent() {
         ) : (
           <>
             {currentView === "editor" && (
-              <div className="px-8 pb-8 pt-0 print:p-0">
+              <div className="px-6 pb-6 pt-0 print:p-0">
                 {!activeFilePath ? (
                   <div className="text-center mt-20 max-w-xl mx-auto">
                      <h2 className="text-3xl font-bold text-gray-100 mb-4">Workspace Ready</h2>

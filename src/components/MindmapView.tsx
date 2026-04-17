@@ -1224,7 +1224,7 @@ export function MindmapView() {
 
   return (
     <div className="tp-mindmap h-full w-full bg-[#121212] relative flex flex-col print:bg-white">
-      <div className="absolute top-0 left-0 w-full p-4 z-10 pointer-events-none flex justify-between print:hidden">
+      <div className="absolute top-0 left-0 w-full p-3 z-10 pointer-events-none flex justify-between print:hidden">
         <div className="flex items-center gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">Mindmap Workspace</h1>

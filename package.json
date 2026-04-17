@@ -1,7 +1,7 @@
 {
   "name": "teacherpro",
   "private": true,
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "sync:version": "node scripts/sync-version.mjs",
-    "verify:scrollbars": "node scripts/verify-scrollbars.mjs"
+    "verify:scrollbars": "node scripts/verify-scrollbars.mjs",
+    "qa:method-bank": "node scripts/method-bank-qa-checklist.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

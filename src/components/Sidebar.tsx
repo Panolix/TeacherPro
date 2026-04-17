@@ -666,6 +666,7 @@ export function Sidebar() {
   const [aiRuntimeDiagnostics, setAiRuntimeDiagnostics] = useState<AiRuntimeDiagnostics | null>(null);
   const [aiRuntimeBusy, setAiRuntimeBusy] = useState(false);
   const aiInstallPollersRef = useRef<Record<string, number>>({});
+  const materialSidebarDragEnabled = currentView === "mindmap";
   const currentAccentPickerColor = resolveAccentColorValue(accentColor);
   const hasCustomAccent = !Object.prototype.hasOwnProperty.call(ACCENT_PRESET_COLORS, accentColor);
 
@@ -1049,6 +1050,10 @@ export function Sidebar() {
   }, [materialPreview]);
 
   const handleDragStart = (e: React.DragEvent, relativePath: string, isDirectory: boolean) => {
+    if (!materialSidebarDragEnabled) {
+      return;
+    }
+
     const payload = JSON.stringify({ relativePath, isDirectory });
     logDebug("sidebar", "drag-start", `${relativePath} (${isDirectory ? "folder" : "file"})`);
     setDraggedMaterial({ relativePath, isDirectory });
@@ -1060,6 +1065,10 @@ export function Sidebar() {
   };
 
   const handleDragEnd = (e: React.DragEvent, relativePath: string, isDirectory: boolean) => {
+    if (!materialSidebarDragEnabled) {
+      return;
+    }
+
     const dropEffect = e.dataTransfer?.dropEffect || "none";
     const activeDrag = useAppStore.getState().draggedMaterial;
     const dragStillActive =
@@ -1653,7 +1662,7 @@ export function Sidebar() {
       return (
         <li key={entry.relativePath}>
           <button
-            draggable
+            draggable={materialSidebarDragEnabled}
             onDragStart={(event) => handleDragStart(event, entry.relativePath, entry.isDirectory)}
             onDragEnd={(event) => handleDragEnd(event, entry.relativePath, entry.isDirectory)}
             onClick={() => entry.isDirectory && materialSearchTerms.length === 0 && toggleFolder(entry.relativePath)}
@@ -1746,7 +1755,7 @@ export function Sidebar() {
   return (
     <div
       className={`print:hidden ${
-        sidebarOpen ? "w-64" : "w-16"
+        sidebarOpen ? "w-72" : "w-16"
       } transition-all duration-300 ease-in-out bg-[#191919] border-r border-[#333333] flex flex-col relative tp-sidebar`}
     >
       {/* Sidebar Header */}

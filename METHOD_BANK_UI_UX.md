@@ -11,55 +11,61 @@ To solve this, the implementation relies heavily on **Progressive Disclosure** (
 
 ---
 
-## 💻 1. The Primary UI: The Left Sidebar
+## 💻 1. The Primary UI: Editor-Triggered Left Dock
 
-The Method Bank will live as a new, collapsible section within the existing **Left Sidebar** (beneath or alongside "Lesson Plans," "Mindmaps," and "Materials").
+The Method Bank lives in the same **left slide-out dock region** used by AI Chat and Notes, but is toggled from the lesson editor action-button row.
+
+**Dock control contract (fixed):**
+* `AI Chat` button remains leftmost.
+* `Notes` button remains second.
+* `Method Bank` button is third.
+* Only one of these three docks is open at a time.
 
 ### The "Skinny" Default View
-To keep the sidebar narrow, Method items will NOT display their full descriptions or wrapping text. They will render as highly compact, draggable rows (similar to file tree items).
+To protect lesson-canvas width, Method Bank items render as compact rows in the dock list (title, summary snippet, duration, type label).
 
-**Visual Structure of a Sidebar Item:**
-*   **Drag Handle:** `⋮⋮` (Indicates the item can be pulled into the editor).
-*   **Icon:** An emoji or Lucide icon representing the type (e.g., ⏱️ for Phase, 👥 for Social Form, 🧠 for Method).
+**Visual Structure of a Dock List Item:**
+*   **Icon/Label Row:** Compact title with type badge for fast scanning.
 *   **Title:** Truncated text (e.g., "Socratic Seminar...").
 *   **Duration:** Right-aligned badge (e.g., `[ 45m ]`).
 
-**Categorization (Accordions):**
-Instead of a flat list of 80+ items, the methods must be grouped into collapsible accordion folders based on their `tags` or `type` to make scanning efficient in a narrow space.
-*   `> 🗣️ Discussion Protocols (12)`
-*   `> 📝 Formative Assessment (8)`
-*   `> 🏃 Kinesthetic / Movement (5)`
+**Categorization (Filters):**
+The initial implementation uses fast filter chips rather than nested accordions:
+* `Phase`
+* `Social`
+* `Method`
+
+When no chip is selected, the list shows all method types.
+
+This keeps scan speed high and prevents deep nesting in an already narrow dock.
 
 ---
 
-## 🔍 2. Progressive Disclosure (Hover & Click States)
+## 🔍 2. Progressive Disclosure (List + Detail Pane)
 
-Teachers need to read the `summary` and `description` from the JSON database without cluttering the sidebar permanently.
+Teachers need both quick scanning and deep detail. The dock uses a split disclosure model:
+* **Top:** dense list for fast scanning.
+* **Bottom:** detail pane for full description and tags of the selected method.
 
-### Level 1: The Hover State (The Quick Hint)
-When a user hovers their mouse over a compact sidebar item for ~500ms, a standard, dark-themed tooltip appears containing *only* the 1-sentence `summary` field from the JSON data.
-*   *Example Tooltip on Hover:* "Quick end-of-lesson assessment of learning and confusion."
+### Selection State
+Clicking a list item updates the detail pane with:
+* `title`
+* `type`
+* `description`
+* `tags`
 
-### Level 2: The Click State (The Deep Dive Popover)
-When a user explicitly **clicks** a sidebar item, a Popover (a floating, absolute-positioned panel) anchors to the right side of the sidebar, slightly overlapping the edge of the editor canvas.
-
-**Popover Contents:**
-*   **Title & Duration:** Prominently displayed at the top.
-*   **Tags:** Rendered as small, colored chips (e.g., `<Badge>Formative Assessment</Badge>`).
-*   **Detailed Description:** The full, multi-sentence instruction block on how to execute the method in the classroom.
-
-**Interaction:**
-*   The Popover must close immediately if the user clicks anywhere outside of it or presses the `Escape` key.
-*   If the user likes the method they just read about, they can close the Popover and simply drag the skinny sidebar item directly into their TipTap lesson table.
+Double-clicking a list row inserts the method title into the active lesson-table body row and mapped lesson-table column.
+If the cursor is outside a lesson-table body row, insertion is ignored.
 
 ---
 
 ## ⌨️ 3. The Power User UI: Contextual Slash Commands (`/`)
 
-For veteran teachers who know what methods they want, browsing the sidebar is too slow. They need to stay on the keyboard.
+For veteran teachers who know what methods they want, browsing the dock list is too slow. They need to stay on the keyboard.
 
 ### The Trigger
-Typing `/` inside the TipTap editor triggers a floating autocomplete menu querying the `method-bank.json` database.
+Typing `/` inside the TipTap lesson table triggers a floating autocomplete menu querying the Method Bank data.
+The trigger is intentionally scoped to **table body cells** (not header cells).
 
 ### Context-Aware Filtering (Crucial for UI Scale)
 A menu showing 80 items would cover the entire lesson plan. The slash command menu MUST be context-aware based on the user's cursor position within the `insertLessonTable` structure:
@@ -68,24 +74,28 @@ A menu showing 80 items would cover the entire lesson plan. The slash command me
 *   If the cursor is in the **"LTA" (Activity) column**, typing `/` only shows items where `type === "method"`.
 
 ### Combating Menu Bloat
-Even filtered, a list of 40 teaching methods is too large for a floating dropdown.
+Even filtered lists can become noisy, so the slash menu enforces strict height and keyboard-first control.
 1.  **Hard Limits:** The floating menu should have a strict `max-height` (e.g., `250px`) with a slim scrollbar, displaying a maximum of 5–7 items at once.
 2.  **Instant Type-to-Search:** As the user continues typing after the slash, the list instantly filters.
     *   Typing `/` shows the default/top methods.
     *   Typing `/jig` instantly filters the list down to only "Jigsaw Method".
-3.  **Auto-Fill Behavior:** Pressing `Enter` on a selected item instantly populates the table cell with the Method's `title` (and optionally inserts the `duration` into the adjacent Time column if the cursor context allows).
+3.  **Auto-Fill Behavior:** Pressing `Enter` or `Tab` inserts the selected method `title` as plain text.
+
+### Insertion Policy
+Lesson editor insertion is currently double-click-first for both materials and Method Bank methods.
+Drag/drop insertion in the lesson editor is intentionally disabled for this workflow.
 
 ---
 
 ## 🛠️ Developer Implementation Checklist (Tauri/React/TipTap)
 
-1.  **State Management (`src/store.ts`):** 
-    *   Implement logic to load `method-bank.json` into the global Zustand store on app startup (similar to how materials or settings are loaded).
-2.  **Sidebar Component (`src/components/Sidebar.tsx`):**
-    *   Add a new collapsible section for the Method Bank.
-    *   Build the grouped accordion logic and the compact drag-handle list items.
-    *   Implement the Radix UI (or similar) Popover component triggered by `onClick` for the deep-dive descriptions.
-3.  **Editor Integration (`src/components/Editor.tsx`):**
-    *   Update the TipTap configuration to include a Slash Command extension (e.g., `@tiptap/suggestion`).
-    *   Write the filtering logic to detect which table column the cursor is currently inside to contextually filter the suggestion list.
-    *   Implement the `onDrop` handler in the Editor to parse the payload when a Method is dragged from the sidebar and insert the formatted text into the ProseMirror document.
+1.  **Data seed (`public/method-bank.json`):**
+    *   Keep the runtime-accessible seed in `public/` so the editor can fetch it directly.
+2.  **Editor integration (`src/components/Editor.tsx`):**
+    *   Add Method Bank as a third left dock panel sharing Notes/AI Chat dock behavior.
+    *   Preserve action-button order: AI Chat, Notes, Method Bank.
+    *   Add method double-click insertion (plain-text title in v1).
+    *   Add contextual slash menu filtered by lesson-table column.
+3.  **Insertion behavior (v1):**
+    *   Use plain-text method-title insertion for double-click and slash selection.
+    *   Keep structured token/node insertion as future scope.

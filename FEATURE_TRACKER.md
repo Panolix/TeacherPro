@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-16 (v1.5.0: unified sidebar search, model capability chips, diagnostics + runtime polish)
+Last updated: 2026-04-17 (Method Bank left dock + contextual slash insertion)
 
 ## Purpose
 
@@ -34,20 +34,36 @@ Primary implementation:
   - Toggle header row/column
 - Notes button now sits in the same editor action-button row as AI Chat and uses matching button size/style.
 - Notes and AI Chat share the same left-side slide-out dock footprint and are mutually exclusive (only one can be open at a time).
+- Method Bank button is now integrated into the same lesson action-button row and uses the same toggle styling/behavior as AI Chat and Notes.
+- Action-button order is fixed for dock controls: AI Chat (leftmost), Notes, then Method Bank.
+- Method Bank now opens as a third optional left-side slide-out dock panel and remains mutually exclusive with AI Chat and Notes.
+- Method Bank panel supports local search, type filtering (Phase/Social/Method with no active chip meaning all), compact rows, detail preview, and double-click insertion.
+- Method Bank double-click insertion is now constrained to lesson-table body rows and maps plain-text method titles into table-aware target columns.
+- Method and material double-click insertion now targets inline end-of-cell paragraph content to avoid creating an unintended empty line before inserted content.
+- Contextual `/` menu inside lesson-table cells now filters Method Bank suggestions by column (Phase, LTA, Social Form) and inserts the selected method title.
+- Method Bank `/` suggestions are now limited to lesson-table body cells and intentionally excluded from header cells.
+- Method Bank hover summary tooltip has been removed to reduce visual noise in dense list scanning.
+- Lesson editor drag/drop insertion for Method Bank and materials is intentionally disabled in favor of deterministic double-click insertion flows.
+- Method Bank dock width now matches the Notes dock width.
+- Main navigation sidebar and all lesson side docks (AI Chat, Notes, Method Bank) are now slightly wider for improved readability.
+- AI Chat header now uses a compact single-row hierarchy (title plus model badge) for clearer alignment with the side-dock top bars while preserving model visibility.
+- Outer workspace padding was reduced across editor/calendar/mindmap views to reclaim horizontal space without shrinking the interactive lesson or mindmap surfaces.
+- Explanatory helper copy was removed from Notes and Method Bank side panels to keep the side UI denser and less visually noisy.
 - Lesson notes are stored per lesson, included in local search indexing, and excluded from print/PDF output by default.
 - Metadata row: Teacher, Created, Planned For, Subject.
+- Subject dropdown/input width is now constrained to a compact control size instead of stretching across the full metadata row.
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
-- Material drag/drop insertion into editor content with table-cell targeting.
-- Material drop and double-click insertion prioritize the active table row and insert into the row's final media/material cell.
+- Material double-click insertion into editor content is constrained to lesson-table body rows and inserts into the row's final media/material cell.
 - Double-click material insertion is intentionally limited to active lesson-plan editing and no longer force-switches views.
 - Material links render as custom inline nodes with hover actions and context menu.
 - Lesson editor typography is slightly reduced (content and table-header scale) to improve readability in smaller windows.
+- Weekly calendar mass-delete now guards against duplicate click re-entry and treats already-moved files as non-fatal, preventing noisy rename errors during rapid bulk delete actions.
 - Debounced autosave (including metadata fields) with invalid date guard for planned date.
 - Lesson action buttons (Preview, Print, Export, Save) are icon-first by default and can optionally show labels via settings.
 - Subject field renders as a color-swatch dropdown when subjects are configured in settings; falls back to free-text input when no subjects are defined.
 - AI rewrite and translate actions are now available for selected text from both the editor toolbar and the table right-click menu.
 - AI chat toggle is now integrated directly into the main lesson action button row (icon-first, matching Save/Preview/Print/Export behavior).
-- Lesson AI chat now opens as a fixed bottom dock while active, staying visible during editor scrolling.
+- Lesson AI chat opens as a left-side slide-out dock while active.
 - AI chat thinking toggle is now model-aware: unsupported models disable the toggle and skip thinking requests.
 - Scrollbars are globally enforced as thin, dark track/thumb styling across app scroll containers with WKWebView-safe root fallbacks.
 - Release and cross-platform installer workflows now run a scrollbar invariant check (`npm run verify:scrollbars`) before packaging.
@@ -189,6 +205,7 @@ Primary implementation:
 - Optional debug mode with rolling event console.
 - Debug events for drag/drop and material operations.
 - Copy and clear debug logs in-app.
+- Manual Method Bank pre-release checklist command available via `npm run qa:method-bank`.
 
 Primary implementation:
 
@@ -225,7 +242,11 @@ Primary implementation:
 - Table insertion body row count now reads from persisted settings (default 4, clamped 1-12).
 - `insertMaterialLinkAtSelection(payload, clientX?, clientY?)` inserts dropped material links.
 - `insertDroppedMaterial(dataTransfer, clientX?, clientY?)` resolves payload and executes insertion.
-- `handleMaterialDrop(...)` and native/window drop handlers coordinate drag/drop flow.
+- `insertMethodTextAtSelection(payload, clientX?, clientY?)` inserts plain-text Method Bank titles with table-column targeting.
+- `insertDroppedMethod(dataTransfer, clientX?, clientY?)` resolves method drag payloads and executes insertion.
+- `handleEditorDrop(...)` plus native/window drop handlers coordinate both material and Method Bank drag/drop flows.
+- Lesson-editor drag/drop insertion handlers remain in codepath but are currently gated off; active insertion UX is double-click plus slash.
+- `refreshSlashMenu()` and slash keyboard handlers drive contextual Method Bank `/` suggestions inside lesson-table cells.
 - Row-targeted material insertion computes the current table row and uses the final media/material cell when available.
 - Autosave runs in the background while manual save remains available from the toolbar.
 - Toolbar now includes underline toggle, text-color picker/reset, underline-color picker/reset, and highlight-color picker/reset.
@@ -247,6 +268,7 @@ Primary implementation:
 ### Sidebar (`src/components/Sidebar.tsx`)
 
 - `handleDragStart(...)` and `handleDragEnd(...)` emit drag payload and fallback drop info.
+- Sidebar material entries currently disable drag gestures for lesson-editor insertion; double-click queue is the active path.
 - `handleDuplicateFromMenu()` duplicates lesson plans from context menu.
 - `handlePreviewFromMenu()`, `handleOpenFromMenu()`, `handleRevealFromMenu()`.
 - AI settings handlers for model lifecycle:

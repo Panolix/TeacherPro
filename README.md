@@ -99,7 +99,10 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
 - **Contextual AI Chat Dock:** Toggle AI chat directly from the editor action buttons; when active, it opens as a slide-out side dock so it remains visible while you work.
 - **Private Lesson Notes Drawer:** Open a dedicated notes panel per lesson from the editor header action row (right next to AI Chat). It uses the same left-side dock area as AI Chat, with only one panel open at a time. Notes autosave with the lesson, are searchable locally, and stay out of print/PDF export by default.
-- **Material Linking:** Drag and drop external files (PDFs, Word Docs, Images) directly into the editor to create clickable links. Double-clicking the link opens the file in your computer's default native application.
+- **Method Bank Pedagogy Drawer:** Open a third optional dock panel from the same lesson action row to browse teaching phases, social forms, and methods. It shares the same left-side dock footprint as AI Chat and Notes, stays mutually exclusive with them, supports double-click insertion into mapped lesson-table columns when the cursor is inside a lesson-table body row, and supports contextual `/` suggestions inside table cells.
+- **Stable Editor Button Order:** The dock toggles in the lesson action row stay ordered as AI Chat (leftmost), then Notes, then Method Bank.
+- **Readable Workspace Density:** The main sidebar and all lesson side docks are slightly wider, while surrounding workspace padding is reduced to maximize useful space without shrinking core editor or mindmap surfaces.
+- **Material Linking:** Double-click a material entry in the sidebar to insert a clickable media link into the lesson table's media column for the active row (when cursor focus is inside a lesson-table body row). Double-clicking an inserted link opens the file in your computer's default native application.
 
 ### 🧠 Mindmap Editor
 - **Infinite Canvas:** Build visual curriculums using a node-based interface (powered by React Flow).

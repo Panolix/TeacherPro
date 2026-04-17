@@ -642,13 +642,27 @@ async function movePathToTrash(
   sourcePath: string,
   trashSection: "Lesson Plans" | "Mindmaps" | "Materials",
   originalName: string,
-): Promise<void> {
+): Promise<boolean> {
+  if (!(await exists(sourcePath))) {
+    return false;
+  }
+
   const trashRoot = await join(vaultPath, "Trash", trashSection);
   await mkdir(trashRoot, { recursive: true });
 
   const trashName = createTrashName(originalName);
   const trashTargetPath = await ensureUniqueTargetPath(trashRoot, trashName);
-  await rename(sourcePath, trashTargetPath);
+
+  try {
+    await rename(sourcePath, trashTargetPath);
+    return true;
+  } catch (error) {
+    // During rapid bulk actions the file may already have been moved by a prior pass.
+    if (!(await exists(sourcePath))) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function createPlannedForIso(plannedDate: Date): string {
@@ -1216,7 +1230,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const filePath = await join(lessonPlansFolder, fileName);
-      await movePathToTrash(vaultPath, filePath, "Lesson Plans", fileName);
+      const didMove = await movePathToTrash(vaultPath, filePath, "Lesson Plans", fileName);
+
+      if (!didMove) {
+        console.warn(`Skipped deleting lesson \"${fileName}\" because it no longer exists.`);
+      }
 
       if (currentView === "editor" && activeFilePath?.endsWith(fileName)) {
         set({ activeFilePath: null, activeFileContent: null });

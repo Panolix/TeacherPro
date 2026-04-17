@@ -66,12 +66,55 @@ import {
   Brain,
   Trash2,
   FileText,
+  BookOpen,
 } from "lucide-react";
 
 interface MaterialDropPayload {
   relativePath: string;
   itemType: "file" | "folder";
 }
+
+type MethodBankType = "phase" | "socialForm" | "method";
+
+interface MethodBankItem {
+  id: string;
+  type: MethodBankType;
+  title: string;
+  summary: string;
+  description: string;
+  duration: string;
+  tags: string[];
+}
+
+interface MethodDropPayload {
+  id: string;
+  type: MethodBankType;
+  title: string;
+  summary: string;
+  duration: string;
+}
+
+interface SlashMenuState {
+  query: string;
+  from: number;
+  to: number;
+  x: number;
+  y: number;
+  requiredType: MethodBankType;
+  selectedIndex: number;
+}
+
+const METHOD_TYPE_LABELS: Record<MethodBankType, string> = {
+  phase: "Phase",
+  socialForm: "Social Form",
+  method: "Method",
+};
+
+const METHOD_TYPE_ACCENT: Record<MethodBankType, string> = {
+  phase: "text-cyan-300",
+  socialForm: "text-emerald-300",
+  method: "text-amber-300",
+};
 
 interface TableContextMenuState {
   x: number;
@@ -238,16 +281,110 @@ function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload
   return { relativePath, itemType };
 }
 
+function normalizeMethodBankItem(raw: unknown): MethodBankItem | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+
+  const candidate = raw as Partial<MethodBankItem>;
+  const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
+  const summary = typeof candidate.summary === "string" ? candidate.summary.trim() : "";
+  const description = typeof candidate.description === "string" ? candidate.description.trim() : "";
+  const duration = typeof candidate.duration === "string" ? candidate.duration.trim() : "";
+  const type =
+    candidate.type === "phase" || candidate.type === "socialForm" || candidate.type === "method"
+      ? candidate.type
+      : null;
+
+  if (!id || !title || !summary || !description || !duration || !type) {
+    return null;
+  }
+
+  const tags = Array.isArray(candidate.tags)
+    ? candidate.tags
+        .filter((tag): tag is string => typeof tag === "string")
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    : [];
+
+  return {
+    id,
+    type,
+    title,
+    summary,
+    description,
+    duration,
+    tags,
+  };
+}
+
+function parseMethodBankSeed(raw: unknown): MethodBankItem[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const parsed: MethodBankItem[] = [];
+  for (const entry of raw) {
+    const normalized = normalizeMethodBankItem(entry);
+    if (normalized) {
+      parsed.push(normalized);
+    }
+  }
+
+  return parsed;
+}
+
+function getMethodDropPayload(dataTransfer: DataTransfer): MethodDropPayload | null {
+  const structuredPayload = dataTransfer.getData("application/teacherpro-method");
+  if (!structuredPayload) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(structuredPayload) as Partial<MethodDropPayload>;
+    if (
+      typeof parsed.id !== "string" ||
+      typeof parsed.type !== "string" ||
+      typeof parsed.title !== "string" ||
+      typeof parsed.summary !== "string" ||
+      typeof parsed.duration !== "string"
+    ) {
+      return null;
+    }
+
+    if (parsed.type !== "phase" && parsed.type !== "socialForm" && parsed.type !== "method") {
+      return null;
+    }
+
+    return {
+      id: parsed.id,
+      type: parsed.type,
+      title: parsed.title,
+      summary: parsed.summary,
+      duration: parsed.duration,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function hasMethodDropData(dataTransfer: DataTransfer): boolean {
+  return hasTransferType(dataTransfer, "application/teacherpro-method");
+}
+
 function hasTransferType(dataTransfer: DataTransfer, type: string): boolean {
   return Array.from(dataTransfer.types || []).includes(type);
 }
 
 function hasMaterialDropData(dataTransfer: DataTransfer): boolean {
+  if (hasMethodDropData(dataTransfer)) {
+    return false;
+  }
+
   return (
     hasTransferType(dataTransfer, "application/teacherpro-material") ||
-    hasTransferType(dataTransfer, "application/teacherpro-file") ||
-    hasTransferType(dataTransfer, "text/plain") ||
-    hasTransferType(dataTransfer, "text")
+    hasTransferType(dataTransfer, "application/teacherpro-file")
   );
 }
 
@@ -387,8 +524,10 @@ const MenuBar = ({
   onExport,
   onToggleChat,
   onToggleNotes,
+  onToggleMethodBank,
   chatOpen,
   notesOpen,
+  methodBankOpen,
   isPdfBusy,
   showActionButtonLabels,
   aiEnabled,
@@ -400,8 +539,10 @@ const MenuBar = ({
   onExport: () => void;
   onToggleChat: () => void;
   onToggleNotes: () => void;
+  onToggleMethodBank: () => void;
   chatOpen: boolean;
   notesOpen: boolean;
+  methodBankOpen: boolean;
   isPdfBusy: boolean;
   showActionButtonLabels: boolean;
   aiEnabled: boolean;
@@ -673,6 +814,19 @@ const MenuBar = ({
           {showActionButtonLabels && <span>Notes</span>}
         </button>
         <button
+          onClick={onToggleMethodBank}
+          title={methodBankOpen ? "Hide Method Bank" : "Open Method Bank"}
+          aria-pressed={methodBankOpen}
+          className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
+            methodBankOpen
+              ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
+              : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          {showActionButtonLabels && <span>Method Bank</span>}
+        </button>
+        <button
           onClick={onPreview}
           title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
           disabled={isPdfBusy}
@@ -757,8 +911,19 @@ export function Editor() {
   const [editorRevision, setEditorRevision] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [methodBankOpen, setMethodBankOpen] = useState(false);
+  const [methodBankItems, setMethodBankItems] = useState<MethodBankItem[]>([]);
+  const [methodBankLoading, setMethodBankLoading] = useState(true);
+  const [methodBankError, setMethodBankError] = useState<string | null>(null);
+  const [methodBankSearch, setMethodBankSearch] = useState("");
+  const [methodBankTypeFilter, setMethodBankTypeFilter] = useState<MethodBankType | null>(null);
+  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
+  const [draggedMethod, setDraggedMethod] = useState<MethodDropPayload | null>(null);
+  const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
+  const [, setIsEditorDropActive] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
+  const lessonEditorDragDropEnabled = false;
 
   // Auto-close chat when AI is turned off in settings.
   useEffect(() => {
@@ -773,6 +938,7 @@ export function Editor() {
       if (next) {
         setSidebarOpen(true);
         setNotesOpen(false);
+        setMethodBankOpen(false);
       }
       return next;
     });
@@ -784,6 +950,19 @@ export function Editor() {
       if (next) {
         setSidebarOpen(true);
         setChatOpen(false);
+        setMethodBankOpen(false);
+      }
+      return next;
+    });
+  }, [setSidebarOpen]);
+
+  const toggleMethodBankPanel = useCallback(() => {
+    setMethodBankOpen((previous) => {
+      const next = !previous;
+      if (next) {
+        setSidebarOpen(true);
+        setChatOpen(false);
+        setNotesOpen(false);
       }
       return next;
     });
@@ -823,6 +1002,43 @@ export function Editor() {
   }, [activeFilePath, aiPersistChats]);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    const loadMethodBank = async () => {
+      setMethodBankLoading(true);
+      setMethodBankError(null);
+
+      try {
+        const response = await fetch("/method-bank.json", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const parsed = parseMethodBankSeed(await response.json());
+        if (!isCancelled) {
+          setMethodBankItems(parsed);
+          setSelectedMethodId((previous) => previous ?? parsed[0]?.id ?? null);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setMethodBankItems([]);
+          setMethodBankError(`Could not load Method Bank: ${String(error)}`);
+        }
+      } finally {
+        if (!isCancelled) {
+          setMethodBankLoading(false);
+        }
+      }
+    };
+
+    void loadMethodBank();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
     setTeacher(activeFileContent?.metadata?.teacher || "");
     setLessonNotes(activeFileContent?.notes || "");
@@ -843,12 +1059,14 @@ export function Editor() {
       setTableContextMenu(null);
       setRewriteSubmenuOpen(false);
       setTranslateSubmenuOpen(false);
+      setSlashMenu(null);
     };
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setTableContextMenu(null);
         setRewriteSubmenuOpen(false);
         setTranslateSubmenuOpen(false);
+        setSlashMenu(null);
       }
     };
 
@@ -1547,14 +1765,533 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     });
   }, [chatOpen, chatMessages, isChatBusy]);
 
-  const handleMaterialDragOver = useCallback(
+  const normalizedMethodSearch = methodBankSearch.trim().toLowerCase();
+  const filteredMethodBankItems = methodBankItems.filter((entry) => {
+    if (methodBankTypeFilter && entry.type !== methodBankTypeFilter) {
+      return false;
+    }
+
+    if (!normalizedMethodSearch) {
+      return true;
+    }
+
+    const searchable = `${entry.title}\n${entry.summary}\n${entry.description}\n${entry.duration}\n${entry.tags.join(" ")}`
+      .toLowerCase();
+
+    return searchable.includes(normalizedMethodSearch);
+  });
+
+  useEffect(() => {
+    if (filteredMethodBankItems.length === 0) {
+      setSelectedMethodId(null);
+      return;
+    }
+
+    const hasSelected = filteredMethodBankItems.some((entry) => entry.id === selectedMethodId);
+    if (!hasSelected) {
+      setSelectedMethodId(filteredMethodBankItems[0].id);
+    }
+  }, [filteredMethodBankItems, selectedMethodId]);
+
+  const selectedMethod = selectedMethodId
+    ? filteredMethodBankItems.find((entry) => entry.id === selectedMethodId) || null
+    : null;
+
+  const getSlashSuggestions = useCallback(
+    (requiredType: MethodBankType, query: string): MethodBankItem[] => {
+      const normalizedQuery = query.trim().toLowerCase();
+      return methodBankItems
+        .filter((entry) => {
+          if (entry.type !== requiredType) {
+            return false;
+          }
+          if (!normalizedQuery) {
+            return true;
+          }
+          return (
+            entry.title.toLowerCase().includes(normalizedQuery) ||
+            entry.summary.toLowerCase().includes(normalizedQuery) ||
+            entry.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
+          );
+        })
+        .slice(0, 7);
+    },
+    [methodBankItems],
+  );
+
+  const isSelectionInsideLessonTableBodyRow = useCallback((): boolean => {
+    if (!editor) {
+      return false;
+    }
+
+    const { $from } = editor.state.selection;
+    let cellDepth = -1;
+    for (let depth = $from.depth; depth >= 0; depth -= 1) {
+      const nodeName = $from.node(depth).type.name;
+      if (nodeName === "tableCell" || nodeName === "tableHeader") {
+        cellDepth = depth;
+        break;
+      }
+    }
+
+    if (cellDepth < 2) {
+      return false;
+    }
+
+    if ($from.node(cellDepth).type.name !== "tableCell") {
+      return false;
+    }
+
+    const rowDepth = cellDepth - 1;
+    const tableDepth = rowDepth - 1;
+    if ($from.node(rowDepth).type.name !== "tableRow" || $from.node(tableDepth).type.name !== "table") {
+      return false;
+    }
+
+    const rowIndex = $from.index(tableDepth);
+    return rowIndex > 0;
+  }, [editor]);
+
+  const getSelectionMethodType = useCallback((): MethodBankType | null => {
+    if (!editor) {
+      return null;
+    }
+
+    const { $from } = editor.state.selection;
+    let cellDepth = -1;
+    for (let depth = $from.depth; depth >= 0; depth -= 1) {
+      const nodeName = $from.node(depth).type.name;
+      if (nodeName === "tableCell" || nodeName === "tableHeader") {
+        cellDepth = depth;
+        break;
+      }
+    }
+
+    if (cellDepth < 2) {
+      return null;
+    }
+
+    // Exclude table header cells and only allow slash menu in body cells.
+    if ($from.node(cellDepth).type.name !== "tableCell") {
+      return null;
+    }
+
+    const rowDepth = cellDepth - 1;
+    const tableDepth = rowDepth - 1;
+    if ($from.node(rowDepth).type.name !== "tableRow" || $from.node(tableDepth).type.name !== "table") {
+      return null;
+    }
+
+    // Exclude the first (header) row.
+    const rowIndex = $from.index(tableDepth);
+    if (rowIndex === 0) {
+      return null;
+    }
+
+    const cellIndex = $from.index(rowDepth);
+    if (cellIndex === 1) {
+      return "phase";
+    }
+    if (cellIndex === 2) {
+      return "method";
+    }
+    if (cellIndex === 3) {
+      return "socialForm";
+    }
+
+    return null;
+  }, [editor]);
+
+  const insertMethodFromSlash = useCallback(
+    (entry: MethodBankItem) => {
+      if (!editor || !slashMenu) {
+        return;
+      }
+
+      const didInsert = editor
+        .chain()
+        .focus()
+        .insertContentAt({ from: slashMenu.from, to: slashMenu.to }, `${entry.title} `)
+        .run();
+
+      if (didInsert) {
+        logDebug("editor", "method-slash-insert", `${entry.type}:${entry.title}`);
+      }
+
+      setSlashMenu(null);
+    },
+    [editor, logDebug, slashMenu],
+  );
+
+  const refreshSlashMenu = useCallback(() => {
+    if (!editor || !methodBankItems.length) {
+      setSlashMenu(null);
+      return;
+    }
+
+    const { selection } = editor.state;
+    if (!selection.empty) {
+      setSlashMenu(null);
+      return;
+    }
+
+    const requiredType = getSelectionMethodType();
+    if (!requiredType) {
+      setSlashMenu(null);
+      return;
+    }
+
+    const { $from, from } = selection;
+    const parent = $from.parent;
+    if (!parent.isTextblock) {
+      setSlashMenu(null);
+      return;
+    }
+
+    const textBefore = parent.textBetween(0, $from.parentOffset, undefined, " ");
+    const match = textBefore.match(/(?:^|\s)\/([\w-]*)$/);
+    if (!match) {
+      setSlashMenu(null);
+      return;
+    }
+
+    const query = match[1] || "";
+    const slashFrom = from - query.length - 1;
+    const slashTo = from;
+    const coords = editor.view.coordsAtPos(from);
+
+    setSlashMenu((previous) => {
+      const sameAnchor =
+        previous &&
+        previous.from === slashFrom &&
+        previous.to === slashTo &&
+        previous.requiredType === requiredType;
+
+      return {
+        query,
+        from: slashFrom,
+        to: slashTo,
+        x: coords.left,
+        y: coords.bottom + 6,
+        requiredType,
+        selectedIndex: sameAnchor ? previous.selectedIndex : 0,
+      };
+    });
+  }, [editor, getSelectionMethodType, methodBankItems.length]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    refreshSlashMenu();
+
+    const handleSlashStateChange = () => {
+      refreshSlashMenu();
+    };
+
+    editor.on("update", handleSlashStateChange);
+    editor.on("selectionUpdate", handleSlashStateChange);
+
+    return () => {
+      editor.off("update", handleSlashStateChange);
+      editor.off("selectionUpdate", handleSlashStateChange);
+    };
+  }, [editor, refreshSlashMenu]);
+
+  useEffect(() => {
+    if (!editor || !slashMenu) {
+      return;
+    }
+
+    const handleSlashKeydown = (event: KeyboardEvent) => {
+      const suggestions = getSlashSuggestions(slashMenu.requiredType, slashMenu.query);
+      if (suggestions.length === 0) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setSlashMenu(null);
+        }
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSlashMenu((previous) => {
+          if (!previous) return previous;
+          return {
+            ...previous,
+            selectedIndex: (previous.selectedIndex + 1) % suggestions.length,
+          };
+        });
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSlashMenu((previous) => {
+          if (!previous) return previous;
+          return {
+            ...previous,
+            selectedIndex: previous.selectedIndex <= 0 ? suggestions.length - 1 : previous.selectedIndex - 1,
+          };
+        });
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === "Tab") {
+        event.preventDefault();
+        const selected = suggestions[Math.min(slashMenu.selectedIndex, suggestions.length - 1)] || suggestions[0];
+        if (selected) {
+          insertMethodFromSlash(selected);
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashMenu(null);
+      }
+    };
+
+    editor.view.dom.addEventListener("keydown", handleSlashKeydown, true);
+
+    return () => {
+      editor.view.dom.removeEventListener("keydown", handleSlashKeydown, true);
+    };
+  }, [editor, getSlashSuggestions, insertMethodFromSlash, slashMenu]);
+
+  const handleEditorDragOver = useCallback(
     (event: React.DragEvent) => {
-      if (draggedMaterial || hasMaterialDropData(event.dataTransfer)) {
+      if (!lessonEditorDragDropEnabled) {
+        return;
+      }
+
+      if (
+        draggedMaterial ||
+        draggedMethod ||
+        hasMaterialDropData(event.dataTransfer) ||
+        hasMethodDropData(event.dataTransfer)
+      ) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
+        setIsEditorDropActive(true);
+      } else {
+        setIsEditorDropActive(false);
       }
     },
-    [draggedMaterial],
+    [draggedMaterial, draggedMethod, lessonEditorDragDropEnabled],
+  );
+
+  const handleEditorDragLeave = useCallback((event: React.DragEvent) => {
+    if (!lessonEditorDragDropEnabled) {
+      return;
+    }
+
+    const surface = editorSurfaceRef.current;
+    if (!surface) {
+      setIsEditorDropActive(false);
+      return;
+    }
+
+    const rect = surface.getBoundingClientRect();
+    const outsideSurface =
+      event.clientX <= rect.left ||
+      event.clientX >= rect.right ||
+      event.clientY <= rect.top ||
+      event.clientY >= rect.bottom;
+
+    if (outsideSurface) {
+      setIsEditorDropActive(false);
+    }
+  }, [lessonEditorDragDropEnabled]);
+
+  const insertMethodTextAtSelection = useCallback(
+    (
+      payload: MethodDropPayload,
+      clientX?: number,
+      clientY?: number,
+    ): boolean => {
+      if (!editor) {
+        return false;
+      }
+
+      const getCurrentRowTargetInsertPos = (): number | null => {
+        const { selection, doc } = editor.state;
+        const { $from } = selection;
+
+        let rowDepth = -1;
+        for (let depth = $from.depth; depth >= 0; depth -= 1) {
+          if ($from.node(depth).type.name === "tableRow") {
+            rowDepth = depth;
+            break;
+          }
+        }
+
+        if (rowDepth < 1) {
+          return null;
+        }
+
+        const tableDepth = rowDepth - 1;
+        if ($from.node(tableDepth).type.name !== "table") {
+          return null;
+        }
+
+        const targetColumnByType: Record<MethodBankType, number> = {
+          phase: 1,
+          method: 2,
+          socialForm: 3,
+        };
+
+        const targetColumnIndex = targetColumnByType[payload.type];
+        const tableNode = $from.node(tableDepth);
+        const rowIndex = $from.index(tableDepth);
+        const rowNode = tableNode.child(rowIndex);
+        if (!rowNode || rowNode.childCount <= targetColumnIndex) {
+          return null;
+        }
+
+        const tableStart = $from.start(tableDepth);
+        let rowStart = tableStart;
+        for (let currentRowIndex = 0; currentRowIndex < rowIndex; currentRowIndex += 1) {
+          rowStart += tableNode.child(currentRowIndex).nodeSize;
+        }
+
+        let cellStart = rowStart + 1;
+        for (let cellIndex = 0; cellIndex < targetColumnIndex; cellIndex += 1) {
+          cellStart += rowNode.child(cellIndex).nodeSize;
+        }
+
+        const cellNode = rowNode.child(targetColumnIndex);
+        const insertPos = cellStart + cellNode.content.size;
+        if (insertPos < 0 || insertPos > doc.content.size + 1) {
+          return null;
+        }
+
+        return insertPos;
+      };
+
+      const inferInsideTableCell = (pos: number): boolean => {
+        const resolvedPos = editor.state.doc.resolve(pos);
+        for (let depth = resolvedPos.depth; depth > 0; depth -= 1) {
+          const nodeName = resolvedPos.node(depth).type.name;
+          if (nodeName === "tableCell" || nodeName === "tableHeader") {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      let targetPos = editor.state.selection.from;
+      let isInsideTableCell = false;
+
+      const preferredTargetPos = getCurrentRowTargetInsertPos();
+      if (preferredTargetPos !== null) {
+        targetPos = preferredTargetPos;
+        isInsideTableCell = true;
+      }
+
+      if (preferredTargetPos === null && typeof clientX === "number" && typeof clientY === "number") {
+        const pointerTarget = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+        const tableCellElement = pointerTarget?.closest("td,th");
+
+        if (tableCellElement && editor.view.dom.contains(tableCellElement)) {
+          const firstParagraph = tableCellElement.querySelector("p");
+          try {
+            if (firstParagraph) {
+              targetPos = editor.view.posAtDOM(firstParagraph, firstParagraph.childNodes.length);
+            } else {
+              targetPos = editor.view.posAtDOM(tableCellElement, 0);
+            }
+            isInsideTableCell = true;
+          } catch {
+            isInsideTableCell = false;
+          }
+        }
+
+        if (!isInsideTableCell) {
+          const coordsPos = editor.view.posAtCoords({ left: clientX, top: clientY });
+          if (coordsPos?.pos !== undefined) {
+            targetPos = coordsPos.pos;
+          }
+          isInsideTableCell = inferInsideTableCell(targetPos);
+        }
+      } else if (preferredTargetPos === null) {
+        isInsideTableCell = inferInsideTableCell(targetPos);
+      }
+
+      editor.chain().focus().setTextSelection(targetPos).run();
+
+      const textToInsert = `${payload.title} `;
+
+      logDebug(
+        "editor",
+        "method-drop-target",
+        `${payload.type} pos=${targetPos} tableCell=${String(isInsideTableCell)} x=${String(clientX)} y=${String(clientY)}`,
+      );
+
+      const didInsert = editor
+        .chain()
+        .focus()
+        .insertContentAt(targetPos, textToInsert)
+        .run();
+
+      if (!didInsert) {
+        return editor.chain().focus().insertContent(textToInsert).run();
+      }
+
+      return didInsert;
+    },
+    [editor, logDebug],
+  );
+
+  const insertDroppedMethod = useCallback(
+    (dataTransfer: DataTransfer, clientX?: number, clientY?: number): boolean => {
+      if (!editor) {
+        logDebug("editor", "method-drop-insert-skip", "editor missing");
+        return false;
+      }
+
+      const payload = getMethodDropPayload(dataTransfer) || draggedMethod;
+      if (!payload) {
+        logDebug("editor", "method-drop-payload-missing", `types=${Array.from(dataTransfer.types || []).join(",")}`);
+        return false;
+      }
+
+      const didInsert = insertMethodTextAtSelection(payload, clientX, clientY);
+      if (!didInsert) {
+        logDebug("editor", "method-drop-insert-failed", `${payload.type}:${payload.title}`);
+        return false;
+      }
+
+      logDebug("editor", "method-drop-insert-success", `${payload.type}:${payload.title}`);
+      setDraggedMethod(null);
+      return true;
+    },
+    [draggedMethod, editor, insertMethodTextAtSelection, logDebug],
+  );
+
+  const handleInsertMethod = useCallback(
+    (entry: MethodBankItem) => {
+      if (!isSelectionInsideLessonTableBodyRow()) {
+        logDebug("editor", "method-double-click-skipped", "cursor-not-inside-lesson-table-body-row");
+        return;
+      }
+
+      const payload: MethodDropPayload = {
+        id: entry.id,
+        type: entry.type,
+        title: entry.title,
+        summary: entry.summary,
+        duration: entry.duration,
+      };
+
+      const didInsert = insertMethodTextAtSelection(payload);
+      if (didInsert) {
+        logDebug("editor", "method-click-insert", `${entry.type}:${entry.title}`);
+        editor?.view.focus();
+      }
+    },
+    [editor, insertMethodTextAtSelection, isSelectionInsideLessonTableBodyRow, logDebug],
   );
 
   const insertMaterialLinkAtSelection = useCallback(
@@ -1610,7 +2347,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         }
 
         const cellNode = rowNode.child(materialColumnIndex);
-        const insertPos = cellStart + 1 + cellNode.content.size;
+        const insertPos = cellStart + cellNode.content.size;
         if (insertPos < 0 || insertPos > doc.content.size + 1) {
           return null;
         }
@@ -1755,19 +2492,33 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     [draggedMaterial, editor, insertMaterialLinkAtSelection, setDraggedMaterial, logDebug],
   );
 
-  const handleMaterialDrop = useCallback(
+  const handleEditorDrop = useCallback(
     (event: React.DragEvent) => {
+      if (!lessonEditorDragDropEnabled) {
+        return;
+      }
+
       if (!editor) {
         return;
       }
 
+      const isMethodDrop = !!draggedMethod || hasMethodDropData(event.dataTransfer);
       const isMaterialDrop = !!draggedMaterial || hasMaterialDropData(event.dataTransfer);
-      if (!isMaterialDrop) {
+      if (!isMethodDrop && !isMaterialDrop) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
+      setIsEditorDropActive(false);
+
+      if (isMethodDrop) {
+        const didInsertMethod = insertDroppedMethod(event.dataTransfer, event.clientX, event.clientY);
+        if (!didInsertMethod) {
+          logDebug("editor", "method-drop-react-handler-skip", "insertDroppedMethod returned false");
+        }
+        return;
+      }
 
       const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
       if (!didInsert) {
@@ -1775,11 +2526,15 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         return;
       }
     },
-    [draggedMaterial, editor, insertDroppedMaterial, logDebug],
+    [draggedMaterial, draggedMethod, editor, insertDroppedMaterial, insertDroppedMethod, lessonEditorDragDropEnabled, logDebug],
   );
 
   useEffect(() => {
     if (!editor) {
+      return;
+    }
+
+    if (!lessonEditorDragDropEnabled) {
       return;
     }
 
@@ -1788,7 +2543,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     const onNativeDragOver = (event: DragEvent) => {
       if (!event.dataTransfer) return;
 
-      if (draggedMaterial || hasMaterialDropData(event.dataTransfer)) {
+      if (
+        draggedMaterial ||
+        draggedMethod ||
+        hasMaterialDropData(event.dataTransfer) ||
+        hasMethodDropData(event.dataTransfer)
+      ) {
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
       }
@@ -1797,13 +2557,23 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     const onNativeDrop = (event: DragEvent) => {
       if (!event.dataTransfer) return;
 
+      const isMethodDrop = !!draggedMethod || hasMethodDropData(event.dataTransfer);
       const isMaterialDrop = !!draggedMaterial || hasMaterialDropData(event.dataTransfer);
-      if (!isMaterialDrop) {
+      if (!isMethodDrop && !isMaterialDrop) {
         return;
       }
 
       event.preventDefault();
       event.stopPropagation();
+      setIsEditorDropActive(false);
+
+      if (isMethodDrop) {
+        const didInsertMethod = insertDroppedMethod(event.dataTransfer, event.clientX, event.clientY);
+        if (!didInsertMethod) {
+          logDebug("editor", "method-drop-native-handler-skip", "insertDroppedMethod returned false");
+        }
+        return;
+      }
 
       const didInsert = insertDroppedMaterial(event.dataTransfer, event.clientX, event.clientY);
       if (!didInsert) {
@@ -1819,16 +2589,20 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       dom.removeEventListener("dragover", onNativeDragOver, true);
       dom.removeEventListener("drop", onNativeDrop, true);
     };
-  }, [draggedMaterial, editor, insertDroppedMaterial, logDebug]);
+  }, [draggedMaterial, draggedMethod, editor, insertDroppedMaterial, insertDroppedMethod, lessonEditorDragDropEnabled, logDebug]);
 
   useEffect(() => {
     if (!editor) {
       return;
     }
 
+    if (!lessonEditorDragDropEnabled) {
+      return;
+    }
+
     const onWindowDragOver = (event: DragEvent) => {
-      const activeDrag = useAppStore.getState().draggedMaterial;
-      if (!activeDrag) {
+      const activeMaterialDrag = useAppStore.getState().draggedMaterial;
+      if (!activeMaterialDrag && !draggedMethod) {
         return;
       }
 
@@ -1839,8 +2613,9 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     };
 
     const onWindowDrop = (event: DragEvent) => {
-      const activeDrag = useAppStore.getState().draggedMaterial;
-      if (!activeDrag) {
+      const activeMaterialDrag = useAppStore.getState().draggedMaterial;
+      const activeMethodDrag = draggedMethod;
+      if (!activeMaterialDrag && !activeMethodDrag) {
         return;
       }
 
@@ -1861,12 +2636,24 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
       event.preventDefault();
       event.stopPropagation();
+      setIsEditorDropActive(false);
+
+      if (activeMethodDrag) {
+        const didInsertMethod = insertMethodTextAtSelection(activeMethodDrag, event.clientX, event.clientY);
+        if (didInsertMethod) {
+          logDebug("editor", "method-drop-window-success", `${activeMethodDrag.type}:${activeMethodDrag.title}`);
+          setDraggedMethod(null);
+        } else {
+          logDebug("editor", "method-drop-window-failed", `${activeMethodDrag.type}:${activeMethodDrag.title}`);
+        }
+        return;
+      }
 
       const payload =
         (event.dataTransfer && getMaterialDropPayload(event.dataTransfer)) ||
         {
-          relativePath: activeDrag.relativePath,
-          itemType: activeDrag.isDirectory ? "folder" : "file",
+          relativePath: activeMaterialDrag!.relativePath,
+          itemType: activeMaterialDrag!.isDirectory ? "folder" : "file",
         };
 
       const didInsert = insertMaterialLinkAtSelection(payload, event.clientX, event.clientY);
@@ -1885,7 +2672,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       window.removeEventListener("dragover", onWindowDragOver, true);
       window.removeEventListener("drop", onWindowDrop, true);
     };
-  }, [editor, insertMaterialLinkAtSelection, setDraggedMaterial, logDebug]);
+  }, [draggedMethod, editor, insertMaterialLinkAtSelection, insertMethodTextAtSelection, lessonEditorDragDropEnabled, setDraggedMaterial, logDebug]);
 
   useEffect(() => {
     if (!editor || !pendingMaterialDrop) {
@@ -1896,6 +2683,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     const shouldInsertAtCursor = clientX < 0 || clientY < 0;
 
     if (shouldInsertAtCursor) {
+      if (!isSelectionInsideLessonTableBodyRow()) {
+        logDebug("editor", "double-click-insert-skipped", `${relativePath} | cursor-not-inside-lesson-table-body-row`);
+        setPendingMaterialDrop(null);
+        return;
+      }
+
       const didInsert = insertMaterialLinkAtSelection({
         relativePath,
         itemType: isDirectory ? "folder" : "file",
@@ -1954,7 +2747,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     }
 
     setPendingMaterialDrop(null);
-  }, [editor, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
+  }, [editor, isSelectionInsideLessonTableBodyRow, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
 
   const createLessonPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
     const sourceElement = document.getElementById("lesson-plan-export-content");
@@ -2207,12 +3000,15 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         toggleHeaderRow: false,
         toggleHeaderColumn: false,
       };
+  const slashSuggestions = slashMenu
+    ? getSlashSuggestions(slashMenu.requiredType, slashMenu.query)
+    : [];
 
   return (
     <div
       className="tp-editor-page w-full max-w-none mx-auto print:max-w-none print:w-full"
     >
-      <div className="sticky top-0 z-[66] bg-[#1e1e1e] pt-8 print:hidden">
+      <div className="sticky top-0 z-[66] bg-[#1e1e1e] pt-6 print:hidden">
         <div className="mb-3 flex gap-2">
           <button
             onClick={insertLessonTable}
@@ -2229,8 +3025,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           onExport={handleExportPDF}
           onToggleChat={toggleChatPanel}
           onToggleNotes={toggleNotesPanel}
+          onToggleMethodBank={toggleMethodBankPanel}
           chatOpen={chatOpen}
           notesOpen={notesOpen}
+          methodBankOpen={methodBankOpen}
           isPdfBusy={isPdfBusy}
           showActionButtonLabels={showActionButtonLabels}
           aiEnabled={aiEnabled}
@@ -2245,7 +3043,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-b-md rounded-t-none shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
           {activeFileContent?.metadata && (
-            <div className="px-8 pt-4 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
+            <div className="px-6 pt-4 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
               <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-y-4 gap-x-6 text-sm text-gray-400 print:text-black">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Teacher:</span>
@@ -2352,7 +3150,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Subject:</span>
                   {subjects.length > 0 ? (
-                    <div className="flex items-center gap-2 flex-1 min-w-[180px] lesson-export-subject-picker">
+                    <div className="flex w-[260px] max-w-full items-center gap-2 lesson-export-subject-picker">
                       {selectedSubjectColor && (
                         <span
                           className="w-3 h-3 rounded-full shrink-0 border border-white/20"
@@ -2362,7 +3160,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       <select
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        className="flex-1 bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                        className="w-full bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
                       >
                         <option value="">— None —</option>
                         {subjects.map((s) => (
@@ -2376,7 +3174,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="e.g. Mathematics"
-                      className="flex-1 min-w-[180px] bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                      className="w-[260px] max-w-full bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
                     />
                   )}
                   <span className="hidden lesson-export-value lesson-export-subject-text">
@@ -2390,9 +3188,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
           <div
             ref={editorSurfaceRef}
-            className="px-8 pb-8 flex-1 print:p-0 lesson-export-editor overflow-x-auto"
-            onDragOver={handleMaterialDragOver}
-            onDrop={handleMaterialDrop}
+            className="px-6 pb-6 flex-1 print:p-0 lesson-export-editor overflow-x-auto relative transition-colors"
+            onDragOver={handleEditorDragOver}
+            onDragLeave={handleEditorDragLeave}
+            onDrop={handleEditorDrop}
             onContextMenu={handleEditorContextMenu}
           >
             <EditorContent editor={editor} className="h-full" />
@@ -2612,14 +3411,14 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       </div>
 
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-64 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           notesOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
           <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
             <FileText className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
-            <span className="flex-1 truncate text-xs font-medium text-[var(--tp-text-primary)]">Lesson Notes</span>
+            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">Lesson Notes</span>
             <button
               onClick={() => setLessonNotes("")}
               title="Clear notes"
@@ -2640,17 +3439,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             </button>
           </div>
 
-          <div className="px-4 py-3 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)]">
-            <p className="text-[11px] leading-relaxed text-[var(--tp-text-muted)]">
-              Private notes for this lesson. They stay out of print and PDF export by default.
-            </p>
-          </div>
-
           <div className="flex-1 p-3 bg-[var(--tp-app-bg)]">
             <textarea
               value={lessonNotes}
               onChange={(event) => setLessonNotes(event.target.value)}
-              placeholder="Write your private lesson notes here..."
               className="h-full w-full resize-none overflow-y-auto rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 py-3 text-sm leading-relaxed text-[var(--tp-text-primary)] outline-none focus:border-[var(--tp-accent)] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]"
             />
           </div>
@@ -2658,7 +3450,134 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       </div>
 
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-64 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+          methodBankOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-full flex-col border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
+          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
+            <BookOpen className="h-3.5 w-3.5 shrink-0 text-[var(--tp-accent)]" />
+            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">Method Bank</span>
+            <button
+              onClick={() => setMethodBankOpen(false)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+              title="Close Method Bank"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="shrink-0 space-y-2 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-3">
+            <input
+              type="text"
+              value={methodBankSearch}
+              onChange={(event) => setMethodBankSearch(event.target.value)}
+              placeholder="Search methods..."
+              className="h-9 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-sm text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { key: "phase", label: "Phase" },
+                { key: "socialForm", label: "Social" },
+                { key: "method", label: "Method" },
+              ] as const).map(({ key, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setMethodBankTypeFilter((previous) => (previous === key ? null : key))}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    methodBankTypeFilter === key
+                      ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/20 text-[var(--tp-accent)]"
+                      : "border-[var(--tp-border-strong)] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--tp-app-bg)] py-3 pl-3 pr-2 [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
+            {methodBankLoading && (
+              <p className="text-xs text-[var(--tp-text-muted)]">Loading Method Bank...</p>
+            )}
+
+            {!methodBankLoading && methodBankError && (
+              <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                {methodBankError}
+              </p>
+            )}
+
+            {!methodBankLoading && !methodBankError && filteredMethodBankItems.length === 0 && (
+              <p className="text-xs text-[var(--tp-text-muted)]">No methods match your current filters.</p>
+            )}
+
+            {!methodBankLoading && !methodBankError && filteredMethodBankItems.length > 0 && (
+              <div className="space-y-1.5">
+                {filteredMethodBankItems.map((entry) => {
+                  const isSelected = selectedMethodId === entry.id;
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      draggable={false}
+                      onClick={() => setSelectedMethodId(entry.id)}
+                      onDoubleClick={() => handleInsertMethod(entry)}
+                      title={entry.title}
+                      className={`w-full rounded-md border px-2 py-2 text-left transition-colors ${
+                        isSelected
+                          ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/15"
+                          : "border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] hover:border-[var(--tp-accent)]/60"
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="truncate text-[13px] font-semibold text-[var(--tp-text-primary)]">
+                            {entry.title}
+                          </p>
+                          <span className={`shrink-0 text-[11px] font-medium ${METHOD_TYPE_ACCENT[entry.type]}`}>
+                            {METHOD_TYPE_LABELS[entry.type]}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 line-clamp-2 text-[12px] text-[var(--tp-text-muted)]">
+                          {entry.summary}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[var(--tp-text-muted)]">{entry.duration}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] p-3">
+            {selectedMethod ? (
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-[var(--tp-text-primary)]">{selectedMethod.title}</p>
+                  <span className={`text-[12px] font-medium ${METHOD_TYPE_ACCENT[selectedMethod.type]}`}>
+                    {METHOD_TYPE_LABELS[selectedMethod.type]}
+                  </span>
+                </div>
+                <p className="text-[12px] leading-relaxed text-[var(--tp-text-muted)]">{selectedMethod.description}</p>
+                <div className="flex flex-wrap gap-1">
+                  {selectedMethod.tags.map((tag) => (
+                    <span
+                      key={`${selectedMethod.id}-${tag}`}
+                      className="rounded-full border border-[var(--tp-border-strong)] px-2 py-0.5 text-[11px] text-[var(--tp-text-muted)]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           chatOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -2666,7 +3585,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             {/* Header */}
             <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
               <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
-              <span className="flex-1 truncate text-[11px] text-[var(--tp-text-muted)] bg-[var(--tp-panel-muted)] px-2 py-0.5 rounded-full">{aiDefaultModelId}</span>
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">
+                AI Chat
+              </span>
+              <span className="inline-flex max-w-[112px] shrink items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--tp-text-muted)]">
+                {aiDefaultModelId}
+              </span>
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => setChatMessages([])}
@@ -2835,6 +3759,48 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             </div>
           </div>
       </div>
+
+      {slashMenu && (
+        <div
+          className="fixed z-[210] w-[320px] overflow-hidden rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl print:hidden"
+          style={{ left: slashMenu.x, top: slashMenu.y }}
+        >
+          <div className="border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-2 text-[11px] text-[var(--tp-text-muted)]">
+            {METHOD_TYPE_LABELS[slashMenu.requiredType]} suggestions
+          </div>
+          <div className="max-h-[250px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
+            {slashSuggestions.length === 0 ? (
+              <div className="px-3 py-2 text-[11px] text-[var(--tp-text-muted)]">
+                No Method Bank matches for "{slashMenu.query}".
+              </div>
+            ) : (
+              slashSuggestions.map((entry, index) => (
+                <button
+                  key={`slash-${entry.id}`}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertMethodFromSlash(entry);
+                  }}
+                  className={`w-full px-3 py-2 text-left transition-colors ${
+                    index === slashMenu.selectedIndex
+                      ? "bg-[var(--tp-accent)]/20"
+                      : "hover:bg-[var(--tp-panel-muted)]"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[12px] font-medium text-[var(--tp-text-primary)]">{entry.title}</span>
+                    <span className={`shrink-0 text-[10px] ${METHOD_TYPE_ACCENT[entry.type]}`}>
+                      {entry.duration}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 truncate text-[11px] text-[var(--tp-text-muted)]">{entry.summary}</p>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {pdfPreviewUrl && (
         <div

@@ -9,6 +9,7 @@ export function CalendarView() {
   const [draggingLessonName, setDraggingLessonName] = useState<string | null>(null);
   const [manualDraggingLessonName, setManualDraggingLessonName] = useState<string | null>(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
+  const [isDeletingLessons, setIsDeletingLessons] = useState(false);
   const {
     lessonPlans,
     openLesson,
@@ -174,7 +175,7 @@ export function CalendarView() {
   };
 
   const handleDeleteSelected = async () => {
-    if (selectedLessons.size === 0) {
+    if (selectedLessons.size === 0 || isDeletingLessons) {
       return;
     }
 
@@ -184,14 +185,23 @@ export function CalendarView() {
       return;
     }
 
-    for (const name of names) {
-      await deleteLesson(name);
-    }
+    setIsDeletingLessons(true);
+    try {
+      for (const name of names) {
+        await deleteLesson(name);
+      }
 
-    setSelectedLessons(new Set());
+      setSelectedLessons(new Set());
+    } finally {
+      setIsDeletingLessons(false);
+    }
   };
 
   const handleDeleteAllForDate = async (date: Date) => {
+    if (isDeletingLessons) {
+      return;
+    }
+
     const lessons = getLessonsForDate(date).filter((lesson) => !!lesson.name);
     if (lessons.length === 0) {
       return;
@@ -203,24 +213,29 @@ export function CalendarView() {
       return;
     }
 
-    for (const lesson of lessons) {
-      await deleteLesson(lesson.name!);
-    }
-
-    setSelectedLessons((previous) => {
-      const next = new Set(previous);
+    setIsDeletingLessons(true);
+    try {
       for (const lesson of lessons) {
-        if (lesson.name) {
-          next.delete(lesson.name);
-        }
+        await deleteLesson(lesson.name!);
       }
-      return next;
-    });
+
+      setSelectedLessons((previous) => {
+        const next = new Set(previous);
+        for (const lesson of lessons) {
+          if (lesson.name) {
+            next.delete(lesson.name);
+          }
+        }
+        return next;
+      });
+    } finally {
+      setIsDeletingLessons(false);
+    }
   };
 
   return (
-    <div className="tp-calendar-page p-8 h-full flex flex-col bg-[#1e1e1e]">
-      <div className="flex items-center justify-between mb-8">
+    <div className="tp-calendar-page p-6 h-full flex flex-col bg-[#1e1e1e]">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-100">Weekly Planner</h1>
           <p className="text-gray-400 mt-1">Plan your lessons across the week.</p>
@@ -245,10 +260,13 @@ export function CalendarView() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleDeleteSelected}
-            disabled={selectedLessons.size === 0}
+            disabled={selectedLessons.size === 0 || isDeletingLessons}
             className="flex items-center gap-2 rounded-md border border-[#5a2b2b] bg-[#3a1f1f] px-3 py-2 text-sm text-red-200 transition-colors hover:bg-[#4a2525] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Trash2 className="h-4 w-4" /> Move Selected to Trash ({selectedLessons.size})
+            <Trash2 className="h-4 w-4" />
+            {isDeletingLessons
+              ? "Moving to Trash..."
+              : `Move Selected to Trash (${selectedLessons.size})`}
           </button>
         </div>
       </div>
@@ -356,6 +374,7 @@ export function CalendarView() {
                                   });
                                 }
                               }}
+                              disabled={isDeletingLessons}
                               className="text-red-300 hover:text-red-200"
                               title="Move lesson to Trash"
                             >
@@ -378,7 +397,8 @@ export function CalendarView() {
                    </button>
                    <button
                      onClick={() => void handleDeleteAllForDate(day)}
-                     className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-[#3a2020] rounded transition-colors"
+                     disabled={isDeletingLessons}
+                     className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-[#3a2020] rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                      title="Delete all lessons for this day"
                    >
                      <Trash2 className="w-3 h-3" /> All

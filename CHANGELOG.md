@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-04-17
+### Added
+- Method Bank is now fully integrated as a third left-side dock in the lesson editor, with local JSON seed loading from `public/method-bank.json`.
+- Method Bank supports searchable entries, compact cards, contextual detail preview, and table-aware insertion flows aligned with lesson-plan columns.
+- New Method Bank QA preflight script and npm command (`npm run qa:method-bank`) to validate interaction and regression checkpoints.
+
+### Changed
+- Method Bank filtering now uses `Phase`, `Social`, and `Method` chips where no active chip means an unfiltered list.
+- Sidebar/dock readability and density were refined across AI Chat, Notes, and Method Bank (header hierarchy, compact spacing, and width alignment).
+- Lesson metadata Subject control no longer stretches across the row; dropdown/input width now stays compact and consistent with surrounding controls.
+- Weekly calendar bulk-delete controls now guard against overlapping operations and show explicit in-progress state while moving items to Trash.
+
+### Fixed
+- Method and material double-click insertion now targets inline end-of-cell content, preventing unintended blank line insertion in lesson-table cells.
+- Lesson deletion is now idempotent during rapid mass-delete flows; missing/already-moved files are treated as non-fatal instead of surfacing noisy rename errors.
+- AI Chat top bar structure was rebalanced to a cleaner compact row (title + model badge) for better visual consistency with other side docks.
+
 ## [1.5.1] - 2026-04-16
 ### Changed
 - AI model catalog context windows now reflect each model's actual architecture rather than hardware-specific assumptions: thinking models (Gemma 4 E4B, 26B, 31B, Qwen 3, DeepSeek R1) use 32K default context; edge/rewrite-focused models retain 16K.
