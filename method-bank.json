@@ -1,0 +1,1081 @@
+[
+  {
+    "id": "phase-hook",
+    "type": "phase",
+    "title": "Anticipatory Set (Hook)",
+    "summary": "Brief opening activity that grabs attention and connects to prior knowledge.",
+    "description": "The teacher opens with a provocative question, image, short story, or quick problem directly tied to the lesson goal. Students briefly predict, discuss, or write initial ideas. This establishes emotional engagement and relevance before new content is introduced.",
+    "duration": "5-10m",
+    "tags": [
+      "Introduction",
+      "Engagement",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-objective",
+    "type": "phase",
+    "title": "Objective Setting & Framing",
+    "summary": "Teacher makes learning goals and success criteria explicit to students.",
+    "description": "The instructor presents the specific learning target in student-friendly language. The teacher explains the relevance of the objective and the specific criteria for success, ensuring learners know exactly what is expected of them.",
+    "duration": "2-5m",
+    "tags": [
+      "Universal",
+      "Clarity",
+      "Explicit Teaching"
+    ]
+  },
+  {
+    "id": "phase-recall",
+    "type": "phase",
+    "title": "Prior Knowledge Recall",
+    "summary": "Systematic review prompting students to retrieve previously learned information.",
+    "description": "The teacher initiates a brief quiz, rapid questioning, or a short writing prompt covering previous material. Students actively retrieve this information from memory, strengthening neural pathways before new, related material is introduced.",
+    "duration": "5-10m",
+    "tags": [
+      "Cognitive Science",
+      "Formative Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-input",
+    "type": "phase",
+    "title": "Direct Instruction (Input)",
+    "summary": "Teacher presents essential information, concepts, and procedures.",
+    "description": "The educator delivers core content in structured increments using visuals, organizers, and clear explanations. The pacing is deliberately controlled to prevent cognitive overload, ensuring foundational concepts are established.",
+    "duration": "10-20m",
+    "tags": [
+      "Direct Instruction",
+      "Content Delivery",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-model",
+    "type": "phase",
+    "title": "Teacher Modeling (I Do)",
+    "summary": "Teacher demonstrates a new skill while vocalizing internal cognitive steps.",
+    "description": "The teacher solves a problem or analyzes a text in front of students utilizing a 'think-aloud' strategy. They narrate decision-making, strategies, and checks, providing a cognitive template for later independent practice.",
+    "duration": "5-15m",
+    "tags": [
+      "Scaffolding",
+      "Gradual Release",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-guided",
+    "type": "phase",
+    "title": "Guided Practice (We Do)",
+    "summary": "Students practice new learning with substantial teacher support.",
+    "description": "Students apply the modeled process step-by-step through short tasks. The teacher circulates, provides prompts, and addresses errors in real-time, gradually reducing help as competence increases.",
+    "duration": "10-20m",
+    "tags": [
+      "Scaffolding",
+      "Formative Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-collab",
+    "type": "phase",
+    "title": "Collaborative Practice (You Do Together)",
+    "summary": "Students work in groups to apply learning without constant teacher direction.",
+    "description": "The teacher assigns a challenging task requiring shared problem-solving. Students negotiate roles, explain ideas, and critique each other's thinking. The teacher intervenes only when groups are stuck.",
+    "duration": "15-30m",
+    "tags": [
+      "Collaborative",
+      "Active Learning",
+      "Gradual Release"
+    ]
+  },
+  {
+    "id": "phase-independent",
+    "type": "phase",
+    "title": "Independent Practice (You Do)",
+    "summary": "Students apply learning on their own to consolidate mastery.",
+    "description": "Students work individually on tasks mirroring the objective. The teacher monitors minimally, focusing on autonomous strategy use. This serves as an indicator of mastery and informs future teaching.",
+    "duration": "15-40m",
+    "tags": [
+      "Mastery",
+      "Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-check",
+    "type": "phase",
+    "title": "Formative Checkpoint",
+    "summary": "Brief mid-lesson assessment to adjust teaching in real time.",
+    "description": "The teacher pauses instruction to collect quick evidence of understanding via questioning, mini-quizzes, or digital polls. The teacher instantly decides whether to re-teach, slow down, or extend based on the responses.",
+    "duration": "3-5m",
+    "tags": [
+      "Formative Assessment",
+      "Responsive Teaching",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-closure",
+    "type": "phase",
+    "title": "Lesson Closure",
+    "summary": "Structured ending that consolidates key learning from the lesson.",
+    "description": "The teacher prompts students to summarize main ideas, connect them to objectives, and reflect on progress. The teacher highlights common themes and corrects lingering misunderstandings before concluding.",
+    "duration": "5-10m",
+    "tags": [
+      "Reflection",
+      "Synthesis",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-5e-engage",
+    "type": "phase",
+    "title": "Engage Phase (5E)",
+    "summary": "Sparks curiosity and activates prior conceptions without giving answers.",
+    "description": "The teacher presents a puzzling phenomenon or scenario. Students share initial ideas individually or in pairs. The teacher probes thinking with open questions, priming students to seek explanations.",
+    "duration": "5-15m",
+    "tags": [
+      "STEM",
+      "Inquiry-Based",
+      "5E Model"
+    ]
+  },
+  {
+    "id": "phase-5e-explore",
+    "type": "phase",
+    "title": "Explore Phase (5E)",
+    "summary": "Students investigate through hands-on tasks before formal explanations.",
+    "description": "Students work collaboratively to explore materials, test variables, and record observations without direct procedural interference. They build preliminary conceptual understanding from empirical experiences.",
+    "duration": "20-45m",
+    "tags": [
+      "STEM",
+      "Active Learning",
+      "5E Model"
+    ]
+  },
+  {
+    "id": "phase-5e-explain",
+    "type": "phase",
+    "title": "Explain Phase (5E)",
+    "summary": "Students articulate findings before teacher introduces formal vocabulary.",
+    "description": "Students describe their observations and hypotheses. The teacher then formally introduces standard academic vocabulary, definitions, and models, connecting raw experiences to formal concepts.",
+    "duration": "15-25m",
+    "tags": [
+      "STEM",
+      "Concept-Building",
+      "5E Model"
+    ]
+  },
+  {
+    "id": "phase-5e-elaborate",
+    "type": "phase",
+    "title": "Elaborate Phase (5E)",
+    "summary": "Students apply new learning in varied, complex contexts.",
+    "description": "The instructor presents a new, more complex problem requiring the application of the day's formal concepts. Students adapt their theoretical understanding to solve this challenge, strengthening flexible knowledge transfer.",
+    "duration": "20-40m",
+    "tags": [
+      "STEM",
+      "Higher-Order Thinking",
+      "5E Model"
+    ]
+  },
+  {
+    "id": "phase-5e-evaluate",
+    "type": "phase",
+    "title": "Evaluate Phase (5E)",
+    "summary": "Final assessment of understanding and skills within the inquiry cycle.",
+    "description": "The teacher administers a formal assessment (quiz, performance task, lab report). Students demonstrate mastery of core concepts. The teacher uses this data to evaluate the instructional cycle's efficacy.",
+    "duration": "15-30m",
+    "tags": [
+      "STEM",
+      "Summative Assessment",
+      "5E Model"
+    ]
+  },
+  {
+    "id": "phase-pbl-launch",
+    "type": "phase",
+    "title": "Project Launch (Entry Event)",
+    "summary": "Immersive event generating excitement and establishing a driving question.",
+    "description": "The teacher orchestrates an authentic scenario (guest speaker, simulated crisis). Students brainstorm 'Need to Know' questions to solve the challenge, guiding the trajectory of the upcoming sustained inquiry.",
+    "duration": "30-45m",
+    "tags": [
+      "PBL",
+      "High-Prep",
+      "Engagement"
+    ]
+  },
+  {
+    "id": "phase-pbl-inquiry",
+    "type": "phase",
+    "title": "Sustained Inquiry",
+    "summary": "Iterative research, design, and revision to solve a central driving question.",
+    "description": "Students operate in teams to gather research, conduct experiments, or build prototypes. The teacher acts as a project manager, providing targeted resources based on group bottlenecks.",
+    "duration": "Multi-Day",
+    "tags": [
+      "PBL",
+      "Student-Centered",
+      "Collaborative"
+    ]
+  },
+  {
+    "id": "phase-pbl-presentation",
+    "type": "phase",
+    "title": "Public Product Presentation",
+    "summary": "Culminating event where students present solutions to an authentic audience.",
+    "description": "Students finalize projects and present their work to an external audience (community members, industry experts). They defend methodological choices and field unscripted questions.",
+    "duration": "45-90m",
+    "tags": [
+      "PBL",
+      "Summative Assessment",
+      "High-Stakes"
+    ]
+  },
+  {
+    "id": "phase-workshop-mini",
+    "type": "phase",
+    "title": "Workshop Mini-Lesson",
+    "summary": "Highly focused, brief instruction on a single strategy or conceptual tool.",
+    "description": "The teacher explicitly models a single, actionable strategy using a think-aloud process. The instruction is intentionally brief and links directly to the upcoming independent work.",
+    "duration": "10-15m",
+    "tags": [
+      "Humanities",
+      "Workshop Model",
+      "Universal"
+    ]
+  },
+  {
+    "id": "phase-workshop-independent",
+    "type": "phase",
+    "title": "Independent Workshop Time",
+    "summary": "Students apply strategies independently while teacher conducts small-group differentiation.",
+    "description": "Students engage in prolonged independent reading, writing, or problem-solving. The teacher pulls small, homogeneous strategy groups or conducts one-on-one conferences for targeted differentiation.",
+    "duration": "30-45m",
+    "tags": [
+      "Workshop Model",
+      "Differentiation",
+      "Independence"
+    ]
+  },
+  {
+    "id": "phase-workshop-share",
+    "type": "phase",
+    "title": "Workshop Share",
+    "summary": "Students publicly reflect on their use of the day's strategy during independent work.",
+    "description": "The class reconvenes to share successes and struggles encountered during independent work. Selected students articulate how they applied the strategy, providing peer-to-peer modeling.",
+    "duration": "5-10m",
+    "tags": [
+      "Workshop Model",
+      "Formative Assessment",
+      "Synthesis"
+    ]
+  },
+  {
+    "id": "phase-transition",
+    "type": "phase",
+    "title": "Transition / Reset Phase",
+    "summary": "Short, intentional shift between activities or modes of work.",
+    "description": "The teacher signals a change with a routine or cue. Students tidy materials, reconfigure seating, and receive a preview of the next task, maintaining momentum and reducing downtime.",
+    "duration": "2-5m",
+    "tags": [
+      "Classroom Management",
+      "Universal",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "phase-metacognitive",
+    "type": "phase",
+    "title": "Metacognitive Reflection",
+    "summary": "Students reflect on how they learned, not just what they learned.",
+    "description": "Students consider which strategies helped, where they struggled, and how to improve. They write short reflections or share in pairs, building awareness of their own learning processes.",
+    "duration": "5-10m",
+    "tags": [
+      "Metacognition",
+      "SEL",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-solo",
+    "type": "socialForm",
+    "title": "Individual Work (Solo)",
+    "summary": "Each student works alone on tasks at their own pace.",
+    "description": "Students focus silently on independent tasks, relying on their own strategies. Essential for deep focus, independent practice, and summative assessments.",
+    "duration": "10-40m",
+    "tags": [
+      "Mastery",
+      "Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-pair",
+    "type": "socialForm",
+    "title": "Pair Work (Dyads)",
+    "summary": "Students collaborate in pairs to complete learning tasks.",
+    "description": "Partners share ideas, check each other's work, and provide feedback. Balances support with accountability and is excellent for quick discussions and peer review.",
+    "duration": "5-25m",
+    "tags": [
+      "Collaborative",
+      "Low-Prep",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-turntalk",
+    "type": "socialForm",
+    "title": "Turn-and-Talk Partners",
+    "summary": "Rapid grouping where students converse with an adjacent peer.",
+    "description": "The instructor poses a question and students turn to a nearby partner for a brief, timed discussion. The class immediately snaps back to whole-class configuration to share insights.",
+    "duration": "2-5m",
+    "tags": [
+      "Active Learning",
+      "Low-Prep",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-smallgroup",
+    "type": "socialForm",
+    "title": "Small Groups (3-5 Students)",
+    "summary": "Students work in small teams with shared responsibility for outcomes.",
+    "description": "Students plan approaches, divide subtasks, and synthesize results into a product. Supports complex tasks, problem-solving, and peer teaching.",
+    "duration": "15-40m",
+    "tags": [
+      "Collaborative",
+      "Project-Based",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "social-plenum",
+    "type": "socialForm",
+    "title": "Plenum / Whole Class",
+    "summary": "Teacher and all students interact in a single shared discussion space.",
+    "description": "Students face a central focal point. The teacher controls the flow of information, delivering lectures or facilitating unified discussions. Ensures uniform baseline exposure.",
+    "duration": "10-30m",
+    "tags": [
+      "Direct Instruction",
+      "Universal",
+      "Efficient"
+    ]
+  },
+  {
+    "id": "social-station",
+    "type": "socialForm",
+    "title": "Station / Center Work",
+    "summary": "Students rotate through multiple activity stations around the room.",
+    "description": "Different stations offer varied modalities or tasks. Students move in small groups on a timed schedule. Allows differentiation and efficient use of resources.",
+    "duration": "20-45m",
+    "tags": [
+      "Differentiation",
+      "Active Learning",
+      "STEM"
+    ]
+  },
+  {
+    "id": "social-quadrants",
+    "type": "socialForm",
+    "title": "Thematic Quadrants",
+    "summary": "Students are grouped into themed desk clusters that remain stable.",
+    "description": "Desks are arranged into localized clusters with thematic identities (e.g., continents, eras). Fosters a stable micro-community identity and enables targeted small-group rotation.",
+    "duration": "Weeks",
+    "tags": [
+      "Classroom Management",
+      "Collaboration",
+      "Elementary/Middle"
+    ]
+  },
+  {
+    "id": "social-interest",
+    "type": "socialForm",
+    "title": "Interest-Based Centers",
+    "summary": "Students self-select groups based on preference for a specific task.",
+    "description": "Students physically move to activity stations that align with their personal interests or preferred output method. Increases intrinsic motivation and student agency.",
+    "duration": "20-40m",
+    "tags": [
+      "Differentiation",
+      "Student Choice",
+      "High-Prep"
+    ]
+  },
+  {
+    "id": "social-homogeneous",
+    "type": "socialForm",
+    "title": "Homogeneous Ability Grouping",
+    "summary": "Students grouped by similar academic skill levels for targeted instruction.",
+    "description": "The teacher sorts students into skill-aligned tiers using assessment data. Enables intensive, specialized scaffolding for struggling groups and rigorous extension for advanced groups.",
+    "duration": "20-45m",
+    "tags": [
+      "Differentiation",
+      "Targeted Support",
+      "High-Prep"
+    ]
+  },
+  {
+    "id": "social-heterogeneous",
+    "type": "socialForm",
+    "title": "Heterogeneous Mixed Grouping",
+    "summary": "Students grouped with varying skill levels to promote peer tutoring.",
+    "description": "A calculated mix of high, average, and lower-performing students within clusters. Diverse cognitive strengths are synthesized to succeed in complex collaborative tasks.",
+    "duration": "30-60m",
+    "tags": [
+      "Collaborative",
+      "Equity",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-agile",
+    "type": "socialForm",
+    "title": "Agile Scrum Teams",
+    "summary": "Autonomous teams using project management roles for complex tasks.",
+    "description": "Students take roles (Scrum Master, Developer) and conduct daily 'stand-up' meetings. They manage workflow visually (Kanban) while the teacher observes and intervenes sparingly.",
+    "duration": "Weeks/Months",
+    "tags": [
+      "PBL",
+      "STEM",
+      "Career-Readiness"
+    ]
+  },
+  {
+    "id": "social-expert",
+    "type": "socialForm",
+    "title": "Expert Groups (Jigsaw Base)",
+    "summary": "Students collaborate to master a subtopic before teaching peers.",
+    "description": "Each group receives a distinct subtopic. Members collaborate to understand and summarize their piece before re-forming into mixed groups to teach it to others.",
+    "duration": "15-30m",
+    "tags": [
+      "Collaborative",
+      "Literacy",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "social-fishbowl",
+    "type": "socialForm",
+    "title": "Fishbowl Discussion",
+    "summary": "Inner circle discusses while outer circle observes and evaluates.",
+    "description": "An inner circle engages in conversation about a text or problem while the outer circle tracks patterns or evidence use. Roles may switch midway to allow all students to speak.",
+    "duration": "20-40m",
+    "tags": [
+      "Discussion",
+      "Observation",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "social-innerouter",
+    "type": "socialForm",
+    "title": "Inner-Outer Circle (Rotating Partners)",
+    "summary": "Concentric circles rotate to hold brief paired dialogues.",
+    "description": "Two circles face each other. After responding to a prompt, one circle rotates, instantly creating new pairings. Prompts build on each other and promote varied perspectives.",
+    "duration": "10-20m",
+    "tags": [
+      "Discussion",
+      "Active Learning",
+      "SEL"
+    ]
+  },
+  {
+    "id": "social-peertutor",
+    "type": "socialForm",
+    "title": "Peer Tutoring / Coaching",
+    "summary": "Students support each other's learning in structured tutor-tutee pairs.",
+    "description": "Trained tutors guide peers through tasks while the teacher supervises. Pairs are formed strategically, often matching strengths with needs. Roles switch to ensure reciprocity.",
+    "duration": "15-30m",
+    "tags": [
+      "Differentiation",
+      "Support",
+      "Universal"
+    ]
+  },
+  {
+    "id": "social-onlineforum",
+    "type": "socialForm",
+    "title": "Online Discussion Forum",
+    "summary": "Asynchronous text-based discussion in a digital space.",
+    "description": "The teacher posts a prompt online. Students reply with initial posts and respond constructively to classmates. Extends participation beyond class time and benefits reflective writers.",
+    "duration": "10-30m",
+    "tags": [
+      "Blended Learning",
+      "Discussion",
+      "Literacy"
+    ]
+  },
+  {
+    "id": "method-tps",
+    "type": "method",
+    "title": "Think-Pair-Share",
+    "summary": "Individual thinking, partner discussion, and whole-class sharing.",
+    "description": "Students think silently about a prompt, discuss it with a partner, and then share insights with the whole class. High engagement and low barrier for entry.",
+    "duration": "5-10m",
+    "tags": [
+      "Discussion",
+      "Active Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-pss",
+    "type": "method",
+    "title": "Pair-Square-Share",
+    "summary": "Builds from pairs to small groups before whole-class addressing.",
+    "description": "Following initial pair discussion, two separate pairs physically merge to form a 'square'. They synthesize their perspectives before a spokesperson shares the refined insight.",
+    "duration": "15-20m",
+    "tags": [
+      "Collaborative",
+      "Low-Prep",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-jigsaw",
+    "type": "method",
+    "title": "Jigsaw Method",
+    "summary": "Students become experts on subtopics and teach peers in mixed groups.",
+    "description": "A topic is divided into parts. 'Expert groups' master one part, then shuffle into 'jigsaw groups' to teach their segment to peers. The teacher clarifies gaps during whole-class debrief.",
+    "duration": "30-60m",
+    "tags": [
+      "Cooperative Learning",
+      "Literacy",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-socratic",
+    "type": "method",
+    "title": "Socratic Seminar",
+    "summary": "Student-led, evidence-based discussion around a complex text.",
+    "description": "Students prepare by annotating a text. Sitting in a circle, they engage in unmediated dialogue using textual evidence. The teacher remains silent, observing and evaluating.",
+    "duration": "45-60m",
+    "tags": [
+      "Discussion",
+      "Critical Thinking",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-philosophical",
+    "type": "method",
+    "title": "Philosophical Chairs",
+    "summary": "Kinesthetic debate where students align physically with their position.",
+    "description": "Students move to sides of the room representing 'Agree' or 'Disagree' on a controversial statement. They defend positions and can change sides if swayed by a peer's argument.",
+    "duration": "20-40m",
+    "tags": [
+      "Debate",
+      "Kinesthetic",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-pinwheel",
+    "type": "method",
+    "title": "Pinwheel Discussion",
+    "summary": "Rotating discussion format where groups represent specific viewpoints.",
+    "description": "Representatives from groups sit in a central square facing inward to debate an issue. Teammates sit behind them to provide support. Seats rotate so new teammates take the speaking role.",
+    "duration": "30-50m",
+    "tags": [
+      "Role-Play",
+      "Discussion",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-snowball",
+    "type": "method",
+    "title": "Snowball Discussion",
+    "summary": "Expanding discussion forcing consensus as groups double in size.",
+    "description": "Students respond to a prompt individually, pair up to synthesize answers, then merge with another pair. This doubling continues until the entire class unifies in a single debate.",
+    "duration": "20-30m",
+    "tags": [
+      "Consensus-Building",
+      "Collaborative",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-quescussion",
+    "type": "method",
+    "title": "Ques-cussion",
+    "summary": "Discussion format using exclusively open-ended questions.",
+    "description": "Participants engage with an academic idea by responding only with questions. If a declarative statement is made, the class shouts 'Statement!' to enforce the inquiry mindset.",
+    "duration": "15-30m",
+    "tags": [
+      "Inquiry-Based",
+      "Critical Thinking",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-converstations",
+    "type": "method",
+    "title": "Conver-Stations",
+    "summary": "Networked discussion where representatives rotate to cross-pollinate ideas.",
+    "description": "Groups discuss a prompt at stations. Members rotate to different groups, summarize previous insights, and tackle a secondary related prompt, spreading ideas across the room.",
+    "duration": "20-30m",
+    "tags": [
+      "Collaborative",
+      "Active Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-pbl",
+    "type": "method",
+    "title": "Problem-Based Learning (PBL)",
+    "summary": "Students tackle an open-ended, authentic problem before instruction.",
+    "description": "The teacher presents a complex scenario. Students investigate using resources and expert input. The teacher coaches inquiry and collaboration rather than providing solutions.",
+    "duration": "Multi-Day",
+    "tags": [
+      "STEM",
+      "Inquiry",
+      "Project-Based"
+    ]
+  },
+  {
+    "id": "method-flipped",
+    "type": "method",
+    "title": "Flipped Classroom",
+    "summary": "Content acquisition at home; class time focuses on application.",
+    "description": "Students watch video lectures or read at home. Class time is used for problem-solving, projects, and discussions. Shifts class time toward higher-order thinking.",
+    "duration": "1 lesson + HW",
+    "tags": [
+      "Blended Learning",
+      "Active Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-muddiest",
+    "type": "method",
+    "title": "The Minute Paper / Muddiest Point",
+    "summary": "Quick end-of-lesson assessment of learning and confusion.",
+    "description": "Students have 60 seconds to write the most important thing they learned and what is still confusing. The teacher uses this data to clarify points in the next class.",
+    "duration": "2-5m",
+    "tags": [
+      "Formative Assessment",
+      "Reflection",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-braindump",
+    "type": "method",
+    "title": "Brain Dump (Retrieval Practice)",
+    "summary": "Students write down everything remembered from a previous lesson.",
+    "description": "At the start of class, students clear desks and write all they remember from the prior session without notes. Strengthens long-term memory pathways effectively.",
+    "duration": "3-5m",
+    "tags": [
+      "Cognitive Science",
+      "Formative Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-exit",
+    "type": "method",
+    "title": "Exit Tickets",
+    "summary": "Short end-of-lesson prompts providing quick evidence of learning.",
+    "description": "Students answer focused questions aligned with the objective before leaving. The teacher sorts responses into patterns of understanding to adjust the next lesson.",
+    "duration": "3-7m",
+    "tags": [
+      "Formative Assessment",
+      "Low-Prep",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-conceptmap",
+    "type": "method",
+    "title": "Concept Mapping",
+    "summary": "Visual diagramming showing relationships between key ideas.",
+    "description": "Students arrange vocabulary or concepts spatially and draw linking lines. They write brief phrases along lines explaining theoretical relationships, boosting synthesis.",
+    "duration": "20-30m",
+    "tags": [
+      "Visual Learning",
+      "Synthesis",
+      "Marzano"
+    ]
+  },
+  {
+    "id": "method-casestudy",
+    "type": "method",
+    "title": "Case Study Analysis",
+    "summary": "In-depth investigation of a real-world scenario.",
+    "description": "Students dissect competing variables, stakeholder interests, and data within a detailed narrative. Groups formulate logical resolutions and present their strategic rationale.",
+    "duration": "45-60m",
+    "tags": [
+      "Problem-Solving",
+      "Real-World",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-roleplay",
+    "type": "method",
+    "title": "Role-Playing / Simulation",
+    "summary": "Students act out roles in realistic situations to explore perspectives.",
+    "description": "Students prepare roles and interact according to the scenario rules, negotiating outcomes. A debrief surfaces learning and connects back to concepts.",
+    "duration": "20-60m",
+    "tags": [
+      "SEL",
+      "Humanities",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-gallery",
+    "type": "method",
+    "title": "Gallery Walk / Tour",
+    "summary": "Students circulate to view and comment on curated artifacts or peer work.",
+    "description": "Materials are posted around the room. Students walk station-to-station analyzing materials and leaving feedback via sticky notes. The class then debriefs overarching themes.",
+    "duration": "20-30m",
+    "tags": [
+      "Kinesthetic",
+      "Peer Review",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-mini",
+    "type": "method",
+    "title": "Direct Instruction Mini-Lesson",
+    "summary": "Concise, focused explanation of a specific concept.",
+    "description": "The teacher introduces an objective with a tight explanation and clear example. Emphasizes key steps using visuals, followed immediately by practice.",
+    "duration": "5-15m",
+    "tags": [
+      "Direct Instruction",
+      "Low-Prep",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-worked",
+    "type": "method",
+    "title": "Worked Example Strategy",
+    "summary": "Teacher presents fully solved examples highlighting reasoning.",
+    "description": "The teacher shows complete solutions, pointing out steps and rationale. Students annotate copies. The teacher gradually removes steps in partially worked examples to scaffold independent work.",
+    "duration": "10-20m",
+    "tags": [
+      "STEM",
+      "Scaffolding",
+      "Mastery"
+    ]
+  },
+  {
+    "id": "method-similarities",
+    "type": "method",
+    "title": "Identifying Similarities and Differences",
+    "summary": "Students compare and classify to deepen understanding.",
+    "description": "Students use Venn diagrams or matrices to identify shared and unique attributes of concepts. They articulate generalizations or create analogies, promoting higher-order thinking.",
+    "duration": "10-25m",
+    "tags": [
+      "Marzano",
+      "Critical Thinking",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-inquirylab",
+    "type": "method",
+    "title": "Inquiry Lab",
+    "summary": "Students design and conduct investigations to answer questions.",
+    "description": "Students plan procedures, identify variables, and collect data. The teacher supports analysis to help draw evidence-based conclusions. Often ends with written reports.",
+    "duration": "30-90m",
+    "tags": [
+      "STEM",
+      "Inquiry",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-reciprocal",
+    "type": "method",
+    "title": "Reciprocal Teaching",
+    "summary": "Students lead reading comprehension strategies in small groups.",
+    "description": "Students rotate through roles (predictor, questioner, clarifier, summarizer) to guide peers through texts. The teacher models initially and then supervises strategy use.",
+    "duration": "20-40m",
+    "tags": [
+      "Literacy",
+      "Metacognition",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-peerinstruction",
+    "type": "method",
+    "title": "Peer Instruction (Concept Questions)",
+    "summary": "Students answer concept questions, discuss, and revote.",
+    "description": "The teacher poses a challenging multiple-choice question. Students vote, discuss/defend their answers in pairs, and revote. Surfaces misconceptions and leverages peer explanations.",
+    "duration": "8-15m",
+    "tags": [
+      "Formative Assessment",
+      "STEM",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-debate",
+    "type": "method",
+    "title": "Structured Academic Debate",
+    "summary": "Students argue opposing positions using evidence.",
+    "description": "Students research, prepare arguments, and anticipate counterarguments. Follows a clear format with timed speeches and rebuttals. Reflection targets argument quality.",
+    "duration": "30-60m",
+    "tags": [
+      "Critical Thinking",
+      "Humanities",
+      "Speaking"
+    ]
+  },
+  {
+    "id": "method-interactivelecture",
+    "type": "method",
+    "title": "Interactive Lecture with Checkpoints",
+    "summary": "Lecture interspersed with active tasks and quick assessments.",
+    "description": "Content is segmented into mini-lectures punctuated by think-pair-share, polls, or problem-solving. Students process each chunk before moving on.",
+    "duration": "20-40m",
+    "tags": [
+      "Universal",
+      "Formative Assessment",
+      "Active Learning"
+    ]
+  },
+  {
+    "id": "method-quickwrites",
+    "type": "method",
+    "title": "Writing-to-Learn (Quick Writes)",
+    "summary": "Short, low-stakes writing tasks used to process content.",
+    "description": "Students write continuously for a brief period to explain or question ideas, without worrying about formal correctness. Makes thinking visible and supports retention.",
+    "duration": "5-10m",
+    "tags": [
+      "Formative Assessment",
+      "Literacy",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-hypotheses",
+    "type": "method",
+    "title": "Generating and Testing Hypotheses",
+    "summary": "Students make predictions and test them through reasoning.",
+    "description": "Students propose hypotheses about outcomes or relationships. They design thought experiments or tests, analyze results, and reconcile differences with evidence.",
+    "duration": "20-60m",
+    "tags": [
+      "Marzano",
+      "STEM",
+      "Critical Thinking"
+    ]
+  },
+  {
+    "id": "method-fourcorners",
+    "type": "method",
+    "title": "Four Corners",
+    "summary": "Kinesthetic multiple-choice protocol using room corners.",
+    "description": "Corners are labeled with opinions or choices. Students move to the corner representing their choice and discuss rationale with like-minded peers before debating others.",
+    "duration": "10-20m",
+    "tags": [
+      "Kinesthetic",
+      "Formative Assessment",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-histogram",
+    "type": "method",
+    "title": "Human Histogram",
+    "summary": "Students physically arrange along a linear spectrum.",
+    "description": "Students stand on an invisible line across the room representing an ideological spectrum to match their answer, creating a living graph for targeted questioning.",
+    "duration": "10-15m",
+    "tags": [
+      "Kinesthetic",
+      "Visual Learning",
+      "Formative Assessment"
+    ]
+  },
+  {
+    "id": "method-tableau",
+    "type": "method",
+    "title": "Human Tableau",
+    "summary": "Students use bodies to create a frozen diorama depicting a concept.",
+    "description": "Groups collaboratively choreograph a silent, physical pose using facial expressions and spatial relationships to represent an academic concept. Peers analyze and deduce the scene.",
+    "duration": "20-30m",
+    "tags": [
+      "Kinesthetic",
+      "Creative",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-jumbled",
+    "type": "method",
+    "title": "Jumbled Sequence",
+    "summary": "Logical reasoning task to reorder a scrambled set of steps.",
+    "description": "Small groups receive shuffled strips of paper containing chronological steps. They debate and organize them sequentially, targeting the 'Understand' level of Bloom's Taxonomy.",
+    "duration": "15-25m",
+    "tags": [
+      "Problem-Solving",
+      "STEM",
+      "Formative Assessment"
+    ]
+  },
+  {
+    "id": "method-crowdcrumple",
+    "type": "method",
+    "title": "Crowd Crumple",
+    "summary": "Anonymous peer-review activity lowering social stakes.",
+    "description": "Students write answers, crumple the paper into a ball, and throw it to a peer anonymously. The receiving student reads it aloud and critiques or expands upon it.",
+    "duration": "10-15m",
+    "tags": [
+      "Fun",
+      "Kinesthetic",
+      "Formative Assessment"
+    ]
+  },
+  {
+    "id": "method-analyticmemo",
+    "type": "method",
+    "title": "Analytic Memo",
+    "summary": "Brief, structured writing to advise a specific stakeholder.",
+    "description": "Students analyze course data and draft a concise, professional memo recommending a course of action. Translates theory into practical, audience-appropriate communication.",
+    "duration": "45m / HW",
+    "tags": [
+      "Career-Readiness",
+      "Writing",
+      "Synthesis"
+    ]
+  },
+  {
+    "id": "method-hotseat",
+    "type": "method",
+    "title": "Hot Seat",
+    "summary": "Role-playing activity fielding unscripted questions in persona.",
+    "description": "A student assumes the persona of a historical figure or concept. The class acts as an investigative panel asking rigorous questions. The student improvises accurate responses.",
+    "duration": "10-20m",
+    "tags": [
+      "Role-Play",
+      "High-Engagement",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-peerreview",
+    "type": "method",
+    "title": "Peer Review (Rubric-Based)",
+    "summary": "Students utilize a rubric to evaluate a classmate's work.",
+    "description": "Students exchange drafts, independently grade the work against rubric criteria, and provide actionable criticism. Students then revise their own work based on feedback.",
+    "duration": "30-45m",
+    "tags": [
+      "Writing",
+      "Evaluation",
+      "High-Prep"
+    ]
+  },
+  {
+    "id": "method-dotocracy",
+    "type": "method",
+    "title": "Dot-ocracy",
+    "summary": "Visual polling technique evaluating popularity of options.",
+    "description": "Students place dot stickers on a board next to their preferred choices. The class analyzes the visual distribution of dots to guide discussions or prioritize projects.",
+    "duration": "5-10m",
+    "tags": [
+      "Decision Making",
+      "Visual",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-whiparound",
+    "type": "method",
+    "title": "Whip Around",
+    "summary": "Rapid-fire protocol where every student provides a one-word response.",
+    "description": "The teacher points to students in rapid succession to provide a single, highly specific word representing their takeaway, ensuring every voice contributes to the summary.",
+    "duration": "2-5m",
+    "tags": [
+      "Formative Assessment",
+      "Lesson Closure",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-onesentence",
+    "type": "method",
+    "title": "One-Sentence Summary",
+    "summary": "Synthesize a topic using a single, highly informative sentence.",
+    "description": "Students condense material by answering 'who, what, where, when, why, and how' within one unbroken sentence, forcing immense cognitive compression.",
+    "duration": "10-15m",
+    "tags": [
+      "Writing",
+      "Synthesis",
+      "Marzano"
+    ]
+  },
+  {
+    "id": "method-tpr",
+    "type": "method",
+    "title": "Total Physical Response (TPR)",
+    "summary": "Students respond to verbal commands with whole-body actions.",
+    "description": "Mimics first-language acquisition. The teacher gives a command in the target language and students react physically. Reduces stress, improves long-term memory, and is highly effective for beginners.",
+    "duration": "5-15m",
+    "tags": [
+      "Language Learning",
+      "Kinesthetic",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-harkness",
+    "type": "method",
+    "title": "Harkness Method",
+    "summary": "Student-centered, discussion-based pedagogy around an oval table.",
+    "description": "Students sit around a table and lead the discussion, ask questions, and collaborate to explore a text. The teacher acts strictly as a facilitator. Develops critical thinking and active listening.",
+    "duration": "45-60m",
+    "tags": [
+      "Discussion",
+      "Humanities",
+      "Student-Led"
+    ]
+  },
+  {
+    "id": "method-pechakucha",
+    "type": "method",
+    "title": "PechaKucha Presentation (20x20)",
+    "summary": "Highly structured presentation format using 20 slides for 20 seconds each.",
+    "description": "Slides advance automatically, giving the presenter 6 minutes and 40 seconds. Slides are highly visual with minimal text. Forces students to be concise and focus on storytelling over reading from a screen.",
+    "duration": "6m 40s per student",
+    "tags": [
+      "Presentation",
+      "Visual Learning",
+      "Creative"
+    ]
+  },
+  {
+    "id": "method-escaperoom",
+    "type": "method",
+    "title": "Escape Room Pedagogy",
+    "summary": "Students solve curriculum-based puzzles to 'escape' a digital or physical room.",
+    "description": "The teacher designs a narrative scenario where students must unlock clues by correctly answering academic questions or solving problems. Highly gamified approach that boosts motivation and teamwork.",
+    "duration": "30-60m",
+    "tags": [
+      "Gamification",
+      "Collaborative",
+      "High-Prep"
+    ]
+  },
+  {
+    "id": "method-spacedrep",
+    "type": "method",
+    "title": "Spaced Repetition & Retrieval",
+    "summary": "Spreading study sessions over time and forcing memory recall.",
+    "description": "Instead of cramming, the teacher schedules low-stakes quizzes or review games on older material at increasing intervals (e.g., 1 day, 3 days, 1 week later). Leverages the spacing effect for long-term retention.",
+    "duration": "5-10m",
+    "tags": [
+      "Cognitive Science",
+      "Formative Assessment",
+      "Universal"
+    ]
+  }
+]
