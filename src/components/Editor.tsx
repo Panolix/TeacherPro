@@ -3196,11 +3196,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         )}
       <div
         id="lesson-plan-container"
-        className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col w-full max-w-[297mm] mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
+        className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
         style={{
           background: "var(--tp-paper-bg)",
           border: "1px solid var(--tp-paper-line-soft)",
-          minHeight: "210mm",
         }}
       >
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
