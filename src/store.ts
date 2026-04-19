@@ -42,6 +42,14 @@ export interface MaterialEntry {
   children: MaterialEntry[];
 }
 
+export type VaultRoot = "Lesson Plans" | "Mindmaps" | "Materials";
+
+export interface RecentItem {
+  type: "lesson" | "mindmap";
+  relativePath: string; // relative to root folder
+  openedAt: number;
+}
+
 export interface DraggedMaterialRef {
   relativePath: string;
   isDirectory: boolean;
@@ -84,6 +92,10 @@ interface UISettings {
   lessonPaperTone: PaperTone;
   mindmapPaperTone: PaperTone;
   defaultLessonTableBodyRows: number;
+  sidebarOpen: boolean;
+  sidebarSearchCollapsed: boolean;
+  expandedMaterialFolders: Record<string, boolean>;
+  expandedTrashFolders: Record<string, boolean>;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -107,8 +119,11 @@ interface AppState {
   vaultPath: string | null;
   lessonPlans: DirEntry[];
   mindmaps: DirEntry[];
+  lessonTree: MaterialEntry[];
+  mindmapTree: MaterialEntry[];
   materials: MaterialEntry[];
   trashEntries: MaterialEntry[];
+  recents: RecentItem[];
   lessonSearchIndex: Record<string, string>;
   mindmapSearchIndex: Record<string, string>;
   isSearchIndexing: boolean;
@@ -117,6 +132,9 @@ interface AppState {
   lessonPaperTone: PaperTone;
   mindmapPaperTone: PaperTone;
   defaultLessonTableBodyRows: number;
+  sidebarSearchCollapsed: boolean;
+  expandedMaterialFolders: Record<string, boolean>;
+  expandedTrashFolders: Record<string, boolean>;
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
@@ -143,9 +161,33 @@ interface AppState {
   activeFilePath: string | null;
   activeFileContent: LessonData | null;
   activeMindmapContent: MindmapData | null;
+
+  /**
+   * Bridge that lets the TopBar call Editor-internal actions (save/preview/print/export)
+   * and toggle its side panels. Editor registers these on mount; TopBar consumes them.
+   */
+  editorActions: {
+    save: () => void;
+    preview: () => void;
+    print: () => void;
+    export: () => void;
+    insertTable: () => void;
+    toggleChat: () => void;
+    toggleNotes: () => void;
+    toggleMethodBank: () => void;
+    chatOpen: boolean;
+    notesOpen: boolean;
+    methodBankOpen: boolean;
+    isPdfBusy: boolean;
+    aiEnabled: boolean;
+  } | null;
+  setEditorActions: (actions: AppState["editorActions"]) => void;
   
   initVault: () => Promise<void>;
   setSidebarOpen: (isOpen: boolean) => void;
+  setSidebarSearchCollapsed: (collapsed: boolean) => void;
+  setExpandedMaterialFolders: (expandedFolders: Record<string, boolean>) => void;
+  setExpandedTrashFolders: (expandedFolders: Record<string, boolean>) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setAccentColor: (color: AccentColor) => void;
   setLessonPaperTone: (tone: PaperTone) => void;
@@ -175,7 +217,8 @@ interface AppState {
   setCurrentView: (view: "editor" | "calendar" | "mindmap") => void;
   openVault: () => Promise<void>;
   refreshVault: () => Promise<void>;
-  createNewLesson: (plannedDate?: Date) => Promise<void>;
+  createNewLesson: (plannedDate?: Date, subFolder?: string) => Promise<void>;
+  createVaultFolder: (folderName: string, parentPath?: string) => Promise<void>;
   duplicateLesson: (fileName: string) => Promise<void>;
   rescheduleLesson: (fileName: string, plannedDate: Date) => Promise<string | null>;
   deleteLesson: (fileName: string) => Promise<void>;
@@ -187,15 +230,23 @@ interface AppState {
     options?: SaveLessonOptions,
   ) => Promise<void>;
   openLesson: (fileName: string) => Promise<void>;
-  createNewMindmap: () => Promise<void>;
+  createNewMindmap: (subFolder?: string) => Promise<void>;
   deleteMindmap: (fileName: string) => Promise<void>;
   renameMindmap: (oldFileName: string, newName: string) => Promise<void>;
   saveActiveMindmap: (nodes: any[], edges: any[]) => Promise<void>;
   openMindmap: (fileName: string) => Promise<void>;
-  addMaterialFiles: () => Promise<string[]>;
-  addMaterialDirectory: () => Promise<string | null>;
+  addMaterialFiles: (targetSubFolder?: string) => Promise<string[]>;
+  addMaterialDirectory: (targetSubFolder?: string) => Promise<string | null>;
   deleteMaterialEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
   renameMaterialEntry: (relativePath: string, newName: string) => Promise<void>;
+  // Generic vault path operations (any root: Lesson Plans / Mindmaps / Materials)
+  renameVaultPath: (root: VaultRoot, relativePath: string, newName: string) => Promise<void>;
+  moveVaultPath: (root: VaultRoot, sourceRelative: string, targetFolderRelative: string) => Promise<void>;
+  deleteVaultPath: (root: VaultRoot, relativePath: string, isDirectory: boolean) => Promise<void>;
+  duplicateVaultPath: (root: VaultRoot, relativePath: string) => Promise<void>;
+  // Recents
+  addRecent: (item: Omit<RecentItem, "openedAt">) => void;
+  clearRecents: () => void;
   restoreTrashEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
   permanentlyDeleteTrashEntry: (relativePath: string, isDirectory: boolean) => Promise<void>;
 }
@@ -225,12 +276,32 @@ function clampDefaultLessonTableBodyRows(value: unknown): number {
   );
 }
 
+function normalizeBooleanRecord(value: unknown): Record<string, boolean> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const normalized: Record<string, boolean> = {};
+  for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
+    if (key.trim().length === 0 || typeof entryValue !== "boolean") {
+      continue;
+    }
+    normalized[key] = entryValue;
+  }
+
+  return normalized;
+}
+
 const DEFAULT_UI_SETTINGS: UISettings = {
   themeMode: "dark",
   accentColor: "blue",
-  lessonPaperTone: "dark",
+  lessonPaperTone: "light",
   mindmapPaperTone: "dark",
   defaultLessonTableBodyRows: 4,
+  sidebarOpen: true,
+  sidebarSearchCollapsed: false,
+  expandedMaterialFolders: {},
+  expandedTrashFolders: {},
   calendarCollapsed: false,
   sectionCollapsed: {
     lessonPlans: false,
@@ -279,7 +350,20 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
       source.themeMode === "light" || source.themeMode === "dark"
         ? source.themeMode
         : DEFAULT_UI_SETTINGS.themeMode,
+    // Lesson paper is fixed to light and mindmap paper is fixed to dark.
+    lessonPaperTone: "light",
+    mindmapPaperTone: "dark",
     defaultLessonTableBodyRows: clampDefaultLessonTableBodyRows(source.defaultLessonTableBodyRows),
+    sidebarOpen:
+      typeof source.sidebarOpen === "boolean"
+        ? source.sidebarOpen
+        : DEFAULT_UI_SETTINGS.sidebarOpen,
+    sidebarSearchCollapsed:
+      typeof source.sidebarSearchCollapsed === "boolean"
+        ? source.sidebarSearchCollapsed
+        : DEFAULT_UI_SETTINGS.sidebarSearchCollapsed,
+    expandedMaterialFolders: normalizeBooleanRecord(source.expandedMaterialFolders),
+    expandedTrashFolders: normalizeBooleanRecord(source.expandedTrashFolders),
     sectionCollapsed: {
       lessonPlans: sectionSource.lessonPlans ?? DEFAULT_UI_SETTINGS.sectionCollapsed.lessonPlans,
       mindmaps: sectionSource.mindmaps ?? DEFAULT_UI_SETTINGS.sectionCollapsed.mindmaps,
@@ -491,25 +575,33 @@ async function buildMindmapSearchIndex(vaultPath: string, mindmapEntries: DirEnt
   return Object.fromEntries(pairs);
 }
 
-async function buildLessonSubjectIndex(vaultPath: string, lessonEntries: DirEntry[]): Promise<Record<string, string>> {
+async function buildLessonSubjectIndex(vaultPath: string, lessonTree: MaterialEntry[]): Promise<Record<string, string>> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-  const pairs = await Promise.all(
-    lessonEntries
-      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
-      .map(async (entry) => {
-        const fileName = entry.name!;
-        const filePath = await join(lessonPlansFolder, fileName);
-        try {
-          const text = await readTextFile(filePath);
-          const parsed = JSON.parse(text) as { metadata?: { subject?: unknown } };
-          const subject = typeof parsed?.metadata?.subject === "string" ? parsed.metadata.subject.trim() : "";
-          return [fileName, subject] as const;
-        } catch {
-          return [fileName, ""] as const;
-        }
-      }),
-  );
-  return Object.fromEntries(pairs);
+  const result: Record<string, string> = {};
+
+  // Walk the full tree recursively so nested lessons (e.g. "History/Lesson.json")
+  // are indexed by their full relativePath — the same key CalendarView uses.
+  const walk = async (entries: MaterialEntry[]) => {
+    await Promise.all(entries.map(async (entry) => {
+      if (entry.isDirectory) {
+        await walk(entry.children);
+        return;
+      }
+      if (!entry.name?.toLowerCase().endsWith(".json")) return;
+      const filePath = await join(lessonPlansFolder, entry.relativePath);
+      try {
+        const text = await readTextFile(filePath);
+        const parsed = JSON.parse(text) as { metadata?: { subject?: unknown } };
+        const subject = typeof parsed?.metadata?.subject === "string" ? parsed.metadata.subject.trim() : "";
+        result[entry.relativePath] = subject;
+      } catch {
+        result[entry.relativePath] = "";
+      }
+    }));
+  };
+
+  await walk(lessonTree);
+  return result;
 }
 
 let searchIndexBuildVersion = 0;
@@ -683,18 +775,23 @@ function buildLessonFileNameForMetadata(currentFileName: string, metadata: Lesso
   const dateStr = sourceDate.split("T")[0];
   const subject = metadata.subject.trim();
 
+  // Preserve folder prefix (e.g. "History/") if the file lives in a subfolder
+  const lastSlash = currentFileName.lastIndexOf("/");
+  const folderPrefix = lastSlash >= 0 ? currentFileName.slice(0, lastSlash + 1) : "";
+  const baseName = lastSlash >= 0 ? currentFileName.slice(lastSlash + 1) : currentFileName;
+
   if (subject) {
     const sanitizedSubject = subject.replace(/[^a-zA-Z0-9\-_ ]/g, "").replace(/\s+/g, "-");
-    return `${dateStr}-${sanitizedSubject}.json`;
+    return `${folderPrefix}${dateStr}-${sanitizedSubject}.json`;
   }
 
   const datePattern = /\d{4}-\d{2}-\d{2}/;
-  if (datePattern.test(currentFileName)) {
-    return currentFileName.replace(datePattern, dateStr);
+  if (datePattern.test(baseName)) {
+    return `${folderPrefix}${baseName.replace(datePattern, dateStr)}`;
   }
 
   const id = Date.now().toString().slice(-4);
-  return `Lesson-${dateStr}-${id}.json`;
+  return `${folderPrefix}Lesson-${dateStr}-${id}.json`;
 }
 
 function subjectToLessonFileToken(subject: string): string {
@@ -702,7 +799,9 @@ function subjectToLessonFileToken(subject: string): string {
 }
 
 function fallbackSubjectFromLessonFileName(fileName: string, subjects: SubjectConfig[]): string {
-  const stem = fileName.replace(/\.json$/i, "");
+  // Strip folder prefix before pattern matching
+  const baseName = fileName.split("/").pop() || fileName;
+  const stem = baseName.replace(/\.json$/i, "");
   const match = stem.match(/^\d{4}-\d{2}-\d{2}-(.+)$/);
   if (!match) {
     return "";
@@ -726,8 +825,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   vaultPath: null,
   lessonPlans: [],
   mindmaps: [],
+  lessonTree: [],
+  mindmapTree: [],
   materials: [],
   trashEntries: [],
+  recents: (() => {
+    try {
+      const raw = localStorage.getItem("tp-recents");
+      if (raw) return JSON.parse(raw) as RecentItem[];
+    } catch {}
+    return [];
+  })(),
   lessonSearchIndex: {},
   mindmapSearchIndex: {},
   isSearchIndexing: false,
@@ -736,6 +844,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   lessonPaperTone: DEFAULT_UI_SETTINGS.lessonPaperTone,
   mindmapPaperTone: DEFAULT_UI_SETTINGS.mindmapPaperTone,
   defaultLessonTableBodyRows: DEFAULT_UI_SETTINGS.defaultLessonTableBodyRows,
+  sidebarOpen: DEFAULT_UI_SETTINGS.sidebarOpen,
+  sidebarSearchCollapsed: DEFAULT_UI_SETTINGS.sidebarSearchCollapsed,
+  expandedMaterialFolders: DEFAULT_UI_SETTINGS.expandedMaterialFolders,
+  expandedTrashFolders: DEFAULT_UI_SETTINGS.expandedTrashFolders,
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
@@ -757,7 +869,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
-  sidebarOpen: true,
   currentView: "editor",
   activeFilePath: null,
   activeFileContent: null,
@@ -781,6 +892,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         lessonPaperTone: normalizedSettings.lessonPaperTone,
         mindmapPaperTone: normalizedSettings.mindmapPaperTone,
         defaultLessonTableBodyRows: normalizedSettings.defaultLessonTableBodyRows,
+        sidebarOpen: normalizedSettings.sidebarOpen,
+        sidebarSearchCollapsed: normalizedSettings.sidebarSearchCollapsed,
+        expandedMaterialFolders: normalizedSettings.expandedMaterialFolders,
+        expandedTrashFolders: normalizedSettings.expandedTrashFolders,
         calendarCollapsed: normalizedSettings.calendarCollapsed,
         sectionCollapsed: normalizedSettings.sectionCollapsed,
         debugMode: normalizedSettings.debugMode,
@@ -821,7 +936,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  setSidebarOpen: (isOpen) => set({ sidebarOpen: isOpen }),
+  setSidebarOpen: (isOpen) => {
+    set({ sidebarOpen: isOpen });
+    void persistUiSettings({ sidebarOpen: isOpen });
+  },
+  setSidebarSearchCollapsed: (collapsed) => {
+    set({ sidebarSearchCollapsed: collapsed });
+    void persistUiSettings({ sidebarSearchCollapsed: collapsed });
+  },
+  setExpandedMaterialFolders: (expandedFolders) => {
+    set({ expandedMaterialFolders: expandedFolders });
+    void persistUiSettings({ expandedMaterialFolders: expandedFolders });
+  },
+  setExpandedTrashFolders: (expandedFolders) => {
+    set({ expandedTrashFolders: expandedFolders });
+    void persistUiSettings({ expandedTrashFolders: expandedFolders });
+  },
   setThemeMode: (mode) => {
     set({ themeMode: mode });
     void persistUiSettings({ themeMode: mode });
@@ -831,12 +961,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     void persistUiSettings({ accentColor: color });
   },
   setLessonPaperTone: (tone) => {
-    set({ lessonPaperTone: tone });
-    void persistUiSettings({ lessonPaperTone: tone });
+    void tone;
+    set({ lessonPaperTone: "light" });
+    void persistUiSettings({ lessonPaperTone: "light" });
   },
   setMindmapPaperTone: (tone) => {
-    set({ mindmapPaperTone: tone });
-    void persistUiSettings({ mindmapPaperTone: tone });
+    void tone;
+    set({ mindmapPaperTone: "dark" });
+    void persistUiSettings({ mindmapPaperTone: "dark" });
   },
   setDefaultLessonTableBodyRows: (rows) => {
     const clampedRows = clampDefaultLessonTableBodyRows(rows);
@@ -942,6 +1074,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDraggedMaterial: (material) => set({ draggedMaterial: material }),
   setPendingMaterialDrop: (drop) => set({ pendingMaterialDrop: drop }),
   setCurrentView: (view) => set({ currentView: view }),
+  editorActions: null,
+  setEditorActions: (actions) => set({ editorActions: actions }),
 
   openVault: async () => {
     try {
@@ -1004,6 +1138,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const materialsPath = await join(vaultPath, "Materials");
       const materialTree = await readMaterialTree(materialsPath);
 
+      const lessonTree = await readMaterialTree(lessonPlansPath);
+      const mindmapTree = await readMaterialTree(mindmapsPath);
+
       const trashPath = await join(vaultPath, "Trash");
       const trashTree = pruneEmptyTrashSections(await readMaterialTree(trashPath));
 
@@ -1012,6 +1149,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ 
         lessonPlans: lpFiltered,
         mindmaps: mmFiltered,
+        lessonTree,
+        mindmapTree,
         materials: materialTree,
         trashEntries: trashTree,
         isSearchIndexing: true,
@@ -1022,7 +1161,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const [nextLessonIndex, nextMindmapIndex, nextSubjectIndex] = await Promise.all([
             buildLessonSearchIndex(vaultPath, lpFiltered),
             buildMindmapSearchIndex(vaultPath, mmFiltered),
-            buildLessonSubjectIndex(vaultPath, lpFiltered),
+            buildLessonSubjectIndex(vaultPath, lessonTree),
           ]);
 
           if (buildVersion !== searchIndexBuildVersion) {
@@ -1048,23 +1187,60 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  createNewLesson: async (plannedDate?: Date) => {
+  createVaultFolder: async (folderName: string, parentPath?: string) => {
+    const { vaultPath } = get();
+    if (!vaultPath) return;
+    try {
+      const trimmed = folderName.trim();
+      if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
+        alert("Invalid folder name");
+        return;
+      }
+      const base = parentPath
+        ? await join(vaultPath, ...parentPath.split("/").filter(Boolean))
+        : await join(vaultPath, "Lesson Plans");
+      const newFolderPath = await join(base, trimmed);
+      if (await exists(newFolderPath)) {
+        alert("A folder with that name already exists");
+        return;
+      }
+      await mkdir(newFolderPath, { recursive: true });
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to create folder:", error);
+      alert("Error creating folder: " + String(error));
+    }
+  },
+
+  createNewLesson: async (plannedDate?: Date, subFolder?: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
 
     try {
       const { defaultTeacherName } = get();
-      const dateStr = plannedDate ? plannedDate.toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
+      // Use local date string to avoid UTC timezone shift
+      const now = new Date();
+      const dateToUse = plannedDate || now;
+      const year = dateToUse.getFullYear();
+      const month = String(dateToUse.getMonth() + 1).padStart(2, '0');
+      const day = String(dateToUse.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
       const fileName = `Lesson-${dateStr}-${Date.now().toString().slice(-4)}.json`;
-      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+      const lessonPlansFolder = subFolder
+        ? await join(vaultPath, "Lesson Plans", ...subFolder.split("/").filter(Boolean))
+        : await join(vaultPath, "Lesson Plans");
+      // Ensure folder exists
+      if (!(await exists(lessonPlansFolder))) {
+        await mkdir(lessonPlansFolder, { recursive: true });
+      }
       const filePath = await join(lessonPlansFolder, fileName);
       
       const initialContent: LessonData = {
         version: 1,
         metadata: {
           teacher: defaultTeacherName,
-          createdAt: new Date().toISOString(),
-          plannedFor: plannedDate ? plannedDate.toISOString() : null,
+          createdAt: now.toISOString(),
+          plannedFor: dateToUse.toISOString(),
           subject: ""
         },
         notes: "",
@@ -1230,7 +1406,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const filePath = await join(lessonPlansFolder, fileName);
-      const didMove = await movePathToTrash(vaultPath, filePath, "Lesson Plans", fileName);
+      // Extract just the basename for trash naming (handles nested paths like "Folder/Lesson.json")
+      const baseName = fileName.split("/").pop() || fileName;
+      console.log("deleteLesson:", { fileName, baseName, filePath });
+      const didMove = await movePathToTrash(vaultPath, filePath, "Lesson Plans", baseName);
 
       if (!didMove) {
         console.warn(`Skipped deleting lesson \"${fileName}\" because it no longer exists.`);
@@ -1365,9 +1544,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!vaultPath) return;
 
     try {
-      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-      const filePath = await join(lessonPlansFolder, fileName);
+      const parts = fileName.split("/").filter(Boolean);
+      const filePath = await join(vaultPath, "Lesson Plans", ...parts);
       const text = await readTextFile(filePath);
+      get().addRecent({ type: "lesson", relativePath: fileName });
       
       if (fileName.endsWith('.json')) {
         const rawContent = JSON.parse(text);
@@ -1407,13 +1587,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  createNewMindmap: async () => {
+  createNewMindmap: async (subFolder?: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
 
     try {
       const fileName = `Mindmap-${Date.now().toString().slice(-4)}.json`;
-      const mindmapsFolder = await join(vaultPath, "Mindmaps");
+      const mindmapsFolder = subFolder
+        ? await join(vaultPath, "Mindmaps", ...subFolder.split("/").filter(Boolean))
+        : await join(vaultPath, "Mindmaps");
+      if (!(await exists(mindmapsFolder))) {
+        await mkdir(mindmapsFolder, { recursive: true });
+      }
       const filePath = await join(mindmapsFolder, fileName);
       
       const initialContent: MindmapData = {
@@ -1445,7 +1630,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const mindmapsFolder = await join(vaultPath, "Mindmaps");
       const filePath = await join(mindmapsFolder, fileName);
-      await movePathToTrash(vaultPath, filePath, "Mindmaps", fileName);
+      // Extract just the basename for trash naming (handles nested paths like "Folder/Mindmap.json")
+      const baseName = fileName.split("/").pop() || fileName;
+      await movePathToTrash(vaultPath, filePath, "Mindmaps", baseName);
 
       if (currentView === "mindmap" && activeFilePath?.endsWith(fileName)) {
         set({ activeFilePath: null, activeMindmapContent: null });
@@ -1519,9 +1706,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!vaultPath) return;
 
     try {
-      const mindmapsFolder = await join(vaultPath, "Mindmaps");
-      const filePath = await join(mindmapsFolder, fileName);
+      const parts = fileName.split("/").filter(Boolean);
+      const filePath = await join(vaultPath, "Mindmaps", ...parts);
       const text = await readTextFile(filePath);
+      get().addRecent({ type: "mindmap", relativePath: fileName });
       
       if (fileName.endsWith('.json')) {
         const content = JSON.parse(text) as MindmapData;
@@ -1532,7 +1720,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addMaterialFiles: async () => {
+  addMaterialFiles: async (targetSubFolder) => {
     const { vaultPath } = get();
     if (!vaultPath) return [];
 
@@ -1548,7 +1736,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const selectedFiles = Array.isArray(selected) ? selected : [selected];
-      const materialsFolder = await join(vaultPath, "Materials");
+      const subSegs = (targetSubFolder || "").split("/").filter(Boolean);
+      const materialsFolder = subSegs.length > 0
+        ? await join(vaultPath, "Materials", ...subSegs)
+        : await join(vaultPath, "Materials");
+      if (!(await exists(materialsFolder))) {
+        await mkdir(materialsFolder, { recursive: true });
+      }
       const importedRelativePaths: string[] = [];
 
       for (const sourceFile of selectedFiles) {
@@ -1567,7 +1761,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  addMaterialDirectory: async () => {
+  addMaterialDirectory: async (targetSubFolder) => {
     const { vaultPath } = get();
     if (!vaultPath) return null;
 
@@ -1582,7 +1776,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         return null;
       }
 
-      const materialsFolder = await join(vaultPath, "Materials");
+      const subSegs = (targetSubFolder || "").split("/").filter(Boolean);
+      const materialsFolder = subSegs.length > 0
+        ? await join(vaultPath, "Materials", ...subSegs)
+        : await join(vaultPath, "Materials");
+      if (!(await exists(materialsFolder))) {
+        await mkdir(materialsFolder, { recursive: true });
+      }
       const folderName = extractBaseName(selected);
       const destinationPath = await ensureUniqueTargetPath(materialsFolder, folderName);
       await copyDirectoryRecursive(selected, destinationPath);
@@ -1692,5 +1892,140 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error("Failed to permanently delete trash entry:", error);
       alert("Error deleting trash entry: " + String(error));
     }
+  },
+
+  // ===== Generic vault path operations =====
+  renameVaultPath: async (root, relativePath, newName) => {
+    const { vaultPath, activeFilePath } = get();
+    if (!vaultPath) return;
+    try {
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
+        alert("Name cannot be empty or contain path separators.");
+        return;
+      }
+      const segs = relativePath.split("/").filter(Boolean);
+      if (segs.length === 0) return;
+      const isJson = segs[segs.length - 1].toLowerCase().endsWith(".json");
+      const finalName = isJson && !trimmed.toLowerCase().endsWith(".json") ? `${trimmed}.json` : trimmed;
+      const parentSegs = segs.slice(0, -1);
+      const oldPath = await join(vaultPath, root, ...segs);
+      const newPath = await join(vaultPath, root, ...parentSegs, finalName);
+      if (oldPath === newPath) return;
+      if (await exists(newPath)) {
+        alert("An item with that name already exists here.");
+        return;
+      }
+      await rename(oldPath, newPath);
+      if (activeFilePath === oldPath) set({ activeFilePath: newPath });
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to rename vault path:", error);
+      alert("Error renaming: " + String(error));
+    }
+  },
+
+  moveVaultPath: async (root, sourceRelative, targetFolderRelative) => {
+    const { vaultPath, activeFilePath } = get();
+    if (!vaultPath) return;
+    try {
+      const srcSegs = sourceRelative.split("/").filter(Boolean);
+      if (srcSegs.length === 0) return;
+      const itemName = srcSegs[srcSegs.length - 1];
+      const targetSegs = targetFolderRelative.split("/").filter(Boolean);
+      const sourcePath = await join(vaultPath, root, ...srcSegs);
+      const targetFolderPath = targetSegs.length === 0
+        ? await join(vaultPath, root)
+        : await join(vaultPath, root, ...targetSegs);
+
+      // Prevent moving a folder into itself or its descendant
+      const sourcePrefix = srcSegs.join("/");
+      const targetJoined = targetSegs.join("/");
+      if (targetJoined === sourcePrefix || targetJoined.startsWith(sourcePrefix + "/")) {
+        alert("Cannot move a folder into itself.");
+        return;
+      }
+      // No-op if already in target folder
+      if (srcSegs.slice(0, -1).join("/") === targetJoined) return;
+
+      if (!(await exists(targetFolderPath))) {
+        await mkdir(targetFolderPath, { recursive: true });
+      }
+      const newPath = await ensureUniqueTargetPath(targetFolderPath, itemName);
+      await rename(sourcePath, newPath);
+      if (activeFilePath === sourcePath) set({ activeFilePath: newPath });
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to move vault path:", error);
+      alert("Error moving: " + String(error));
+    }
+  },
+
+  deleteVaultPath: async (root, relativePath, isDirectory) => {
+    const { vaultPath, activeFilePath } = get();
+    if (!vaultPath) return;
+    try {
+      const segs = relativePath.split("/").filter(Boolean);
+      if (segs.length === 0) return;
+      const sourcePath = await join(vaultPath, root, ...segs);
+      const originalName = segs[segs.length - 1];
+      const trashSection = root === "Materials" ? "Materials" : root;
+      const moved = await movePathToTrash(vaultPath, sourcePath, trashSection, originalName);
+      if (!moved) {
+        // Fallback hard delete if not in vault anymore
+        try { await remove(sourcePath, isDirectory ? { recursive: true } : undefined); } catch {}
+      }
+      if (activeFilePath === sourcePath) {
+        set({ activeFilePath: null, activeFileContent: null, activeMindmapContent: null });
+      }
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to delete vault path:", error);
+      alert("Error deleting: " + String(error));
+    }
+  },
+
+  duplicateVaultPath: async (root, relativePath) => {
+    const { vaultPath } = get();
+    if (!vaultPath) return;
+    try {
+      const segs = relativePath.split("/").filter(Boolean);
+      if (segs.length === 0) return;
+      const itemName = segs[segs.length - 1];
+      const sourcePath = await join(vaultPath, root, ...segs);
+      const parentPath = segs.length === 1
+        ? await join(vaultPath, root)
+        : await join(vaultPath, root, ...segs.slice(0, -1));
+
+      // Build a "copy" name
+      const dotIdx = itemName.lastIndexOf(".");
+      const stem = dotIdx > 0 ? itemName.substring(0, dotIdx) : itemName;
+      const ext = dotIdx > 0 ? itemName.substring(dotIdx) : "";
+      const candidateName = `${stem} copy${ext}`;
+      const destinationPath = await ensureUniqueTargetPath(parentPath, candidateName);
+
+      const text = await readTextFile(sourcePath);
+      await writeTextFile(destinationPath, text);
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to duplicate vault path:", error);
+      alert("Error duplicating: " + String(error));
+    }
+  },
+
+  // ===== Recents =====
+  addRecent: (item) => {
+    const next: RecentItem = { ...item, openedAt: Date.now() };
+    const filtered = get().recents.filter(
+      (r) => !(r.type === item.type && r.relativePath === item.relativePath),
+    );
+    const merged = [next, ...filtered].slice(0, 20);
+    set({ recents: merged });
+    try { localStorage.setItem("tp-recents", JSON.stringify(merged)); } catch {}
+  },
+
+  clearRecents: () => {
+    set({ recents: [] });
+    try { localStorage.removeItem("tp-recents"); } catch {}
   },
 }));

@@ -1,6 +1,6 @@
 # TeacherPro Feature Tracker
 
-Last updated: 2026-04-17 (Method Bank left dock + contextual slash insertion)
+Last updated: 2026-04-18 (Centered shortcut welcome + keyboard shortcut controls)
 
 ## Purpose
 
@@ -81,6 +81,9 @@ Primary implementation:
 - Lesson and mindmap search now includes indexed JSON content (TipTap text + metadata for lessons, node labels/material paths for mindmaps), not only filenames.
 - Material search supports both file/folder names and relative paths (including nested entries).
 - Section headers for Lesson Plans, Mindmaps, Materials, and Trash now use larger/more readable sidebar typography.
+- Sidebar open/collapsed state is now persisted in app settings and restored on next launch.
+- Sidebar Search collapsed/expanded state is now persisted in app settings and restored on next launch.
+- Expanded folder state maps for Materials and Trash trees are now persisted in app settings and restored on next launch.
 - Appearance settings now include independent paper-tone controls for lesson plans and mindmaps.
 - Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
 - Settings now open as a centered modal overlay with stronger spacing, dimmed/blurred backdrop, and Escape/backdrop dismiss.
@@ -322,10 +325,13 @@ Primary implementation:
 - Material links are visual chips inside lesson content to reduce plain-path clutter.
 - Lesson notes are intentionally private-by-default and remain outside print/PDF exports.
 - Preview modals use centered overlays with explicit close controls.
+- Keyboard shortcut `Cmd/Ctrl+S` now triggers lesson save in the editor across macOS, Windows, and Linux.
 - Escape key closes preview/context overlays across sidebar, editor, and mindmap previews.
+- Escape key in the editor now also closes AI Chat, Notes, and Method Bank side panels.
 - Right-click menus across sidebar/editor/mindmap/material link enforce viewport clamping and max-height scroll behavior for accessibility near window edges.
 - Right-click menu shell and viewport clamping are now centralized through a shared utility (`src/utils/contextMenu.ts`) to keep styling/visibility coherent as new AI actions are added.
 - Main content scroll area reserves stable scrollbar gutter to prevent width shifts while scrolling.
+- Editor empty-state main content now uses a centered welcome screen with direct shortcut references and no inline create CTA.
 - PDF export mode uses temporary body class (`tp-exporting`) to hide interactive controls.
 
 ## Backend and Permissions Notes

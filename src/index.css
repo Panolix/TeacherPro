@@ -12,6 +12,7 @@
 }
 
 :root {
+  /* ========== Legacy tokens (kept for backwards compat) ========== */
   --tp-accent: #2d86a5;
   --tp-app-bg: #121212;
   --tp-panel-bg: #1e1e1e;
@@ -26,6 +27,72 @@
   --tp-scrollbar-track: #161616;
   --tp-scrollbar-thumb: #3a3a3a;
   --tp-scrollbar-thumb-hover: #555555;
+
+  /* ========== v3 Design Tokens (unified layer) ========== */
+  /* Surfaces — layered dark greys */
+  --tp-bg-app:    #181818;  /* app shell background (main area) */
+  --tp-bg-1:      #1e1e1e;  /* primary panel (sidebar, topbar, cards) */
+  --tp-bg-2:      #222222;  /* inputs, inner surfaces */
+  --tp-bg-3:      #252525;  /* subtle hover */
+  --tp-bg-4:      #2d2d2d;  /* stronger hover */
+  --tp-bg-5:      #333333;  /* active / pressed */
+  --tp-bg-6:      #3a3a3a;  /* ghost borders, strong hover */
+
+  /* Borders */
+  --tp-b-1:       #2a2a2a;  /* default subtle */
+  --tp-b-2:       #333333;  /* standard */
+  --tp-b-3:       #444444;  /* emphasized */
+
+  /* Text scale */
+  --tp-t-1:       #ffffff;  /* primary */
+  --tp-t-2:       #b8b8b8;  /* secondary */
+  --tp-t-3:       #888888;  /* tertiary */
+  --tp-t-4:       #555555;  /* quaternary (labels, captions) */
+
+  /* Accent (unchanged) + soft variants */
+  --tp-accent-hover:  #3497b8;
+  --tp-accent-soft:   rgba(45, 134, 165, 0.15);
+  --tp-accent-softer: rgba(45, 134, 165, 0.08);
+
+  /* Semantic status colors */
+  --tp-green: #22c55e;
+  --tp-red:   #ef4444;
+  --tp-amber: #f59e0b;
+  --tp-purple:#8b5cf6;
+
+  /* Paper (lesson surface) */
+  --tp-paper-bg:        #fdfcf9;
+  --tp-paper-ink:       #1a1a1a;
+  --tp-paper-ink-2:     #4a4a4a;
+  --tp-paper-ink-3:     #888888;
+  --tp-paper-line:      rgba(0, 0, 0, 0.08);
+  --tp-paper-line-soft: rgba(0, 0, 0, 0.04);
+
+  /* Radii */
+  --tp-r-xs:  4px;
+  --tp-r-sm:  6px;
+  --tp-r-md:  8px;
+  --tp-r-lg:  10px;
+  --tp-r-xl:  12px;
+  --tp-r-2xl: 16px;
+  --tp-r-pill: 100px;
+
+  /* Motion — upgraded for fluid feel */
+  --tp-ease:      cubic-bezier(0.16, 1, 0.3, 1);   /* smooth deceleration */
+  --tp-ease-out:  cubic-bezier(0.33, 1, 0.68, 1);   /* gentle out */
+  --tp-ease-in:   cubic-bezier(0.32, 0, 0.67, 0);   /* gentle in */
+  --tp-t-fast:    100ms var(--tp-ease);
+  --tp-t-med:     180ms var(--tp-ease);
+  --tp-t-slow:    300ms var(--tp-ease);
+
+  /* App layout dimensions — MUST preserve current app sizes */
+  --tp-sidebar-w:   18rem;   /* 288px = Tailwind w-72 */
+  --tp-sidebar-cw:  4rem;    /* 64px  = Tailwind w-16 (collapsed) */
+  --tp-panel-w:     18rem;   /* 288px = side panels match sidebar width */
+  --tp-topbar-h:    3rem;    /* 48px */
+  --tp-statusbar-h: 1.625rem;/* 26px */
+  --tp-rail-w:      3.5rem;  /* 56px */
+
   color-scheme: dark;
 }
 
@@ -114,6 +181,35 @@ html[data-tp-theme="light"] {
 
 .tp-accent-btn:hover {
   filter: brightness(0.95);
+}
+
+/* ===== Editor right rail buttons (v3) ===== */
+.tp-rail-btn {
+  color: var(--tp-t-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.tp-rail-btn:hover {
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+}
+.tp-rail-btn:disabled {
+  cursor: not-allowed;
+}
+
+.tp-rail-btn-active {
+  color: var(--tp-accent);
+  background: var(--tp-bg-5);
+  border: none;
+  cursor: pointer;
+}
+.tp-rail-btn-active:hover {
+  background: var(--tp-bg-6);
+}
+
+.tp-rail-color-btn:hover {
+  background: var(--tp-bg-4);
 }
 
 html[data-tp-theme="light"] body {
@@ -335,14 +431,8 @@ html[data-tp-lesson-paper="light"] .tp-editor-page #lesson-plan-container {
   border-color: #dbe4ef !important;
 }
 
-@media (min-width: 1601px) {
-  html[data-tp-lesson-paper="light"] .tp-editor-page #lesson-plan-container {
-    background-color: #ffffff !important;
-  }
-}
-
 html[data-tp-lesson-paper="light"] .tp-editor-page .lesson-export-surface {
-  background-color: #ffffff !important;
+  background-color: var(--tp-paper-bg) !important;
 }
 
 html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-meta {
@@ -383,53 +473,6 @@ html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror th {
   color: #0f172a !important;
 }
 
-html[data-tp-lesson-paper="dark"] .tp-editor-page .lesson-export-surface {
-  background-color: #181818 !important;
-}
-
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-input,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-planned-input,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-calendar-trigger button {
-  background-color: #222222 !important;
-  border-color: #333333 !important;
-  color: #f3f4f6 !important;
-}
-
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-label,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-value,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h1,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h2,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror h3,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror p,
-html[data-tp-lesson-paper="dark"] .tp-editor-surface .ProseMirror li {
-  color: #f8f8f8 !important;
-}
-
-/* Independent mindmap paper tone */
-html[data-tp-mindmap-paper="light"] .tp-mindmap {
-  background-color: #f2f6fb !important;
-}
-
-html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-100,
-html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-200,
-html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-300 {
-  color: #172033 !important;
-}
-
-html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-400,
-html[data-tp-mindmap-paper="light"] .tp-mindmap .text-gray-500 {
-  color: #5a6a80 !important;
-}
-
-html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#2d2d2d\],
-html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#2f2f2f\],
-html[data-tp-mindmap-paper="light"] .tp-mindmap .bg-\[\#333\] {
-  background-color: #e8eef6 !important;
-  color: #18263a !important;
-  border-color: #cbd5e1 !important;
-}
-
 html[data-tp-mindmap-paper="dark"] .tp-mindmap {
   background-color: #121212 !important;
 }
@@ -455,17 +498,17 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
 
 /* In-App A4 Landscape Paper Container */
 #lesson-plan-container {
-  width: 100%;
-  max-width: 1800px; /* Much wider to use the full screen natively */
+  width: min(297mm, 100%);
+  max-width: 297mm;
   margin: 0 auto;
-  border-radius: 0 0 6px 6px;
+  border-radius: 14px;
 }
 
 .lesson-export-surface {
   width: 100%;
-  max-width: 1600px; /* internal comfortable reading width */
-  margin: 0 auto;
-  border-radius: 0 0 6px 6px;
+  max-width: none;
+  margin: 0;
+  border-radius: 14px;
 }
 
 /* TipTap Editor Styles - Standardized to A4 12pt Typography */
@@ -598,6 +641,50 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   width: 100%;
   min-width: 100%;
 }
+
+/* v3 meta strip transparent input style */
+.tp-meta-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+  color: var(--tp-paper-ink);
+  font-size: 13px;
+  padding: 2px 0 3px;
+  outline: none;
+  transition: border-bottom-color var(--tp-t-fast);
+  width: 100%;
+  text-align: center;
+  text-align-last: center;
+}
+.tp-meta-input::placeholder {
+  text-align: center;
+}
+.tp-meta-input:hover,
+.tp-meta-input:focus {
+  border-bottom-color: var(--tp-accent);
+}
+
+/* Dark paper: restore readable text for transparent meta inputs */
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-meta-input {
+  color: #f3f4f6 !important;
+}
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .lesson-export-label {
+  color: #9ca3af !important;
+}
+
+/* Light paper: ensure proper ink colors */
+html[data-tp-lesson-paper="light"] .tp-editor-surface .tp-meta-input {
+  color: #0f172a !important;
+}
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-label {
+  color: #475569 !important;
+}
+
+/* Settings panel: align legacy Tailwind grays to design tokens */
+.tp-settings-panel .text-gray-500 { color: var(--tp-t-3); }
+.tp-settings-panel .text-gray-400 { color: var(--tp-t-3); }
+.tp-settings-panel .text-gray-300 { color: var(--tp-t-2); }
+.tp-settings-panel .text-gray-200 { color: var(--tp-t-2); }
 
 /* Export-specific styles for clean lesson PDFs */
 body.tp-exporting #lesson-plan-export-content,
@@ -742,6 +829,631 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror td,
 
 .tp-mindmap-export-clone {
   background: #ffffff !important;
+}
+
+/* ====== v3 Fluid Animations & Transparency ====== */
+
+/* Smooth transitions on all interactive elements */
+button, a, input, select, textarea {
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Smooth hover micro-interactions for buttons */
+.tp-rail-btn,
+.tp-chrome-btn,
+.tp-rail-btn-active {
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tp-rail-btn:hover:not(:disabled) {
+  transform: translateY(-0.5px);
+}
+
+.tp-rail-btn:active:not(:disabled) {
+  transform: translateY(0px) scale(0.96);
+}
+
+/* View tab pill animation */
+[role="tablist"] button {
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Side panel overlay — smooth slide+fade */
+.tp-side-panel-overlay {
+  animation: tp-fade-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tp-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal backdrop smooth entry */
+.tp-modal-backdrop {
+  animation: tp-fade-in 150ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Modal card scale-in */
+.tp-modal-card {
+  animation: tp-scale-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tp-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Context menu pop-in */
+.tp-context-menu {
+  animation: tp-context-pop 140ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes tp-context-pop {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Subtle hover glow on accent buttons */
+.tp-accent-btn {
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.tp-accent-btn:hover {
+  box-shadow: 0 0 16px rgba(45, 134, 165, 0.25);
+}
+.tp-accent-btn:active {
+  transform: scale(0.97);
+}
+
+/* Sidebar action buttons (Lesson / Mindmap / Folder) */
+.tp-action-btn {
+  background: var(--tp-bg-2);
+  border: 1px solid var(--tp-b-1);
+  color: var(--tp-t-2);
+  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+.tp-action-btn:hover {
+  background: var(--tp-bg-4);
+  border-color: var(--tp-accent);
+  color: var(--tp-t-1);
+  box-shadow: 0 0 0 1px var(--tp-accent), 0 2px 8px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+.tp-action-btn:active {
+  transform: translateY(0) scale(0.97);
+  background: var(--tp-accent);
+  color: #fff;
+  border-color: var(--tp-accent);
+}
+
+/* Sidebar items smooth highlight */
+.tp-sidebar-item {
+  transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ===== Craft-style v2 Context Menu ===== */
+.tp-context-menu {
+  min-width: 200px;
+  max-width: 280px;
+  background: #222222;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-family: inherit;
+  user-select: none;
+}
+
+.tp-cm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #b8b8b8;
+  cursor: pointer;
+  transition: all 100ms;
+  position: relative;
+}
+
+.tp-cm-item:hover:not(.disabled) {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+.tp-cm-item.active {
+  background: rgba(45, 134, 165, 0.12);
+  color: var(--tp-accent);
+}
+
+.tp-cm-item.danger {
+  color: #ef4444;
+}
+
+.tp-cm-item.danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
+.tp-cm-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tp-cm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.tp-cm-item:hover .tp-cm-icon {
+  opacity: 1;
+}
+
+.tp-cm-item.active .tp-cm-icon,
+.tp-cm-item.danger .tp-cm-icon {
+  opacity: 1;
+}
+
+.tp-cm-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.tp-cm-label {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tp-cm-kbd {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: #555555;
+  padding: 2px 6px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  font-family: inherit;
+}
+
+.tp-cm-divider {
+  height: 1px;
+  background: #2a2a2a;
+  margin: 6px 0;
+}
+
+.tp-cm-section {
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tp-cm-arrow {
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.5;
+}
+
+/* Submenu popovers (rendered with fixed positioning by JS for viewport-awareness) */
+.tp-cm-submenu-pop {
+  min-width: 200px;
+}
+
+.tp-cm-color-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.tp-cm-color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 100ms;
+  border: 2px solid transparent;
+  padding: 0;
+}
+
+.tp-cm-color-dot:hover {
+  transform: scale(1.15);
+}
+
+.tp-cm-color-dot.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 1px #222222;
+}
+
+/* ===== Craft v2 Settings Modal ===== */
+.tp-settings-modal {
+  background: #222222;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.tp-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2a2a2a;
+  flex-shrink: 0;
+}
+
+.tp-settings-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.tp-settings-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #888888;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+
+.tp-settings-close:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+.tp-settings-tabs {
+  width: 180px;
+  background: #1c1c1c;
+  border-right: 1px solid #2a2a2a;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tp-settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: #888888;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 120ms;
+  text-align: left;
+}
+
+.tp-settings-tab:hover {
+  color: #ffffff;
+  background: #2a2a2a;
+}
+
+.tp-settings-tab.active {
+  color: #ffffff;
+  background: rgba(45, 134, 165, 0.12);
+}
+
+.tp-settings-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.tp-settings-section {
+  margin-bottom: 28px;
+}
+
+.tp-settings-section:last-child {
+  margin-bottom: 0;
+}
+
+.tp-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 14px;
+}
+
+.tp-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tp-form-row:last-child {
+  margin-bottom: 0;
+}
+
+.tp-form-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #b8b8b8;
+}
+
+.tp-form-hint {
+  font-size: 12px;
+  color: #555555;
+}
+
+.tp-input {
+  height: 38px;
+  padding: 0 12px;
+  background: #252525;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 120ms;
+  width: 100%;
+}
+
+.tp-input:focus {
+  border-color: var(--tp-accent);
+}
+
+.tp-input::placeholder {
+  color: #555555;
+}
+
+select.tp-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+.tp-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.tp-toggle-row:last-child {
+  border-bottom: none;
+}
+
+.tp-toggle {
+  width: 44px;
+  height: 24px;
+  background: #333333;
+  border-radius: 100px;
+  position: relative;
+  cursor: pointer;
+  transition: all 120ms;
+  flex-shrink: 0;
+  border: none;
+  padding: 0;
+}
+
+.tp-toggle.active {
+  background: var(--tp-accent);
+}
+
+.tp-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: all 120ms;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.tp-toggle.active::after {
+  left: 22px;
+}
+
+.tp-color-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tp-color-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 120ms;
+  border: 2px solid transparent;
+  position: relative;
+  padding: 0;
+}
+
+.tp-color-option:hover {
+  transform: scale(1.1);
+}
+
+.tp-color-option.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px #222222;
+}
+
+.tp-color-custom {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px dashed #404040;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tp-num-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #252525;
+  border: 1px solid #2a2a2a;
+  color: #b8b8b8;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+
+.tp-num-btn:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+  border-color: #333333;
+}
+
+.tp-num-input {
+  width: 60px;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.tp-num-input::-webkit-outer-spin-button,
+.tp-num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.tp-settings-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid #2a2a2a;
+  background: #1c1c1c;
+  flex-shrink: 0;
+}
+
+.tp-btn {
+  height: 36px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid #333333;
+  color: #b8b8b8;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 120ms;
+}
+
+.tp-btn:hover {
+  background: #2a2a2a;
+  color: #ffffff;
+  border-color: #404040;
+}
+
+.tp-btn:active {
+  transform: translateY(1px);
+}
+
+.tp-btn-primary {
+  background: var(--tp-accent);
+  border-color: transparent;
+  color: white;
+}
+
+.tp-btn-primary:hover {
+  background: var(--tp-accent);
+  filter: brightness(1.08);
+  color: white;
+}
+
+/* Legacy context menus (Editor table, Mindmap node) — inherit craft v2 look
+   These menus build their items as raw <button>/<div> instead of using the new
+   ContextMenu component, so we style their direct children to match. */
+.tp-context-menu--legacy button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #b8b8b8;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 100ms;
+  font-family: inherit;
+}
+.tp-context-menu--legacy button:hover:not(:disabled) {
+  background: #2a2a2a;
+  color: #ffffff;
+}
+.tp-context-menu--legacy button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tp-context-menu--legacy button.text-red-300,
+.tp-context-menu--legacy button.text-red-400,
+.tp-context-menu--legacy button.text-red-500 {
+  color: #ef4444;
+}
+.tp-context-menu--legacy button.text-red-300:hover:not(:disabled),
+.tp-context-menu--legacy button.text-red-400:hover:not(:disabled),
+.tp-context-menu--legacy button.text-red-500:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+/* Dividers used in legacy menus */
+.tp-context-menu--legacy .h-px {
+  background: #2a2a2a !important;
+  margin: 6px 0 !important;
+}
+
+/* Drag-over highlight for folder drop targets */
+.tp-drop-target {
+  outline: 2px solid var(--tp-accent);
+  outline-offset: -2px;
+  background: rgba(45, 134, 165, 0.08) !important;
 }
 
 @media print {

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Sidebar } from "./components/Sidebar";
+import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
 import { useAppStore } from "./store";
 
@@ -39,7 +39,7 @@ function resolveAccentColor(accentValue: string): string {
 }
 
 function App() {
-  const { initVault, accentColor, lessonPaperTone, mindmapPaperTone } = useAppStore();
+  const { initVault, accentColor } = useAppStore();
 
   useEffect(() => {
     console.log("App mounted. Attempting to show window immediately...");
@@ -57,6 +57,10 @@ function App() {
     }).catch(err => {
       console.error("Vault init failed:", err);
     });
+
+    // Fixed canvas modes: lesson paper is always light, mindmap canvas is always dark.
+    useAppStore.getState().setLessonPaperTone("light");
+    useAppStore.getState().setMindmapPaperTone("dark");
   }, []);
 
   useEffect(() => {
@@ -69,16 +73,13 @@ function App() {
   }, [accentColor]);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-tp-lesson-paper", lessonPaperTone);
-  }, [lessonPaperTone]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-tp-mindmap-paper", mindmapPaperTone);
-  }, [mindmapPaperTone]);
+    document.documentElement.setAttribute("data-tp-lesson-paper", "light");
+    document.documentElement.setAttribute("data-tp-mindmap-paper", "dark");
+  }, []);
 
   return (
     <div className="tp-app-shell flex h-screen w-screen overflow-hidden bg-[#1e1e1e] text-slate-800">
-      <Sidebar />
+      <SidebarMinimal />
       <MainContent />
     </div>
   );

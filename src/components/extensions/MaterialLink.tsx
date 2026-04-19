@@ -223,8 +223,12 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     <NodeViewWrapper className="block max-w-full my-2 mx-1 overflow-hidden">
       <div
         onContextMenu={handleContextMenu}
-        className="flex items-center gap-2 px-3 py-2 bg-[#222] border border-[#333] rounded-lg group hover:border-[color:var(--tp-accent)] transition-all shadow-sm max-w-full"
-        title={filePath || fileName}
+        onDoubleClick={() => {
+          closeContextMenu();
+          void handlePreview();
+        }}
+        className="flex items-center gap-2 px-3 py-2 bg-[#222] border border-[#333] rounded-lg hover:border-[color:var(--tp-accent)] transition-all shadow-sm max-w-full cursor-pointer"
+        title={`${filePath || fileName} — right-click for actions, double-click to preview`}
       >
         {itemType === "folder" ? (
           <Folder className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
@@ -237,89 +241,33 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         >
           {fileName}
         </span>
-
-        <div className="flex items-center shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handlePreview();
-            }}
-            className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-[var(--tp-accent)] transition-colors"
-            title="Preview"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handleOpen();
-            }}
-            className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-[var(--tp-accent)] transition-colors"
-            title="Open in default app"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handleReveal();
-            }}
-            className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-[var(--tp-accent)] transition-colors"
-            title="Show in file manager"
-          >
-            <FolderOpen className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="p-1 hover:bg-[#333] rounded text-gray-400 hover:text-red-400 transition-colors"
-            title="Remove link"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
       </div>
 
       {contextMenu && (
         <div
-          className="fixed z-[85] min-w-[180px] max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto rounded-md border border-[#3a3a3a] bg-[#1f1f1f] p-1 shadow-xl"
+          className="tp-context-menu tp-context-menu--legacy fixed z-[85]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
         >
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handlePreview();
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
-          >
-            Preview
+          <button onClick={() => { closeContextMenu(); void handlePreview(); }}>
+            <Eye className="w-4 h-4" />
+            <span style={{ flex: 1 }}>Preview</span>
           </button>
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handleOpen();
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
-          >
-            Open
+          <button onClick={() => { closeContextMenu(); void handleOpen(); }}>
+            <ExternalLink className="w-4 h-4" />
+            <span style={{ flex: 1 }}>Open in Default App</span>
           </button>
-          <button
-            onClick={() => {
-              closeContextMenu();
-              void handleReveal();
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
-          >
-            Show In File Manager
+          <button onClick={() => { closeContextMenu(); void handleReveal(); }}>
+            <FolderOpen className="w-4 h-4" />
+            <span style={{ flex: 1 }}>Reveal in Finder</span>
           </button>
+          <div className="h-px" />
           <button
-            onClick={() => {
-              closeContextMenu();
-              handleDelete();
-            }}
-            className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded"
+            onClick={() => { closeContextMenu(); handleDelete(); }}
+            className="text-red-400"
           >
-            Remove Link
+            <Trash2 className="w-4 h-4" />
+            <span style={{ flex: 1 }}>Remove Link</span>
           </button>
         </div>
       )}

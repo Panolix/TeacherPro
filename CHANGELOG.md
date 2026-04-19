@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-19
+### Changed — UI Overhaul
+- **Complete interface redesign.** The entire shell — sidebar, top bar, status bar, and context menus — has been rebuilt from scratch with a cleaner, more focused aesthetic.
+- **New minimal icon sidebar** (`SidebarMinimal`). A 56 px icon rail with a slide-out explorer panel replaces the old wide sidebar. The explorer shows a unified lesson + mindmap file tree with nested folder support, drag-to-folder, and a trash section — all in one scrollable view.
+- **New top bar** (`TopBar`). Slimmer single-row bar with view tabs, vault breadcrumb, and quick-action buttons. Removes the old double-row chrome.
+- **New status bar** (`StatusBar`). Persistent bottom strip showing vault path, active file, word count, and app version.
+- **New context menu system** (`ContextMenu`). Fully custom floating context menus with submenus, keyboard-navigable, and correctly viewport-anchored.
+- **Mouse-based drag & drop** throughout. HTML5 DnD was replaced entirely with `mousedown/mousemove/mouseup` tracking — the only approach that works reliably in Tauri's WKWebView on macOS. Applies to calendar lesson rescheduling and sidebar file-to-folder moves.
+- **Calendar lesson cards redesigned.** Larger two-row cards with a colored left-border accent per subject, always-visible grip/select/delete controls, and a clean separator between title and action rows.
+- **Vault item preview modal** (`VaultItemPreviewModal`). Inline read-only preview of lessons and mindmaps without opening the full editor.
+- **Material preview modal** (`MaterialPreviewModal`). Dedicated preview for vault material files.
+- **Settings modal** (`SettingsModal`). Moved app settings into a focused modal rather than an inline panel.
+
+### Fixed
+- Lesson cards in calendar no longer show the subject name twice when the title matches the subject (e.g. "English / English") — falls back to a date label.
+- Subject color accent on lesson cards is now preserved after moving a lesson into a subfolder. Root cause: the subject index was keyed by bare filename; it now walks the full `MaterialEntry` tree and keys by `relativePath`.
+- Folder drag-and-drop: items can now be dragged back to vault root by dropping anywhere in the explorer panel outside a folder row.
+- Context menu submenu positioning no longer breaks when near the viewport edge.
+- CSS drop-target highlight changed from dashed to solid outline, consistent with calendar day hover.
+- Trash icon on individual calendar lesson cards now turns red on hover/press.
+
 ## [1.6.0] - 2026-04-17
 ### Added
 - Method Bank is now fully integrated as a third left-side dock in the lesson editor, with local JSON seed loading from `public/method-bank.json`.

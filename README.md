@@ -138,6 +138,9 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Viewport-Safe Context Menus:** Right-click menus in sidebar, editor tables, mindmaps, and material links auto-reposition near window edges so actions remain fully visible.
 - **Stable Scrolling Layout:** Scrollbar gutters are stabilized to avoid content width shifts while scrolling; scrollbar visuals are slimmer and neutral gray.
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
+- **Persistent Sidebar Setup:** Sidebar open/collapsed state, Sidebar Search collapse state, and expanded Material/Trash folders now restore after restarting the app.
+- **Centered Main Welcome Screen:** When no lesson is open, the main content area shows a simple centered welcome with shortcut hints instead of an immediate create button.
+- **Keyboard Shortcuts:** `Cmd/Ctrl+S` saves the active lesson in the editor; `Esc` closes preview overlays, settings, and editor side panels (AI Chat, Notes, Method Bank).
 - **Compact Action Buttons:** AI Chat, Save, Preview, Print, and Export actions are icon-first by default, with an optional setting to show text labels.
 
 ### 🤖 Local AI Assistant (Experimental Foundation)

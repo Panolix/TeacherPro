@@ -312,8 +312,6 @@ export function MindmapView() {
     activeFilePath,
     createNewMindmap,
     vaultPath,
-    mindmapPaperTone,
-    showActionButtonLabels,
     draggedMaterial,
     setDraggedMaterial,
     pendingMaterialDrop,
@@ -1200,11 +1198,9 @@ export function MindmapView() {
     }
   };
 
-  const isLightMindmapPaper = mindmapPaperTone === "light";
-
   if (!activeFilePath) {
     return (
-      <div className="tp-mindmap h-full flex items-center justify-center bg-[#121212]">
+      <div className="tp-mindmap h-full flex items-center justify-center" style={{ background: "var(--tp-bg-app)" }}>
         <div className="text-center max-w-md p-8">
           <h2 className="text-3xl font-bold text-gray-100 mb-4">Mindmaps Ready</h2>
           <p className="text-gray-400 mb-8">
@@ -1247,7 +1243,6 @@ export function MindmapView() {
             className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Eye className="w-4 h-4" />
-            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Preview"}</span>}
           </button>
           <button
             onClick={handlePrintPDF}
@@ -1256,7 +1251,6 @@ export function MindmapView() {
             className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Printer className="w-4 h-4" />
-            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Print"}</span>}
           </button>
           <button
             onClick={handleExportPDF}
@@ -1265,7 +1259,6 @@ export function MindmapView() {
             className="bg-[#333] hover:bg-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Download className="w-4 h-4" />
-            {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Export"}</span>}
           </button>
           <button
             onClick={handleSave}
@@ -1273,7 +1266,6 @@ export function MindmapView() {
             className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
-            {showActionButtonLabels && <span>Save</span>}
           </button>
         </div>
       </div>
@@ -1510,7 +1502,7 @@ export function MindmapView() {
           onPaneClick={() => setContextMenu(null)}
           panOnDrag={[0, 1]}
           fitView
-          colorMode={isLightMindmapPaper ? "light" : "dark"}
+          colorMode="dark"
           className="print:!bg-white"
         >
           <Controls
@@ -1518,12 +1510,12 @@ export function MindmapView() {
             style={{
               display: "flex",
               flexDirection: "column",
-              backgroundColor: isLightMindmapPaper ? "#f3f6fb" : "#222",
-              fill: isLightMindmapPaper ? "#334155" : "#ccc",
-              border: isLightMindmapPaper ? "1px solid #cbd5e1" : "1px solid #333",
+              backgroundColor: "#222",
+              fill: "#ccc",
+              border: "1px solid #333",
             }}
           />
-          <Background className="print:hidden" color={isLightMindmapPaper ? "#d5dde8" : "#333"} gap={16} />
+          <Background className="print:hidden" color="#333" gap={16} />
         </ReactFlow>
       </div>
     </div>

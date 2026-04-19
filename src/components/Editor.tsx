@@ -50,14 +50,11 @@ import {
   ListOrdered,
   Undo,
   Redo,
-  Save,
   Table as TableIcon,
-  Printer,
-  Download,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Eye,
+  ChevronDown,
   Sparkles,
   Languages,
   MessageSquare,
@@ -67,6 +64,8 @@ import {
   Trash2,
   FileText,
   BookOpen,
+  Minus as MinusIcon,
+  Eraser,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -518,37 +517,15 @@ function normalizeAiFragmentOutput(rawOutput: string, originalSelection: string)
 
 const MenuBar = ({
   editor,
-  onSave,
-  onPreview,
-  onPrint,
-  onExport,
-  onToggleChat,
-  onToggleNotes,
-  onToggleMethodBank,
-  chatOpen,
-  notesOpen,
-  methodBankOpen,
-  isPdfBusy,
-  showActionButtonLabels,
-  aiEnabled,
+  onInsertCustomTable,
 }: {
   editor: any;
-  onSave: () => void;
-  onPreview: () => void;
-  onPrint: () => void;
-  onExport: () => void;
-  onToggleChat: () => void;
-  onToggleNotes: () => void;
-  onToggleMethodBank: () => void;
-  chatOpen: boolean;
-  notesOpen: boolean;
-  methodBankOpen: boolean;
-  isPdfBusy: boolean;
-  showActionButtonLabels: boolean;
-  aiEnabled: boolean;
+  onInsertCustomTable: () => void;
 }) => {
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const fontSizeWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!editor) return;
@@ -565,6 +542,25 @@ const MenuBar = ({
       editor.off("selectionUpdate", handleUpdate);
     };
   }, [editor]);
+
+  // Close font-size dropdown on outside click / Escape
+  useEffect(() => {
+    if (!fontSizeOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (fontSizeWrapRef.current && !fontSizeWrapRef.current.contains(e.target as Node)) {
+        setFontSizeOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFontSizeOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [fontSizeOpen]);
 
   if (!editor) {
     return null;
@@ -589,69 +585,153 @@ const MenuBar = ({
     "#fef08a",
   );
 
+  // --- Vertical Right Rail (v3 design) ---
+  const railBtn = (isActive?: boolean) =>
+    `h-8 w-9 inline-flex items-center justify-center rounded-md transition-colors ${
+      isActive ? "tp-rail-btn-active" : "tp-rail-btn"
+    }`;
+  const railDivider = (
+    <div
+      className="w-6 h-px my-0.5"
+      style={{ background: "var(--tp-b-1)" }}
+      aria-hidden="true"
+    />
+  );
+
   return (
-    <div className="tp-editor-toolbar border-b border-[#333333] bg-[#1e1e1e] p-2 rounded-t-xl print:hidden">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">
-        <select
-          value={currentFontSize}
-          onChange={(e) => editor.chain().focus().setFontSize(e.target.value).run()}
-          className="bg-[#2d2d2d] text-gray-200 border border-[#444] rounded px-2 py-1 text-sm outline-none focus:border-[var(--tp-accent)] cursor-pointer"
+    <div
+      className="tp-editor-rail print:hidden self-stretch flex flex-col items-center py-2 gap-0.5 overflow-y-auto shrink-0"
+      style={{
+        width: "var(--tp-rail-w)",
+        background: "var(--tp-bg-1)",
+        borderLeft: "1px solid var(--tp-b-1)",
+      }}
+    >
+      {/* Font size — custom popover dropdown (OS-independent, escapes rail overflow via fixed positioning) */}
+      <div ref={fontSizeWrapRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setFontSizeOpen((v) => !v)}
+          className="h-7 w-9 inline-flex items-center justify-center gap-0.5 rounded text-[10.5px] font-medium cursor-pointer outline-none transition-colors hover:[background:var(--tp-bg-3)]"
+          style={{
+            background: "var(--tp-bg-2)",
+            border: "1px solid var(--tp-b-2)",
+            color: "var(--tp-t-1)",
+          }}
+          title="Font size"
+          aria-haspopup="listbox"
+          aria-expanded={fontSizeOpen}
         >
-          {FONT_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-        
-        <div className="w-px h-6 bg-[#333333] mx-1"></div>
+          <span>{currentFontSize.replace("pt", "")}</span>
+          <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+        </button>
+        {fontSizeOpen && (() => {
+          const rect = fontSizeWrapRef.current?.getBoundingClientRect();
+          const top = rect ? rect.top : 0;
+          const left = rect ? rect.left - 92 : 0; // 84px width + 8px gap
+          return (
+            <div
+              className="py-1 rounded-lg shadow-2xl"
+              style={{
+                position: "fixed",
+                top,
+                left,
+                zIndex: 1000,
+                background: "#222222",
+                border: "1px solid #333333",
+                minWidth: "84px",
+              }}
+              role="listbox"
+            >
+              {FONT_SIZES.map((size) => {
+                const isSelected = size === currentFontSize;
+                return (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      editor.chain().focus().setFontSize(size).run();
+                      setFontSizeOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] transition-colors text-left"
+                    style={{
+                      color: isSelected ? "var(--tp-accent)" : "#b8b8b8",
+                      background: isSelected ? "rgba(45,134,165,0.12)" : "transparent",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "#2a2a2a";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+                    }}
+                    role="option"
+                    aria-selected={isSelected}
+                  >
+                    <span>{size.replace("pt", "")} pt</span>
+                    {isSelected && <span className="text-[10px]">●</span>}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
+      {railDivider}
 
-        <button
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          disabled={!editor.can().chain().focus().toggleBold().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("bold") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Bold className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          disabled={!editor.can().chain().focus().toggleItalic().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("italic") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Italic className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleStrike().run()}
-          disabled={!editor.can().chain().focus().toggleStrike().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("strike") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Strikethrough className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          disabled={!editor.can().chain().focus().toggleUnderline().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("underline") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Underline className="w-4 h-4" />
-        </button>
+      {/* Bold / Italic / Strike / Underline */}
+      <button
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        disabled={!editor.can().chain().focus().toggleBold().run()}
+        className={railBtn(editor.isActive("bold"))}
+        title="Bold (⌘B)"
+      >
+        <Bold className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        disabled={!editor.can().chain().focus().toggleItalic().run()}
+        className={railBtn(editor.isActive("italic"))}
+        title="Italic (⌘I)"
+      >
+        <Italic className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleUnderline().run()}
+        disabled={!editor.can().chain().focus().toggleUnderline().run()}
+        className={railBtn(editor.isActive("underline"))}
+        title="Underline (⌘U)"
+      >
+        <Underline className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        disabled={!editor.can().chain().focus().toggleStrike().run()}
+        className={railBtn(editor.isActive("strike"))}
+        title="Strikethrough"
+      >
+        <Strikethrough className="w-4 h-4" />
+      </button>
 
-        <div className="w-px h-6 bg-[#333333] mx-1"></div>
+      {railDivider}
 
-        <div className="flex items-center gap-1 rounded-md border border-[#3a3a3a] bg-[#242424] px-1 py-1">
+      {/* Colors A / U / H (each with hidden color picker + reset below) */}
+      <div
+        className="flex flex-col p-1 rounded gap-0.5"
+        style={{
+          background: "var(--tp-bg-2)",
+          border: "1px solid var(--tp-b-2)",
+        }}
+      >
+        <div className="flex gap-0.5">
           <label
-            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
             title="Text Color"
+            style={{ color: "var(--tp-t-1)" }}
           >
-            <span className="text-[11px] text-gray-200 font-semibold">A</span>
+            A
+            <span
+              className="absolute left-0.5 right-0.5 bottom-[2px] h-[2px] rounded-sm"
+              style={{ background: currentTextColor }}
+            />
             <input
               type="color"
               value={currentTextColor}
@@ -661,16 +741,23 @@ const MenuBar = ({
           </label>
           <button
             onClick={() => editor.chain().focus().unsetColor().run()}
-            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
             title="Reset Text Color"
           >
             A-
           </button>
+        </div>
+        <div className="flex gap-0.5">
           <label
-            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
             title="Underline Color"
+            style={{ color: "var(--tp-t-1)" }}
           >
-            <span className="text-[11px] text-gray-200 font-semibold">U</span>
+            U
+            <span
+              className="absolute left-0.5 right-0.5 bottom-[2px] h-[2px] rounded-sm"
+              style={{ background: currentUnderlineColor }}
+            />
             <input
               type="color"
               value={currentUnderlineColor}
@@ -693,16 +780,19 @@ const MenuBar = ({
                 .removeEmptyTextStyle()
                 .run()
             }
-            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
             title="Reset Underline Color"
           >
             U-
           </button>
+        </div>
+        <div className="flex gap-0.5">
           <label
-            className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-[#303030] cursor-pointer"
+            className="inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
             title="Highlight Color"
+            style={{ background: currentHighlightColor, color: "#1a1a1a" }}
           >
-            <span className="text-[11px] text-gray-200 font-semibold">H</span>
+            H
             <input
               type="color"
               value={currentHighlightColor}
@@ -714,155 +804,108 @@ const MenuBar = ({
           </label>
           <button
             onClick={() => editor.chain().focus().unsetHighlight().run()}
-            className="h-7 px-2 rounded text-[11px] text-gray-300 hover:bg-[#303030]"
+            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
             title="Clear Highlight"
           >
             H-
           </button>
         </div>
-
-        <div className="w-px h-6 bg-[#333333] mx-1"></div>
-
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("heading", { level: 1 }) ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Heading1 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("heading", { level: 2 }) ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Heading2 className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("heading", { level: 3 }) ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <Heading3 className="w-4 h-4" />
-        </button>
-
-        <div className="w-px h-6 bg-[#333333] mx-1"></div>
-
-        <button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("bulletList") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <List className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`p-2 rounded-md transition-colors ${
-            editor.isActive("orderedList") ? "bg-[#333] text-white" : "text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200"
-          }`}
-        >
-          <ListOrdered className="w-4 h-4" />
-        </button>
-
-        <div className="w-px h-6 bg-[#333333] mx-1"></div>
-
-        <button
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!editor.can().chain().focus().undo().run()}
-          className="p-2 rounded-md text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200 transition-colors disabled:opacity-50"
-        >
-          <Undo className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!editor.can().chain().focus().redo().run()}
-          className="p-2 rounded-md text-gray-400 hover:bg-[#2d2d2d] hover:text-gray-200 transition-colors disabled:opacity-50"
-        >
-          <Redo className="w-4 h-4" />
-        </button>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-        {aiEnabled && (
-          <button
-            onClick={onToggleChat}
-            title={chatOpen ? "Hide AI Chat" : "Open AI Chat"}
-            aria-pressed={chatOpen}
-            className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
-              chatOpen
-                ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
-                : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
-            }`}
-          >
-            <MessageSquare className="w-4 h-4" />
-            {showActionButtonLabels && <span>AI Chat</span>}
-          </button>
-        )}
-        <button
-          onClick={onToggleNotes}
-          title={notesOpen ? "Hide Notes" : "Open Notes"}
-          aria-pressed={notesOpen}
-          className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
-            notesOpen
-              ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
-              : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          {showActionButtonLabels && <span>Notes</span>}
-        </button>
-        <button
-          onClick={onToggleMethodBank}
-          title={methodBankOpen ? "Hide Method Bank" : "Open Method Bank"}
-          aria-pressed={methodBankOpen}
-          className={`h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border rounded-md text-white font-medium shadow-sm transition-colors ${
-            methodBankOpen
-              ? "bg-[var(--tp-accent)] border-[var(--tp-accent)]"
-              : "bg-[#2f2f2f] hover:bg-[#3a3a3a] border-[#444]"
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          {showActionButtonLabels && <span>Method Bank</span>}
-        </button>
-        <button
-          onClick={onPreview}
-          title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
-          disabled={isPdfBusy}
-          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
-        >
-          <Eye className="w-4 h-4" />
-          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Preview"}</span>}
-        </button>
-        <button
-          onClick={onPrint}
-          title={isPdfBusy ? "Print or Save PDF (busy)" : "Print or Save PDF"}
-          disabled={isPdfBusy}
-          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
-        >
-          <Printer className="w-4 h-4" />
-          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Print"}</span>}
-        </button>
-        <button
-          onClick={onExport}
-          title={isPdfBusy ? "Export PDF (busy)" : "Export PDF"}
-          disabled={isPdfBusy}
-          className="h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm bg-[#333] hover:bg-[#444] border-none rounded-md text-white font-medium shadow-sm transition-colors disabled:opacity-60"
-        >
-          <Download className="w-4 h-4" />
-          {showActionButtonLabels && <span>{isPdfBusy ? "Working..." : "Export"}</span>}
-        </button>
-        <button
-          onClick={onSave}
-          title="Save Lesson Plan"
-          className="tp-accent-btn h-9 min-w-9 inline-flex items-center justify-center gap-2 px-2.5 py-1.5 text-sm border-none rounded-md text-white font-medium shadow-sm transition-colors"
-        >
-          <Save className="w-4 h-4" />
-          {showActionButtonLabels && <span>Save</span>}
-        </button>
-        </div>
       </div>
+
+      {railDivider}
+
+      {/* Headings */}
+      <button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+        className={railBtn(editor.isActive("heading", { level: 1 }))}
+        title="Heading 1"
+      >
+        <Heading1 className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        className={railBtn(editor.isActive("heading", { level: 2 }))}
+        title="Heading 2"
+      >
+        <Heading2 className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        className={railBtn(editor.isActive("heading", { level: 3 }))}
+        title="Heading 3"
+      >
+        <Heading3 className="w-4 h-4" />
+      </button>
+
+      {railDivider}
+
+      {/* Lists */}
+      <button
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        className={railBtn(editor.isActive("bulletList"))}
+        title="Bullet list"
+      >
+        <List className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        className={railBtn(editor.isActive("orderedList"))}
+        title="Ordered list"
+      >
+        <ListOrdered className="w-4 h-4" />
+      </button>
+
+      {railDivider}
+
+      {/* Block formats: Horizontal rule, Clear */}
+      <button
+        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        className={railBtn(false)}
+        title="Horizontal rule"
+      >
+        <MinusIcon className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => {
+          // Select all first to ensure clear formatting works
+          editor.chain().focus().selectAll().clearNodes().unsetAllMarks().run();
+        }}
+        className={railBtn(false)}
+        title="Clear all formatting"
+      >
+        <Eraser className="w-4 h-4" />
+      </button>
+
+      {railDivider}
+
+      {/* Insert table */}
+      <button
+        onClick={onInsertCustomTable}
+        className={railBtn(false)}
+        title="Insert Custom Table"
+      >
+        <TableIcon className="w-4 h-4" />
+      </button>
+
+      {railDivider}
+
+      {/* Undo / Redo */}
+      <button
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().chain().focus().undo().run()}
+        className={`${railBtn(false)} disabled:opacity-40`}
+        title="Undo"
+      >
+        <Undo className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().chain().focus().redo().run()}
+        className={`${railBtn(false)} disabled:opacity-40`}
+        title="Redo"
+      >
+        <Redo className="w-4 h-4" />
+      </button>
     </div>
   );
 };
@@ -878,7 +921,6 @@ export function Editor() {
     pendingMaterialDrop,
     setPendingMaterialDrop,
     logDebug,
-    showActionButtonLabels,
     subjects,
     aiEnabled,
     aiDefaultModelId,
@@ -892,6 +934,7 @@ export function Editor() {
     aiTranslateTargetLanguage,
     defaultLessonTableBodyRows,
     setSidebarOpen,
+    setEditorActions,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
@@ -904,6 +947,11 @@ export function Editor() {
   const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
+  const [customTableDialog, setCustomTableDialog] = useState<{
+    rows: number;
+    cols: number;
+    withHeaderRow: boolean;
+  } | null>(null);
   const [rewriteSubmenuOpen, setRewriteSubmenuOpen] = useState(false);
   const [translateSubmenuOpen, setTranslateSubmenuOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
@@ -967,6 +1015,12 @@ export function Editor() {
       return next;
     });
   }, [setSidebarOpen]);
+
+  const closeEditorSidePanels = useCallback(() => {
+    setChatOpen(false);
+    setNotesOpen(false);
+    setMethodBankOpen(false);
+  }, []);
 
   const [chatInput, setChatInput] = useState("");
   const [isChatBusy, setIsChatBusy] = useState(false);
@@ -1061,23 +1115,27 @@ export function Editor() {
       setTranslateSubmenuOpen(false);
       setSlashMenu(null);
     };
+
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setTableContextMenu(null);
         setRewriteSubmenuOpen(false);
         setTranslateSubmenuOpen(false);
         setSlashMenu(null);
+        setPlannedCalendarOpen(false);
+        setPdfPreviewUrl(null);
+        closeEditorSidePanels();
       }
     };
 
     window.addEventListener("click", closeMenu);
-    window.addEventListener("keydown", onEscape);
+    window.addEventListener("keydown", onEscape, true);
 
     return () => {
       window.removeEventListener("click", closeMenu);
-      window.removeEventListener("keydown", onEscape);
+      window.removeEventListener("keydown", onEscape, true);
     };
-  }, []);
+  }, [closeEditorSidePanels]);
 
   useEffect(() => {
     if (!plannedCalendarOpen) {
@@ -1123,13 +1181,32 @@ export function Editor() {
       }
     };
 
+    // The PDF iframe steals focus on load and after every click inside it,
+    // which prevents the parent window from receiving keydown (so Escape dies).
+    // We work around this by reclaiming focus to the modal whenever the
+    // window blurs (i.e. focus moved to the iframe) — keyboard scrolling
+    // inside the PDF is sacrificed but Esc / standard shortcuts work.
+    const reclaimFocus = () => {
+      // Only reclaim if focus actually went to the iframe, not to another
+      // app/window.
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active.tagName === "IFRAME") {
+          (active as HTMLIFrameElement).blur();
+          pdfPreviewRef.current?.focus();
+        }
+      });
+    };
+
     window.addEventListener("keydown", closeOnEscape, true);
+    window.addEventListener("blur", reclaimFocus, true);
     requestAnimationFrame(() => {
       pdfPreviewRef.current?.focus();
     });
 
     return () => {
       window.removeEventListener("keydown", closeOnEscape, true);
+      window.removeEventListener("blur", reclaimFocus, true);
     };
   }, [pdfPreviewUrl]);
 
@@ -1287,6 +1364,22 @@ export function Editor() {
       .run();
   };
 
+  const insertCustomTable = () => {
+    if (!editor) return;
+    setCustomTableDialog({ rows: 4, cols: 4, withHeaderRow: true });
+  };
+
+  const confirmInsertCustomTable = () => {
+    if (!editor || !customTableDialog) return;
+    const { rows, cols, withHeaderRow } = customTableDialog;
+    editor
+      .chain()
+      .focus()
+      .insertTable({ rows, cols, withHeaderRow })
+      .run();
+    setCustomTableDialog(null);
+  };
+
   const runTableCommand = useCallback(
     (runner: () => boolean) => {
       if (!editor) return;
@@ -1353,7 +1446,7 @@ export function Editor() {
     [editor],
   );
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!editor) return;
 
     const parsedPlannedFor = parseEuropeanDateToIso(plannedForInput);
@@ -1375,7 +1468,37 @@ export function Editor() {
       plannedFor: parsedPlannedFor,
       notes: lessonNotes,
     });
-  };
+  }, [editor, plannedForInput, saveActiveLesson, teacher, subject, lessonNotes]);
+
+  useEffect(() => {
+    const onSaveShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) {
+        return;
+      }
+
+      const isSaveKey = event.code === "KeyS";
+      const isModifierPressed = event.metaKey || event.ctrlKey;
+      const hasUnsupportedModifier = event.altKey;
+      if (!isSaveKey || !isModifierPressed || hasUnsupportedModifier) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.repeat) {
+        return;
+      }
+
+      void handleSave();
+    };
+
+    window.addEventListener("keydown", onSaveShortcut);
+
+    return () => {
+      window.removeEventListener("keydown", onSaveShortcut);
+    };
+  }, [handleSave]);
 
   const getSelectedTextRange = useCallback((): SelectedTextRange | null => {
     if (!editor) {
@@ -2959,6 +3082,54 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     });
   };
 
+  // Bridge: expose Editor actions + panel toggles to TopBar.
+  // Keep callable handlers in refs so TopBar actions always execute latest logic
+  // without forcing a render loop from function identity changes.
+  const saveRef = useRef<() => void>(() => {});
+  const previewRef = useRef<() => void>(() => {});
+  const printRef = useRef<() => void>(() => {});
+  const exportRef = useRef<() => void>(() => {});
+  const insertTableRef = useRef<() => void>(() => {});
+  const toggleChatRef = useRef<() => void>(() => {});
+  const toggleNotesRef = useRef<() => void>(() => {});
+  const toggleMethodBankRef = useRef<() => void>(() => {});
+
+  saveRef.current = () => {
+    void handleSave();
+  };
+  previewRef.current = () => {
+    void handlePreviewPDF();
+  };
+  printRef.current = () => {
+    void handlePrintPDF();
+  };
+  exportRef.current = () => {
+    void handleExportPDF();
+  };
+  insertTableRef.current = insertLessonTable;
+  toggleChatRef.current = toggleChatPanel;
+  toggleNotesRef.current = toggleNotesPanel;
+  toggleMethodBankRef.current = toggleMethodBankPanel;
+
+  useEffect(() => {
+    setEditorActions({
+      save: () => saveRef.current(),
+      preview: () => previewRef.current(),
+      print: () => printRef.current(),
+      export: () => exportRef.current(),
+      insertTable: () => insertTableRef.current(),
+      toggleChat: () => toggleChatRef.current(),
+      toggleNotes: () => toggleNotesRef.current(),
+      toggleMethodBank: () => toggleMethodBankRef.current(),
+      chatOpen,
+      notesOpen,
+      methodBankOpen,
+      isPdfBusy,
+      aiEnabled,
+    });
+    return () => setEditorActions(null);
+  }, [setEditorActions, chatOpen, notesOpen, methodBankOpen, isPdfBusy, aiEnabled]);
+
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
   const canRunAiContextActions = !!tableContextMenu?.aiSelection && !isAiBusy && aiEnabled;
   const normalizedSubjectName = subject.trim().toLowerCase();
@@ -3006,71 +3177,62 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
   return (
     <div
-      className="tp-editor-page w-full max-w-none mx-auto print:max-w-none print:w-full"
+      className="tp-editor-page flex flex-row w-full h-full min-h-0 print:block"
+      style={{ background: "var(--tp-bg-app)" }}
     >
-      <div className="sticky top-0 z-[66] bg-[#1e1e1e] pt-6 print:hidden">
-        <div className="mb-3 flex gap-2">
-          <button
-            onClick={insertLessonTable}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-[#222] hover:bg-[#2d2d2d] border border-[#333] rounded-md text-white font-medium shadow-sm transition-colors"
-          >
-            <TableIcon className="w-4 h-4" /> Insert Lesson Table
-          </button>
-        </div>
-        <MenuBar
-          editor={editor}
-          onSave={handleSave}
-          onPreview={handlePreviewPDF}
-          onPrint={handlePrintPDF}
-          onExport={handleExportPDF}
-          onToggleChat={toggleChatPanel}
-          onToggleNotes={toggleNotesPanel}
-          onToggleMethodBank={toggleMethodBankPanel}
-          chatOpen={chatOpen}
-          notesOpen={notesOpen}
-          methodBankOpen={methodBankOpen}
-          isPdfBusy={isPdfBusy}
-          showActionButtonLabels={showActionButtonLabels}
-          aiEnabled={aiEnabled}
-        />
+      {/* Left: scrollable paper area */}
+      <div className="flex-1 min-w-0 overflow-auto px-6 pt-5 pb-10 print:p-0 print:overflow-visible">
         {aiStatusMessage && (
-          <div className="mt-2 rounded-md border border-[#333] bg-[#202020] px-3 py-2 text-xs text-gray-300">
+          <div
+            className="mb-3 rounded-md px-3 py-2 text-xs max-w-[297mm] mx-auto"
+            style={{
+              background: "var(--tp-bg-2)",
+              border: "1px solid var(--tp-b-2)",
+              color: "var(--tp-t-2)",
+            }}
+          >
             {aiStatusMessage}
           </div>
         )}
-      </div>
-      
-      <div id="lesson-plan-container" className="tp-editor-surface bg-[#181818] rounded-b-md rounded-t-none shadow-sm border border-[#2a2a2a] min-h-[70vh] flex flex-col w-full print:bg-white print:border-none print:shadow-none print:min-h-0">
+      <div
+        id="lesson-plan-container"
+        className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col w-full max-w-[297mm] mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
+        style={{
+          background: "var(--tp-paper-bg)",
+          border: "1px solid var(--tp-paper-line-soft)",
+          minHeight: "210mm",
+        }}
+      >
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
-          {activeFileContent?.metadata && (
-            <div className="px-6 pt-4 pb-6 border-b border-[#2a2a2a] print:border-b-2 print:border-gray-300 mb-6 lesson-export-meta">
-              <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-y-4 gap-x-6 text-sm text-gray-400 print:text-black">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Teacher:</span>
+          <div className="px-6 pt-4 pb-5 lesson-export-meta" style={{ borderBottom: "1px solid var(--tp-paper-line)", marginBottom: "24px" }}>
+              <div className="flex justify-around gap-x-4 gap-y-4 items-start [&_input]:text-center [&_select]:text-center [&>div]:flex [&>div]:flex-col [&>div]:items-center [&>div]:text-center [&>div]:w-[200px] [&>div]:max-w-[200px]">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Teacher</span>
                   <input
                     type="text"
                     value={teacher}
                     onChange={(e) => setTeacher(e.target.value)}
                     placeholder="Your Name"
-                    className="flex-1 min-w-[180px] bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                    className="tp-meta-input lesson-export-input w-full"
                   />
                   <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || "Not set"}</span>
                 </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Created:</span>
-                  <span className="print:text-black lesson-export-value">{formatDate(activeFileContent.metadata.createdAt)}</span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Created</span>
+                  <span className="text-[13px] lesson-export-value" style={{ color: "var(--tp-paper-ink)" }}>{formatDate(activeFileContent?.metadata?.createdAt)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Planned For:</span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Planned For</span>
+                  <div className="flex items-center justify-center gap-1.5 w-full">
                   <input
                     type="text"
                     inputMode="numeric"
                     value={plannedForInput}
                     onChange={(event) => setPlannedForInput(event.target.value)}
                     placeholder="DD/MM/YYYY"
-                    className="w-[220px] max-w-full bg-[#222] border border-[#333] rounded-lg px-3 py-2 text-white text-base outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input lesson-export-planned-input"
+                    className="tp-meta-input lesson-export-input lesson-export-planned-input flex-1 min-w-0 text-center"
                   />
-                  <div className="relative lesson-export-calendar-trigger" ref={plannedCalendarRef}>
+                  <div className="relative lesson-export-calendar-trigger print:hidden" ref={plannedCalendarRef}>
                     <button
                       type="button"
                       onClick={() => {
@@ -3079,7 +3241,8 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                         }
                         setPlannedCalendarOpen((previous) => !previous);
                       }}
-                      className="h-10 w-10 inline-flex items-center justify-center rounded-md border border-[#333] bg-[#222] text-gray-300 hover:text-white hover:border-[var(--tp-accent)] transition-colors print:hidden"
+                      className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:opacity-70 print:hidden"
+                      style={{ color: "var(--tp-paper-ink-3)", border: "1px solid var(--tp-paper-line)" }}
                       title="Pick planned date"
                     >
                       <CalendarDays className="w-4 h-4" />
@@ -3143,24 +3306,25 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       </div>
                     )}
                   </div>
-                  <span className="hidden print:text-black lesson-export-value lesson-export-planned-text">
+                  <span className="hidden lesson-export-value lesson-export-planned-text">
                     {plannedForInput.trim() || "Not set"}
                   </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold text-gray-300 print:text-black min-w-[90px] lesson-export-label">Subject:</span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Subject</span>
                   {subjects.length > 0 ? (
-                    <div className="flex w-[260px] max-w-full items-center gap-2 lesson-export-subject-picker">
+                    <div className="flex items-center gap-1.5 lesson-export-subject-picker w-full">
                       {selectedSubjectColor && (
                         <span
-                          className="w-3 h-3 rounded-full shrink-0 border border-white/20"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: selectedSubjectColor }}
                         />
                       )}
                       <select
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        className="w-full bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                        className="tp-meta-input lesson-export-input flex-1 min-w-0"
                       >
                         <option value="">— None —</option>
                         {subjects.map((s) => (
@@ -3174,7 +3338,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder="e.g. Mathematics"
-                      className="w-[260px] max-w-full bg-[#222] border border-[#333] rounded px-2 py-1.5 text-white text-sm outline-none focus:border-[var(--tp-accent)] print:bg-transparent print:border-none print:p-0 print:text-black lesson-export-input"
+                      className="tp-meta-input lesson-export-input w-full"
                     />
                   )}
                   <span className="hidden lesson-export-value lesson-export-subject-text">
@@ -3184,7 +3348,6 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 </div>
               </div>
             </div>
-          )}
 
           <div
             ref={editorSurfaceRef}
@@ -3409,9 +3572,17 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           )}
         </div>
       </div>
+      </div>
 
+      {/* Right: vertical formatting + actions rail */}
+      <MenuBar
+        editor={editor}
+        onInsertCustomTable={insertCustomTable}
+      />
+
+      {/* Notes Panel - Left Side */}
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           notesOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -3449,8 +3620,9 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         </div>
       </div>
 
+      {/* Method Bank Panel - Left Side */}
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           methodBankOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -3576,8 +3748,9 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         </div>
       </div>
 
+      {/* AI Chat Panel - Left Side */}
       <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-72 print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           chatOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -3798,6 +3971,113 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 </button>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Custom Table Insert Dialog */}
+      {customTableDialog && (
+        <div
+          className="fixed inset-0 z-[80] bg-black/50 flex items-center justify-center print:hidden"
+          onMouseDown={() => setCustomTableDialog(null)}
+        >
+          <div
+            className="w-[320px] rounded-xl overflow-hidden shadow-2xl"
+            style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-2)" }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div
+              className="px-4 py-3 flex items-center gap-2 font-semibold text-[13px]"
+              style={{ borderBottom: "1px solid var(--tp-b-1)", color: "var(--tp-t-1)" }}
+            >
+              <TableIcon className="w-4 h-4" style={{ color: "var(--tp-accent)" }} />
+              Insert Table
+            </div>
+            <div className="px-4 py-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Rows</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={customTableDialog.rows}
+                  onChange={(e) => setCustomTableDialog({ ...customTableDialog, rows: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
+                  className="w-20 h-8 px-2 rounded-md text-[12px] text-center outline-none"
+                  style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-1)" }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Columns</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={customTableDialog.cols}
+                  onChange={(e) => setCustomTableDialog({ ...customTableDialog, cols: Math.max(1, Math.min(12, Number(e.target.value) || 1)) })}
+                  className="w-20 h-8 px-2 rounded-md text-[12px] text-center outline-none"
+                  style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-1)" }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Header row</label>
+                <button
+                  type="button"
+                  onClick={() => setCustomTableDialog({ ...customTableDialog, withHeaderRow: !customTableDialog.withHeaderRow })}
+                  className="w-10 h-5 rounded-full relative transition-colors"
+                  style={{ background: customTableDialog.withHeaderRow ? "var(--tp-accent)" : "var(--tp-bg-4)" }}
+                >
+                  <span
+                    className="absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform"
+                    style={{ left: customTableDialog.withHeaderRow ? "calc(100% - 18px)" : "2px" }}
+                  />
+                </button>
+              </div>
+
+              {/* Visual grid preview */}
+              <div
+                className="mt-1 rounded-md p-2 flex flex-col gap-[2px] overflow-hidden"
+                style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
+              >
+                {Array.from({ length: Math.min(customTableDialog.rows, 6) }, (_, r) => (
+                  <div key={r} className="flex gap-[2px]">
+                    {Array.from({ length: Math.min(customTableDialog.cols, 8) }, (_, c) => (
+                      <div
+                        key={c}
+                        className="flex-1 h-3 rounded-sm"
+                        style={{
+                          background: r === 0 && customTableDialog.withHeaderRow ? "var(--tp-accent)" : "var(--tp-bg-4)",
+                          opacity: r === 0 && customTableDialog.withHeaderRow ? 0.6 : 0.4,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ))}
+                {customTableDialog.rows > 6 && (
+                  <div className="text-[9px] text-center pt-0.5" style={{ color: "var(--tp-t-4)" }}>
+                    +{customTableDialog.rows - 6} more row{customTableDialog.rows - 6 > 1 ? "s" : ""}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div
+              className="px-4 py-3 flex items-center justify-end gap-2"
+              style={{ borderTop: "1px solid var(--tp-b-1)" }}
+            >
+              <button
+                onClick={() => setCustomTableDialog(null)}
+                className="h-8 px-3 rounded-md text-[12px] font-medium transition-colors"
+                style={{ background: "var(--tp-bg-3)", color: "var(--tp-t-2)", border: "1px solid var(--tp-b-2)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmInsertCustomTable}
+                className="h-8 px-4 rounded-md text-[12px] font-medium text-white transition-colors"
+                style={{ background: "var(--tp-accent)" }}
+              >
+                Insert Table
+              </button>
+            </div>
           </div>
         </div>
       )}

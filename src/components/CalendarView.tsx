@@ -1,17 +1,18 @@
-import { format, startOfWeek, addDays } from "date-fns";
-import { useEffect, useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
 import { useAppStore } from "../store";
 
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
-  const [draggingLessonName, setDraggingLessonName] = useState<string | null>(null);
-  const [manualDraggingLessonName, setManualDraggingLessonName] = useState<string | null>(null);
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
   const [isDeletingLessons, setIsDeletingLessons] = useState(false);
+  // Mouse-based drag state — bypasses HTML5 DnD which is unreliable in WKWebView.
+  const draggingLessonRef = useRef<string | null>(null);
+  const mouseDragActiveRef = useRef(false);
   const {
-    lessonPlans,
+    lessonTree,
     openLesson,
     deleteLesson,
     createNewLesson,
@@ -32,33 +33,38 @@ export function CalendarView() {
   useEffect(() => {
     // Reset selection when changing week to avoid accidental cross-week deletes.
     setSelectedLessons(new Set());
-    setDraggingLessonName(null);
-    setManualDraggingLessonName(null);
+    draggingLessonRef.current = null;
     setDragOverDayKey(null);
   }, [start.getTime()]);
-
-  useEffect(() => {
-    if (!manualDraggingLessonName) {
-      return;
-    }
-
-    const clearManualDrag = () => {
-      setManualDraggingLessonName(null);
-      setDragOverDayKey(null);
-    };
-
-    window.addEventListener("mouseup", clearManualDrag);
-    return () => {
-      window.removeEventListener("mouseup", clearManualDrag);
-    };
-  }, [manualDraggingLessonName]);
 
   // We could filter `lessonPlans` by date if we stored it in the filename,
   // but for a robust system we would actually load the JSONs. Since loading all JSONs
   // can be slow, a quick hack is parsing the filename if we use intelligent naming: Lesson-YYYY-MM-DD...
+  // Collect all lessons from lessonTree (includes both root and nested)
+  const allLessonEntries = useMemo(() => {
+    const entries: { name: string; relativePath: string }[] = [];
+    const seen = new Set<string>();
+    // Walk lessonTree to get all lessons (root + nested folders)
+    const walk = (nodes: any[], parentPath: string) => {
+      for (const n of nodes) {
+        if (n.isDirectory) {
+          walk(n.children || [], parentPath ? `${parentPath}/${n.name}` : n.name);
+        } else if (n.name?.toLowerCase().endsWith(".json")) {
+          const relativePath = parentPath ? `${parentPath}/${n.name}` : n.name;
+          if (!seen.has(relativePath)) {
+            seen.add(relativePath);
+            entries.push({ name: n.name, relativePath });
+          }
+        }
+      }
+    };
+    walk(lessonTree, "");
+    return entries;
+  }, [lessonTree]);
+
   const getLessonsForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return lessonPlans.filter(p => p.name && p.name.includes(dateStr));
+    return allLessonEntries.filter(p => p.name && p.name.includes(dateStr));
   };
 
   const getLessonDateToken = (lessonName: string): string | null => {
@@ -89,77 +95,92 @@ export function CalendarView() {
     });
   };
 
-  const handleLessonDragStart = (event: DragEvent<HTMLElement>, lessonName: string) => {
-    setDraggingLessonName(lessonName);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text", lessonName);
-    event.dataTransfer.setData("text/teacherpro-lesson", lessonName);
-    event.dataTransfer.setData("text/plain", lessonName);
+  /** Returns the data-day-key of whichever day column contains the point (x, y). */
+  const findDayKeyAtPoint = (x: number, y: number): string | null => {
+    const cols = document.querySelectorAll<HTMLElement>('[data-day-key]');
+    for (const col of cols) {
+      const r = col.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+        return col.getAttribute('data-day-key');
+      }
+    }
+    return null;
   };
 
-  const handleLessonDragEnd = () => {
-    setDraggingLessonName(null);
-    setDragOverDayKey(null);
-  };
+  /**
+   * Mouse-based drag for lesson cards.
+   * HTML5 dragstart on div elements does not fire reliably in WKWebView (Tauri/macOS).
+   * We use mousedown → mousemove → mouseup with a floating ghost chip instead.
+   */
+  const startMouseDrag = (e: React.MouseEvent, lessonName: string, title: string) => {
+    if (!lessonName) return;
+    e.preventDefault(); // prevent text selection
 
-  const handleManualDragStart = (lessonName: string, event: MouseEvent<HTMLElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setManualDraggingLessonName(lessonName);
-    setDraggingLessonName(lessonName);
-  };
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragging = false;
+    let ghost: HTMLDivElement | null = null;
 
-  const handleDayDragOver = (event: DragEvent<HTMLDivElement>, dayKey: string) => {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDragOverDayKey(dayKey);
-  };
+    const onMouseMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
 
-  const handleDayDragLeave = (event: DragEvent<HTMLDivElement>) => {
-    const nextTarget = event.relatedTarget as Node | null;
-    if (!event.currentTarget.contains(nextTarget)) {
+      if (!dragging && Math.sqrt(dx * dx + dy * dy) > 5) {
+        dragging = true;
+        mouseDragActiveRef.current = true;
+        draggingLessonRef.current = lessonName;
+
+        ghost = document.createElement('div');
+        Object.assign(ghost.style, {
+          position: 'fixed',
+          pointerEvents: 'none',
+          zIndex: '9999',
+          background: 'var(--tp-bg-3, #2a2a2a)',
+          border: '2px solid var(--tp-accent, #2d86a5)',
+          borderRadius: '8px',
+          padding: '5px 10px',
+          fontSize: '13px',
+          fontWeight: '600',
+          color: 'var(--tp-t-1, #fff)',
+          whiteSpace: 'nowrap',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+          transform: 'rotate(-2deg)',
+          opacity: '0.95',
+          userSelect: 'none',
+        });
+        ghost.textContent = title;
+        document.body.appendChild(ghost);
+      }
+
+      if (dragging && ghost) {
+        ghost.style.left = `${ev.clientX + 14}px`;
+        ghost.style.top = `${ev.clientY - 12}px`;
+        setDragOverDayKey(findDayKeyAtPoint(ev.clientX, ev.clientY));
+      }
+    };
+
+    const onMouseUp = (ev: MouseEvent) => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+
+      if (ghost) { ghost.remove(); ghost = null; }
+
+      const wasLessonName = draggingLessonRef.current;
+      draggingLessonRef.current = null;
+      mouseDragActiveRef.current = false;
       setDragOverDayKey(null);
-    }
-  };
 
-  const handleDropOnDate = async (event: DragEvent<HTMLDivElement>, day: Date) => {
-    event.preventDefault();
-    event.stopPropagation();
+      if (!dragging || !wasLessonName) return;
 
-    const droppedLessonName =
-      event.dataTransfer.getData("text/teacherpro-lesson") ||
-      event.dataTransfer.getData("text/plain") ||
-      event.dataTransfer.getData("text") ||
-      draggingLessonName;
+      const targetDayKey = findDayKeyAtPoint(ev.clientX, ev.clientY);
+      if (targetDayKey) {
+        const targetDay = weekDays.find(d => format(d, 'yyyy-MM-dd') === targetDayKey);
+        if (targetDay) void moveLessonToDate(wasLessonName, targetDay);
+      }
+    };
 
-    setDragOverDayKey(null);
-    setDraggingLessonName(null);
-    setManualDraggingLessonName(null);
-
-    if (!droppedLessonName) {
-      return;
-    }
-
-    await moveLessonToDate(droppedLessonName, day);
-  };
-
-  const handleDayMouseEnter = (dayKey: string) => {
-    if (!manualDraggingLessonName) {
-      return;
-    }
-    setDragOverDayKey(dayKey);
-  };
-
-  const handleDayMouseUp = (day: Date) => {
-    if (!manualDraggingLessonName) {
-      return;
-    }
-
-    const lessonName = manualDraggingLessonName;
-    setManualDraggingLessonName(null);
-    setDraggingLessonName(null);
-    setDragOverDayKey(null);
-    void moveLessonToDate(lessonName, day);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
   };
 
   const toggleSelectedLesson = (lessonName: string) => {
@@ -198,11 +219,13 @@ export function CalendarView() {
   };
 
   const handleDeleteAllForDate = async (date: Date) => {
+    console.log("Delete all clicked for:", date, "isDeletingLessons:", isDeletingLessons);
     if (isDeletingLessons) {
       return;
     }
 
     const lessons = getLessonsForDate(date).filter((lesson) => !!lesson.name);
+    console.log("Lessons to delete:", lessons.length, lessons.map(l => l.name));
     if (lessons.length === 0) {
       return;
     }
@@ -216,15 +239,16 @@ export function CalendarView() {
     setIsDeletingLessons(true);
     try {
       for (const lesson of lessons) {
-        await deleteLesson(lesson.name!);
+        const lessonPath = lesson.relativePath || lesson.name || "";
+        console.log("Delete all - deleting:", lessonPath);
+        if (lessonPath) await deleteLesson(lessonPath);
       }
 
       setSelectedLessons((previous) => {
         const next = new Set(previous);
         for (const lesson of lessons) {
-          if (lesson.name) {
-            next.delete(lesson.name);
-          }
+          const lessonPath = lesson.relativePath || lesson.name || "";
+          if (lessonPath) next.delete(lessonPath);
         }
         return next;
       });
@@ -233,152 +257,239 @@ export function CalendarView() {
     }
   };
 
+  const today = new Date();
+
   return (
-    <div className="tp-calendar-page p-6 h-full flex flex-col bg-[#1e1e1e]">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-100">Weekly Planner</h1>
-          <p className="text-gray-400 mt-1">Plan your lessons across the week.</p>
-        </div>
-        <div className="tp-calendar-nav flex items-center gap-4 bg-[#2a2a2a] p-1 rounded-lg border border-[#333]">
-          <button onClick={prevWeek} className="p-2 hover:bg-[#333] rounded-md text-gray-300">
-            <ChevronLeft className="w-5 h-5" />
+    <div
+      className="tp-calendar-page px-5 pt-4 pb-6 h-full flex flex-col gap-3"
+      style={{ background: "var(--tp-bg-app)" }}
+    >
+      {/* Controls row */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div
+          className="inline-flex rounded-md overflow-hidden"
+          style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-1)" }}
+        >
+          <button
+            onClick={prevWeek}
+            className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
+            style={{ color: "var(--tp-t-2)" }}
+            title="Previous week"
+          >
+            <ChevronLeft className="w-4 h-4" />
           </button>
           <button
-            onClick={goToToday}
-            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-[#333] text-gray-100 hover:bg-[#3f3f3f] transition-colors"
+            onClick={nextWeek}
+            className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
+            style={{ color: "var(--tp-t-2)" }}
+            title="Next week"
           >
-            Today
-          </button>
-          <span className="font-semibold text-gray-200 min-w-[140px] text-center">
-            {format(start, "MMM d")} - {format(addDays(start, 6), "MMM d, yyyy")}
-          </span>
-          <button onClick={nextWeek} className="p-2 hover:bg-[#333] rounded-md text-gray-300">
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDeleteSelected}
-            disabled={selectedLessons.size === 0 || isDeletingLessons}
-            className="flex items-center gap-2 rounded-md border border-[#5a2b2b] bg-[#3a1f1f] px-3 py-2 text-sm text-red-200 transition-colors hover:bg-[#4a2525] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Trash2 className="h-4 w-4" />
-            {isDeletingLessons
-              ? "Moving to Trash..."
-              : `Move Selected to Trash (${selectedLessons.size})`}
-          </button>
-        </div>
+        <button
+          onClick={goToToday}
+          className="h-8 px-3.5 rounded-md text-sm font-medium transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
+          style={{
+            background: "var(--tp-bg-1)",
+            border: "1px solid var(--tp-b-1)",
+            color: "var(--tp-t-2)",
+          }}
+        >
+          Today
+        </button>
+        <span
+          className="text-[15px] font-semibold tracking-[-0.01em]"
+          style={{ color: "var(--tp-t-1)" }}
+        >
+          {format(start, "MMM d")} – {format(addDays(start, 6), "MMM d, yyyy")}
+        </span>
+
+        <div className="flex-1" />
+
+        <button
+          onClick={handleDeleteSelected}
+          disabled={selectedLessons.size === 0 || isDeletingLessons}
+          className="h-9 inline-flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+          style={{
+            background: selectedLessons.size > 0 ? "rgba(239, 68, 68, 0.12)" : "var(--tp-bg-1)",
+            border: selectedLessons.size > 0
+              ? "1px solid rgba(239, 68, 68, 0.4)"
+              : "1px solid var(--tp-b-1)",
+            color: selectedLessons.size > 0 ? "#fca5a5" : "var(--tp-t-3)",
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+          {isDeletingLessons
+            ? "Moving..."
+            : `Move Selected to Trash (${selectedLessons.size})`}
+        </button>
       </div>
 
-      <div className="flex-1 grid grid-cols-7 gap-4 min-h-0">
+      {/* Day columns */}
+      <div className="flex-1 grid grid-cols-7 gap-3 min-h-0">
         {weekDays.map((day, idx) => {
           const lessons = getLessonsForDate(day);
           const dayKey = format(day, "yyyy-MM-dd");
           const isDropTarget = dragOverDayKey === dayKey;
-          
+          const isToday = isSameDay(day, today);
+
+          const borderColor = isDropTarget
+            ? "var(--tp-accent)"
+            : isToday
+              ? "var(--tp-accent)"
+              : "var(--tp-b-1)";
+
           return (
             <div
               key={idx}
-              className={`tp-calendar-day-card flex flex-col rounded-xl overflow-hidden shadow-sm border transition-colors ${
-                isDropTarget
-                  ? "bg-[#1c2230] border-[var(--tp-accent)]"
-                  : "bg-[#191919] border-[#2a2a2a]"
-              }`}
-              onMouseEnter={() => handleDayMouseEnter(dayKey)}
-              onMouseUp={() => handleDayMouseUp(day)}
-              onDragOver={(event) => handleDayDragOver(event, dayKey)}
-              onDragLeave={handleDayDragLeave}
-              onDrop={(event) => void handleDropOnDate(event, day)}
+              data-day-key={dayKey}
+              className="tp-calendar-day-card flex flex-col rounded-xl overflow-hidden transition-colors backdrop-blur-[2px]"
+              style={{
+                background: isDropTarget ? "var(--tp-accent-softer)" : "var(--tp-bg-1)",
+                border: `1px solid ${borderColor}`,
+                boxShadow: isToday ? "0 0 0 1px var(--tp-accent-softer)" : undefined,
+              }}
             >
-              <div className="p-3 border-b border-[#2a2a2a] bg-[#222] text-center">
-                <div className="text-sm font-semibold text-gray-400 uppercase tracking-wider">{format(day, "EEEE")}</div>
-                <div className="text-2xl font-bold text-gray-200 mt-1">{format(day, "d")}</div>
+              {/* Day header */}
+              <div
+                className="px-3 py-3 shrink-0"
+                style={{ borderBottom: "1px solid var(--tp-b-1)" }}
+              >
+                <div
+                  className="text-[11px] font-semibold uppercase tracking-[0.08em]"
+                  style={{ color: "var(--tp-t-4)" }}
+                >
+                  {format(day, "EEE")}
+                </div>
+                <div
+                  className="text-[17px] font-semibold leading-none mt-0.5 tabular-nums"
+                  style={{ color: isToday ? "var(--tp-accent)" : "var(--tp-t-1)" }}
+                >
+                  {format(day, "d")}
+                </div>
               </div>
-              <div className="p-3 flex-1 overflow-y-auto space-y-2">
+
+              {/* Lessons list */}
+              <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
                 {lessons.length === 0 ? (
-                   <div className="text-center mt-4 text-xs text-gray-600 italic">Free day</div>
+                  <div
+                    className="h-full flex items-center justify-center text-[12px] italic min-h-[60px]"
+                    style={{ color: "var(--tp-t-4)" }}
+                  >
+                    Free day
+                  </div>
                 ) : (
                   lessons.map((lesson, lIdx) => {
-                    const title = lesson.name?.replace(`-${format(day, "yyyy-MM-dd")}-`, "").replace(".json", "") || "Lesson";
-                    const lessonName = lesson.name || "";
+                    // Clean title: strip date token, "Lesson" prefix, trailing IDs
+                    const rawStem = (lesson.name || "").replace(/\.json$/i, "");
+                    const withoutDate = rawStem.replace(/\d{4}-\d{2}-\d{2}-?/, "");
+                    const withoutLesson = withoutDate.replace(/^Lesson-?/i, "");
+                    const withoutTrailingId = withoutLesson.replace(/-?\d{3,6}$/, "").replace(/-$/, "");
+                    const derivedTitle = withoutTrailingId.replace(/-/g, " ").trim();
+
+                    const lessonName = lesson.relativePath || lesson.name || "";
                     const isSelected = lessonName ? selectedLessons.has(lessonName) : false;
                     const subjectName = lessonName ? (lessonSubjectIndex[lessonName] || "") : "";
                     const subjectColor = subjectName ? subjects.find((s) => s.name === subjectName)?.color : undefined;
+
+                    // If the derived title is just the subject name, the file was auto-named
+                    // from the subject (e.g. "2026-04-17-English.json"). Use a date label so
+                    // the subject badge isn't duplicated as the heading.
+                    const titleEqualsSubject = !!subjectName && derivedTitle.toLowerCase() === subjectName.toLowerCase();
+                    const cleanTitle = (derivedTitle && !titleEqualsSubject)
+                      ? derivedTitle
+                      : `Lesson · ${format(day, "MMM d")}`;
                     return (
                       <div
                         key={lIdx}
-                        draggable={!!lessonName}
-                        onDragStart={(event) => lessonName && handleLessonDragStart(event, lessonName)}
-                        onDragEnd={handleLessonDragEnd}
-                        onMouseDown={(event) => {
-                          const target = event.target as HTMLElement;
-                          if (!lessonName || target.closest("button")) {
-                            return;
-                          }
-                          handleManualDragStart(lessonName, event);
+                        data-lesson-card
+                        className="w-full rounded-lg overflow-hidden"
+                        style={{
+                          background: isSelected ? "var(--tp-accent-softer)" : "var(--tp-bg-2)",
+                          border: `1px solid ${isSelected ? "var(--tp-accent)" : "var(--tp-b-2)"}`,
+                          borderLeft: `3px solid ${subjectColor || "var(--tp-accent)"}`,
                         }}
-                        className={`w-full p-2 border rounded-lg transition-colors ${
-                          isSelected
-                            ? "bg-[#2f2940] border-[var(--tp-accent)]"
-                            : "bg-[#2d2d2d] border-[#444]"
-                        } ${lessonName ? "cursor-grab active:cursor-grabbing" : ""}`}
-                        style={subjectColor ? { borderLeftColor: subjectColor, borderLeftWidth: "3px" } : undefined}
                       >
-                        <div className="flex items-center gap-2">
-                          {lessonName && (
-                            <button
-                              type="button"
-                              draggable
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                              }}
-                              onMouseDown={(event) => handleManualDragStart(lessonName, event)}
-                              onDragStart={(event) => handleLessonDragStart(event, lessonName)}
-                              onDragEnd={handleLessonDragEnd}
-                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-100 hover:bg-[#3a3a3a] cursor-grab active:cursor-grabbing"
-                              title="Drag lesson to another day"
+                        {/* Title row — clickable to open */}
+                        <button
+                          onClick={() => lessonName && openLesson(lessonName)}
+                          className="w-full px-2.5 pt-2.5 pb-1.5 text-left"
+                        >
+                          <div
+                            className="text-[13px] font-semibold leading-snug"
+                            style={{ color: "var(--tp-t-1)", wordBreak: "break-word" }}
+                          >
+                            {cleanTitle}
+                          </div>
+                          {subjectName && (
+                            <div
+                              className="text-[11px] mt-0.5 font-medium"
+                              style={{ color: subjectColor || "var(--tp-accent)" }}
                             >
-                              <GripVertical className="h-4 w-4" />
-                            </button>
+                              {subjectName}
+                            </div>
                           )}
+                        </button>
+
+                        {/* Action row — always visible, compact */}
+                        <div
+                          className="flex items-center px-1.5 pb-1.5"
+                          style={{ borderTop: "1px solid var(--tp-b-1)" }}
+                        >
+                          {/* Drag grip — onMouseDown starts mouse-based drag (reliable in WKWebView) */}
+                          <div
+                            onMouseDown={(e) => startMouseDrag(e, lessonName, cleanTitle)}
+                            className="h-6 w-6 inline-flex items-center justify-center rounded cursor-grab active:cursor-grabbing select-none"
+                            style={{ color: "var(--tp-t-3)" }}
+                            title="Drag to reschedule"
+                          >
+                            <GripVertical className="h-3.5 w-3.5" />
+                          </div>
+
+                          <div className="flex-1" />
+
+                          {/* Select */}
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (lessonName) {
-                                toggleSelectedLesson(lessonName);
-                              }
+                              if (lessonName) toggleSelectedLesson(lessonName);
                             }}
-                            className="text-gray-300 hover:text-white"
-                            title={isSelected ? "Unselect" : "Select"}
+                            className="h-6 w-6 inline-flex items-center justify-center rounded"
+                            style={{ color: isSelected ? "var(--tp-accent)" : "var(--tp-t-3)" }}
+                            title={isSelected ? "Deselect" : "Select"}
                           >
-                            {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                            {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                           </button>
-                          <button
-                            onClick={() => lesson.name && openLesson(lesson.name)}
-                            className="min-w-0 flex-1 text-left hover:text-white"
-                          >
-                            <div className="font-medium text-gray-200 text-sm truncate">{title}</div>
-                          </button>
+
+                          {/* Delete */}
                           {lessonName && (
                             <button
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                if (confirm(`Move lesson plan \"${title}\" to Trash?`)) {
-                                  await deleteLesson(lessonName);
-                                  setSelectedLessons((previous) => {
-                                    const next = new Set(previous);
-                                    next.delete(lessonName);
-                                    return next;
-                                  });
+                                if (confirm(`Move "${cleanTitle}" to Trash?`)) {
+                                  setIsDeletingLessons(true);
+                                  try {
+                                    await deleteLesson(lessonName);
+                                    setSelectedLessons((previous) => {
+                                      const next = new Set(previous);
+                                      next.delete(lessonName);
+                                      return next;
+                                    });
+                                  } catch (err) {
+                                    console.error("Failed to delete lesson:", err);
+                                    alert("Error deleting: " + String(err));
+                                  } finally {
+                                    setIsDeletingLessons(false);
+                                  }
                                 }
                               }}
                               disabled={isDeletingLessons}
-                              className="text-red-300 hover:text-red-200"
-                              title="Move lesson to Trash"
+                              className="h-6 w-6 inline-flex items-center justify-center rounded disabled:opacity-30 disabled:cursor-not-allowed hover:text-red-400 hover:bg-red-400/10 active:text-red-500 transition-colors"
+                              style={{ color: "var(--tp-t-3)" }}
+                              title="Move to Trash"
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           )}
                         </div>
@@ -387,23 +498,34 @@ export function CalendarView() {
                   })
                 )}
               </div>
-              <div className="p-2 border-t border-[#2a2a2a] bg-[#222]">
-                 <div className="flex gap-2">
-                   <button
-                     onClick={() => void createNewLesson(day)}
-                     className="flex-1 flex items-center justify-center gap-2 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-[#333] rounded transition-colors"
-                   >
-                      <Plus className="w-3 h-3" /> Add
-                   </button>
-                   <button
-                     onClick={() => void handleDeleteAllForDate(day)}
-                     disabled={isDeletingLessons}
-                     className="flex items-center justify-center gap-1 py-1.5 px-2 text-xs text-red-300 hover:text-red-200 hover:bg-[#3a2020] rounded transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                     title="Delete all lessons for this day"
-                   >
-                     <Trash2 className="w-3 h-3" /> All
-                   </button>
-                 </div>
+
+              {/* Day footer */}
+              <div
+                className="shrink-0 p-2 flex gap-1.5"
+                style={{ borderTop: "1px solid var(--tp-b-1)" }}
+              >
+                <button
+                  onClick={() => void createNewLesson(day)}
+                  className="flex-1 h-7 inline-flex items-center justify-center gap-1 rounded text-[11.5px] font-medium transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
+                  style={{ color: "var(--tp-t-3)" }}
+                >
+                  <Plus className="w-3 h-3" /> Add
+                </button>
+                <button
+                  onClick={() => void handleDeleteAllForDate(day)}
+                  disabled={isDeletingLessons || lessons.length === 0}
+                  className={`h-7 px-2.5 inline-flex items-center gap-1 rounded text-[11.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    lessons.length > 0 && !isDeletingLessons ? "hover:[filter:brightness(1.15)]" : ""
+                  }`}
+                  style={{
+                    color: isDeletingLessons ? "var(--tp-t-3)" : lessons.length > 0 ? "#ef4444" : "var(--tp-t-4)",
+                    background: isDeletingLessons ? "transparent" : lessons.length > 0 ? "rgba(239,68,68,0.12)" : "transparent",
+                    border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
+                  }}
+                  title={isDeletingLessons ? "Deleting..." : lessons.length > 0 ? `Move all ${lessons.length} lesson(s) to Trash` : "No lessons to delete"}
+                >
+                  <Trash2 className="w-3 h-3" /> All
+                </button>
               </div>
             </div>
           );
