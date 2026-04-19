@@ -93,6 +93,8 @@ interface UISettings {
   mindmapPaperTone: PaperTone;
   defaultLessonTableBodyRows: number;
   sidebarOpen: boolean;
+  lessonZoomMode: "fit" | "fixed";
+  lessonZoomFixed: number;
   sidebarSearchCollapsed: boolean;
   expandedMaterialFolders: Record<string, boolean>;
   expandedTrashFolders: Record<string, boolean>;
@@ -133,6 +135,8 @@ interface AppState {
   mindmapPaperTone: PaperTone;
   defaultLessonTableBodyRows: number;
   sidebarSearchCollapsed: boolean;
+  lessonZoomMode: "fit" | "fixed";
+  lessonZoomFixed: number;
   expandedMaterialFolders: Record<string, boolean>;
   expandedTrashFolders: Record<string, boolean>;
   calendarCollapsed: boolean;
@@ -185,6 +189,8 @@ interface AppState {
   
   initVault: () => Promise<void>;
   setSidebarOpen: (isOpen: boolean) => void;
+  setLessonZoomMode: (mode: "fit" | "fixed") => void;
+  setLessonZoomFixed: (zoom: number) => void;
   setSidebarSearchCollapsed: (collapsed: boolean) => void;
   setExpandedMaterialFolders: (expandedFolders: Record<string, boolean>) => void;
   setExpandedTrashFolders: (expandedFolders: Record<string, boolean>) => void;
@@ -299,6 +305,8 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   mindmapPaperTone: "dark",
   defaultLessonTableBodyRows: 4,
   sidebarOpen: true,
+  lessonZoomMode: "fit",
+  lessonZoomFixed: 1.0,
   sidebarSearchCollapsed: false,
   expandedMaterialFolders: {},
   expandedTrashFolders: {},
@@ -358,6 +366,14 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
       typeof source.sidebarOpen === "boolean"
         ? source.sidebarOpen
         : DEFAULT_UI_SETTINGS.sidebarOpen,
+    lessonZoomMode:
+      source.lessonZoomMode === "fixed" || source.lessonZoomMode === "fit"
+        ? source.lessonZoomMode
+        : DEFAULT_UI_SETTINGS.lessonZoomMode,
+    lessonZoomFixed:
+      typeof source.lessonZoomFixed === "number" && Number.isFinite(source.lessonZoomFixed)
+        ? Math.max(0.5, Math.min(2.0, source.lessonZoomFixed))
+        : DEFAULT_UI_SETTINGS.lessonZoomFixed,
     sidebarSearchCollapsed:
       typeof source.sidebarSearchCollapsed === "boolean"
         ? source.sidebarSearchCollapsed
@@ -845,6 +861,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   mindmapPaperTone: DEFAULT_UI_SETTINGS.mindmapPaperTone,
   defaultLessonTableBodyRows: DEFAULT_UI_SETTINGS.defaultLessonTableBodyRows,
   sidebarOpen: DEFAULT_UI_SETTINGS.sidebarOpen,
+  lessonZoomMode: DEFAULT_UI_SETTINGS.lessonZoomMode,
+  lessonZoomFixed: DEFAULT_UI_SETTINGS.lessonZoomFixed,
   sidebarSearchCollapsed: DEFAULT_UI_SETTINGS.sidebarSearchCollapsed,
   expandedMaterialFolders: DEFAULT_UI_SETTINGS.expandedMaterialFolders,
   expandedTrashFolders: DEFAULT_UI_SETTINGS.expandedTrashFolders,
@@ -893,6 +911,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         mindmapPaperTone: normalizedSettings.mindmapPaperTone,
         defaultLessonTableBodyRows: normalizedSettings.defaultLessonTableBodyRows,
         sidebarOpen: normalizedSettings.sidebarOpen,
+        lessonZoomMode: normalizedSettings.lessonZoomMode,
+        lessonZoomFixed: normalizedSettings.lessonZoomFixed,
         sidebarSearchCollapsed: normalizedSettings.sidebarSearchCollapsed,
         expandedMaterialFolders: normalizedSettings.expandedMaterialFolders,
         expandedTrashFolders: normalizedSettings.expandedTrashFolders,
@@ -939,6 +959,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSidebarOpen: (isOpen) => {
     set({ sidebarOpen: isOpen });
     void persistUiSettings({ sidebarOpen: isOpen });
+  },
+  setLessonZoomMode: (mode) => {
+    set({ lessonZoomMode: mode });
+    void persistUiSettings({ lessonZoomMode: mode });
+  },
+  setLessonZoomFixed: (zoom) => {
+    const clamped = Math.max(0.5, Math.min(2.0, zoom));
+    set({ lessonZoomMode: "fixed", lessonZoomFixed: clamped });
+    void persistUiSettings({ lessonZoomMode: "fixed", lessonZoomFixed: clamped });
   },
   setSidebarSearchCollapsed: (collapsed) => {
     set({ sidebarSearchCollapsed: collapsed });

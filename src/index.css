@@ -93,6 +93,12 @@
   --tp-statusbar-h: 1.625rem;/* 26px */
   --tp-rail-w:      3.5rem;  /* 56px */
 
+  /* Lesson paper — canonical A4 landscape dimensions (px-locked to PDF export) */
+  --tp-export-content-w: 1062px;                                /* 281mm @ 96dpi — matches PDF export clone width */
+  --tp-paper-padding-x:   28px;                                 /* decorative margin between paper edge & content */
+  --tp-paper-w: calc(var(--tp-export-content-w) + var(--tp-paper-padding-x) * 2);
+  --tp-paper-h: calc(var(--tp-paper-w) * 210 / 297);            /* A4 landscape ratio */
+
   color-scheme: dark;
 }
 
@@ -496,19 +502,58 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   border-color: #444 !important;
 }
 
-/* In-App A4 Landscape Paper Container */
+/* In-App A4 Landscape Paper Container — px-locked to PDF export width */
 #lesson-plan-container {
-  width: min(297mm, 100%);
-  max-width: 297mm;
+  width: var(--tp-paper-w);
+  min-width: var(--tp-paper-w);
+  max-width: var(--tp-paper-w);
+  min-height: var(--tp-paper-h);
+  margin: 0 auto;
+  border-radius: 14px;
+  padding-left: var(--tp-paper-padding-x);
+  padding-right: var(--tp-paper-padding-x);
+}
+
+#lesson-plan-export-content,
+.lesson-export-surface {
+  width: var(--tp-export-content-w);
+  max-width: var(--tp-export-content-w);
   margin: 0 auto;
   border-radius: 14px;
 }
 
-.lesson-export-surface {
+/* Zoom wrapper — user-controlled display scale (preserves WYSIWYG with export) */
+.tp-paper-scroll {
   width: 100%;
-  max-width: none;
-  margin: 0;
-  border-radius: 14px;
+  height: 100%;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.tp-paper-zoom {
+  /* The CSS `zoom` property is a real layout property in WebKit/WebView2,
+     so ProseMirror caret, hit-testing and selection rects stay correct. */
+  transform-origin: top center;
+  flex: 0 0 auto;
+}
+
+@media print {
+  .tp-paper-scroll { overflow: visible !important; padding: 0 !important; }
+  .tp-paper-zoom   { zoom: 1 !important; }
+  #lesson-plan-container,
+  #lesson-plan-export-content,
+  .lesson-export-surface {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
 }
 
 /* TipTap Editor Styles - Standardized to A4 12pt Typography */

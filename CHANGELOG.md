@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-04-19
+### Added
+- **Lesson canvas zoom controls** — new zoom cluster in status bar (visible when lesson open) with `−` / `%` / `+` buttons, preset menu (Fit to width, 50–200%), and keyboard shortcuts (`Cmd/Ctrl ±0`).
+- **Fit-to-width mode** dynamically scales the paper to fill available space (capped at 150%).
+
+### Changed
+- Lesson paper now px-locked to PDF export width (1062px) instead of `min(297mm, 100%)`, eliminating silent squish/reflow on narrow viewports.
+- Paper dimensions now driven by CSS variables (`--tp-export-content-w`, `--tp-paper-w`, `--tp-paper-h`) as single source of truth.
+
+### Fixed
+- Weekly calendar "Today" button now shows hover/click feedback (was blocked by inline styles).
+
+## [2.0.2] - 2026-04-19
+### Changed
+- Default lesson editor font size reduced from 12pt to 11pt for better readability.
+- Table headers and headings adjusted proportionally.
+
 ## [2.0.1] - 2026-04-19
 ### Fixed
 - Renaming a lesson (via the subject field) no longer moves it out of its subfolder. The save path now preserves the relative folder prefix (e.g. `History/`) when building the new filename.

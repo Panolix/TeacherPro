@@ -289,7 +289,7 @@ export function CalendarView() {
         </div>
         <button
           onClick={goToToday}
-          className="h-8 px-3.5 rounded-md text-sm font-medium transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
+          className="h-8 px-3.5 rounded-md text-sm font-medium transition-colors hover:![background:var(--tp-bg-3)] hover:![color:var(--tp-t-1)] active:![background:var(--tp-bg-2)]"
           style={{
             background: "var(--tp-bg-1)",
             border: "1px solid var(--tp-b-1)",

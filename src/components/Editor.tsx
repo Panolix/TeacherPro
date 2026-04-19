@@ -935,6 +935,10 @@ export function Editor() {
     defaultLessonTableBodyRows,
     setSidebarOpen,
     setEditorActions,
+    lessonZoomMode,
+    lessonZoomFixed,
+    setLessonZoomMode,
+    setLessonZoomFixed,
   } = useAppStore();
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
@@ -973,12 +977,65 @@ export function Editor() {
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
   const lessonEditorDragDropEnabled = false;
 
+  const paperScrollRef = useRef<HTMLDivElement | null>(null);
+  const [fitZoom, setFitZoom] = useState(1);
+
   // Auto-close chat when AI is turned off in settings.
   useEffect(() => {
     if (!aiEnabled) {
       setChatOpen(false);
     }
   }, [aiEnabled]);
+
+  // Compute fit-to-width zoom: available width / paper width, clamped to [0.5, 1.5].
+  useEffect(() => {
+    const scroll = paperScrollRef.current;
+    if (!scroll) return;
+
+    const paperW =
+      parseFloat(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tp-paper-w")
+          .trim(),
+      ) || 1118;
+
+    const compute = () => {
+      // Subtract horizontal padding (24px * 2) from scroll box for content area.
+      const available = Math.max(0, scroll.clientWidth - 48);
+      if (available <= 0) return;
+      const raw = available / paperW;
+      const clamped = Math.max(0.5, Math.min(1.5, raw));
+      setFitZoom((prev) => (Math.abs(prev - clamped) < 0.001 ? prev : clamped));
+    };
+
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(scroll);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keyboard shortcuts: Cmd/Ctrl + = zoom in, - zoom out, 0 reset to Fit.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        const base = lessonZoomMode === "fit" ? fitZoom : lessonZoomFixed;
+        setLessonZoomFixed(Math.round((base + 0.1) * 100) / 100);
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        const base = lessonZoomMode === "fit" ? fitZoom : lessonZoomFixed;
+        setLessonZoomFixed(Math.round((base - 0.1) * 100) / 100);
+      } else if (e.key === "0") {
+        e.preventDefault();
+        setLessonZoomMode("fit");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [lessonZoomMode, lessonZoomFixed, fitZoom, setLessonZoomMode, setLessonZoomFixed]);
+
+  const effectiveZoom = lessonZoomMode === "fit" ? fitZoom : lessonZoomFixed;
 
   const toggleChatPanel = useCallback(() => {
     setChatOpen((previous) => {
@@ -2891,7 +2948,14 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
     // Force A4 Landscape exact printable inner-width (~1062px at 96 DPI for 281mm printable area).
     // This physically guarantees 12pt web font equals 12pt print font without responsive container stretching/shrinking.
-    const exportWidth = 1062;
+    // Read from the same CSS var that drives the on-screen paper — single source of truth.
+    const exportWidth =
+      parseInt(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tp-export-content-w")
+          .trim(),
+        10,
+      ) || 1062;
     clonedElement.style.width = `${exportWidth}px`;
     clonedElement.style.maxWidth = `${exportWidth}px`;
     clonedElement.style.minWidth = `${exportWidth}px`;
@@ -3180,15 +3244,20 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       className="tp-editor-page flex flex-row w-full h-full min-h-0 print:block"
       style={{ background: "var(--tp-bg-app)" }}
     >
-      {/* Left: scrollable paper area */}
-      <div className="flex-1 min-w-0 overflow-auto px-6 pt-5 pb-10 print:p-0 print:overflow-visible">
+      {/* Left: scrollable paper area with zoom wrapper */}
+      <div
+        ref={paperScrollRef}
+        className="tp-paper-scroll flex-1 min-w-0 print:p-0 print:overflow-visible"
+      >
+        <div className="tp-paper-zoom" style={{ zoom: effectiveZoom }}>
         {aiStatusMessage && (
           <div
-            className="mb-3 rounded-md px-3 py-2 text-xs max-w-[297mm] mx-auto"
+            className="mb-3 rounded-md px-3 py-2 text-xs mx-auto"
             style={{
               background: "var(--tp-bg-2)",
               border: "1px solid var(--tp-b-2)",
               color: "var(--tp-t-2)",
+              maxWidth: "var(--tp-paper-w)",
             }}
           >
             {aiStatusMessage}
@@ -3196,11 +3265,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         )}
       <div
         id="lesson-plan-container"
-        className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col w-full max-w-[297mm] mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
+        className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
         style={{
           background: "var(--tp-paper-bg)",
           border: "1px solid var(--tp-paper-line-soft)",
-          minHeight: "210mm",
         }}
       >
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
@@ -3571,6 +3639,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             </div>
           )}
         </div>
+      </div>
       </div>
       </div>
 
