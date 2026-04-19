@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-04-19
+### Added
+- **Method Bank expansion** — 20 new teaching methods added (103 total): All-Student Response, Peer Teaching Protocol, Self-Regulation Check-in, Purposeful Questioning Sequence, Productive Struggle Support, Sentence Stems for Academic Talk, Frontloading Vocabulary, Graphic Organizer with Word Bank, Comprehensible Input Routine, Tableau (Frozen Scene), Reader's Theatre, Shadow Puppet Narrative, Error Analysis Protocol, Number Talk, Claim-Evidence-Reasoning, Notice & Wonder, Which One Doesn't Belong?, Co-Creating Success Criteria, Two Stars and a Wish, Traffic Light Self-Assessment.
+- **Trash auto-clear** — New setting in Settings > Advanced to automatically delete items from trash after a specified period (7, 14, 30, or 90 days). Default is 30 days. Set to "Never" for manual-only deletion.
+
+### Changed
+- Trash cleanup now runs automatically on vault refresh when auto-clear is enabled.
+
 ## [2.0.3] - 2026-04-19
 ### Added
 - **Lesson canvas zoom controls** — new zoom cluster in status bar (visible when lesson open) with `−` / `%` / `+` buttons, preset menu (Fit to width, 50–200%), and keyboard shortcuts (`Cmd/Ctrl ±0`).

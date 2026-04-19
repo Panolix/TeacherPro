@@ -121,6 +121,8 @@ export function SettingsModal({ open, onClose }: Props) {
     setDebugMode,
     showActionButtonLabels,
     setShowActionButtonLabels,
+    trashAutoClearDays,
+    setTrashAutoClearDays,
   } = useAppStore();
 
   const [tab, setTab] = useState<SettingsTab>("appearance");
@@ -954,14 +956,40 @@ export function SettingsModal({ open, onClose }: Props) {
             )}
 
             {tab === "advanced" && (
-              <Section title="Diagnostics">
-                <ToggleRow
-                  label="Debug mode"
-                  desc="Show diagnostic information in the in-app console"
-                  value={debugMode}
-                  onChange={setDebugMode}
-                />
-              </Section>
+              <>
+                <Section title="Trash">
+                  <div className="tp-form-row">
+                    <label className="tp-form-label">Auto-clear trash</label>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={trashAutoClearDays === null ? "never" : String(trashAutoClearDays)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTrashAutoClearDays(val === "never" ? null : parseInt(val, 10));
+                        }}
+                        className="tp-input"
+                      >
+                        <option value="never">Never (manual only)</option>
+                        <option value="7">After 7 days</option>
+                        <option value="14">After 14 days</option>
+                        <option value="30">After 30 days</option>
+                        <option value="90">After 90 days</option>
+                      </select>
+                    </div>
+                    <span className="tp-form-hint">
+                      Items in trash are permanently deleted after this period
+                    </span>
+                  </div>
+                </Section>
+                <Section title="Diagnostics">
+                  <ToggleRow
+                    label="Debug mode"
+                    desc="Show diagnostic information in the in-app console"
+                    value={debugMode}
+                    onChange={setDebugMode}
+                  />
+                </Section>
+              </>
             )}
           </div>
         </div>

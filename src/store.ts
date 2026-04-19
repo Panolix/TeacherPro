@@ -10,6 +10,7 @@ import {
   exists,
   copyFile,
   remove,
+  stat,
 } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { load } from '@tauri-apps/plugin-store';
@@ -114,6 +115,7 @@ interface UISettings {
   aiSystemPrompt: string;
   aiThinkingEnabled: boolean;
   aiTranslateTargetLanguage: string;
+  trashAutoClearDays: number | null;
 }
 
 interface AppState {
@@ -155,6 +157,7 @@ interface AppState {
   aiSystemPrompt: string;
   aiThinkingEnabled: boolean;
   aiTranslateTargetLanguage: string;
+  trashAutoClearDays: number | null;
   aiModelInstallState: Record<string, AiModelInstallState>;
   lessonSubjectIndex: Record<string, string>;
   debugEvents: DebugEventEntry[];
@@ -215,9 +218,11 @@ interface AppState {
   setAiSystemPrompt: (prompt: string) => void;
   setAiThinkingEnabled: (enabled: boolean) => void;
   setAiTranslateTargetLanguage: (language: string) => void;
+  setTrashAutoClearDays: (days: number | null) => void;
   setAiModelInstallState: (modelId: string, state: AiModelInstallState) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
+  cleanupOldTrashItems: () => Promise<void>;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
   setPendingMaterialDrop: (drop: PendingMaterialDropRef | null) => void;
   setCurrentView: (view: "editor" | "calendar" | "mindmap") => void;
@@ -331,6 +336,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiSystemPrompt: "",
   aiThinkingEnabled: true,
   aiTranslateTargetLanguage: "English",
+  trashAutoClearDays: 30,
 };
 
 function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISettings {
@@ -400,6 +406,12 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
       typeof source.aiTranslateTargetLanguage === "string" && source.aiTranslateTargetLanguage.trim()
         ? source.aiTranslateTargetLanguage
         : DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
+    trashAutoClearDays:
+      source.trashAutoClearDays === null
+        ? null
+        : typeof source.trashAutoClearDays === "number" && source.trashAutoClearDays >= 1
+          ? Math.floor(source.trashAutoClearDays)
+          : DEFAULT_UI_SETTINGS.trashAutoClearDays,
   };
 }
 
@@ -882,6 +894,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiSystemPrompt: DEFAULT_UI_SETTINGS.aiSystemPrompt,
   aiThinkingEnabled: DEFAULT_UI_SETTINGS.aiThinkingEnabled,
   aiTranslateTargetLanguage: DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
+  trashAutoClearDays: DEFAULT_UI_SETTINGS.trashAutoClearDays,
   aiModelInstallState: {},
   lessonSubjectIndex: {},
   debugEvents: [],
@@ -1073,6 +1086,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ aiTranslateTargetLanguage: language });
     void persistUiSettings({ aiTranslateTargetLanguage: language });
   },
+  setTrashAutoClearDays: (days) => {
+    const validDays = days === null ? null : Math.max(1, Math.floor(days));
+    set({ trashAutoClearDays: validDays });
+    void persistUiSettings({ trashAutoClearDays: validDays });
+  },
   setAiModelInstallState: (modelId, installState) => {
     set((state) => ({
       aiModelInstallState: {
@@ -1139,9 +1157,53 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  // Helper function to clean up old trash items based on auto-clear setting
+  cleanupOldTrashItems: async () => {
+    const { vaultPath, trashAutoClearDays } = get();
+    if (!vaultPath || trashAutoClearDays === null) return;
+
+    const trashPath = await join(vaultPath, "Trash");
+    const cutoffTime = Date.now() - (trashAutoClearDays * 24 * 60 * 60 * 1000);
+
+    const deleteOldItems = async (dirPath: string) => {
+      try {
+        const entries = await readDir(dirPath);
+        for (const entry of entries) {
+          if (!entry.name || entry.name.startsWith(".")) continue;
+          const entryPath = await join(dirPath, entry.name);
+          const entryStat = await stat(entryPath);
+
+          if (entry.isDirectory) {
+            await deleteOldItems(entryPath);
+            // Check if directory is now empty
+            const remaining = await readDir(entryPath);
+            if (remaining.filter(e => !e.name?.startsWith(".")).length === 0) {
+              await remove(entryPath);
+            }
+          } else {
+            // Check if file is older than cutoff
+            const modifiedTime = entryStat.mtime ? new Date(entryStat.mtime).getTime() : Date.now();
+            if (modifiedTime < cutoffTime) {
+              await remove(entryPath);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to cleanup trash item:", error);
+      }
+    };
+
+    await deleteOldItems(trashPath);
+  },
+
   refreshVault: async () => {
-    const { vaultPath } = get();
+    const { vaultPath, trashAutoClearDays, cleanupOldTrashItems } = get();
     if (!vaultPath) return;
+
+    // Clean up old trash items before refreshing
+    if (trashAutoClearDays !== null) {
+      await cleanupOldTrashItems();
+    }
 
     const folders = ["Lesson Plans", "Mindmaps", "Materials", "Exports", "Trash"];
     

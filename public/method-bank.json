@@ -1077,5 +1077,265 @@
       "Formative Assessment",
       "Universal"
     ]
+  },
+  {
+    "id": "method-allresponse",
+    "type": "method",
+    "title": "All-Student Response",
+    "summary": "Every student responds simultaneously using mini-whiteboards, hand signals, or gestures.",
+    "description": "The teacher poses a question and all students display answers at once using personal whiteboards, ABCD cards, or thumbs up/down. Provides immediate visual evidence of whole-class understanding without relying on volunteers.",
+    "duration": "2-5m",
+    "tags": [
+      "Formative Assessment",
+      "Active Learning",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-peerteaching",
+    "type": "method",
+    "title": "Peer Teaching Protocol",
+    "summary": "Students teach concepts to each other in structured pairs or small groups.",
+    "description": "After initial instruction, students pair up and take turns explaining concepts to each other using their own words. The listener asks clarifying questions and provides feedback. Roles switch so both practice teaching and learning.",
+    "duration": "10-15m",
+    "tags": [
+      "Collaborative",
+      "Active Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-selfregulation",
+    "type": "method",
+    "title": "Self-Regulation Check-in",
+    "summary": "Students assess their own understanding and set specific improvement goals.",
+    "description": "Students pause to rate their confidence with the material, identify specific areas of confusion, and write one actionable goal for improvement. Builds metacognitive awareness and ownership of learning.",
+    "duration": "3-5m",
+    "tags": [
+      "Metacognition",
+      "Reflection",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-questioning",
+    "type": "method",
+    "title": "Purposeful Questioning Sequence",
+    "summary": "A planned series of questions that reveal and advance student thinking.",
+    "description": "The teacher prepares questions that progress from factual recall to analysis and evaluation. Questions are posed to specific students based on prior responses, using wait time and follow-up probes to deepen reasoning.",
+    "duration": "5-15m",
+    "tags": [
+      "Formative Assessment",
+      "Direct Instruction",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-productivestruggle",
+    "type": "method",
+    "title": "Productive Struggle Support",
+    "summary": "Supporting students through challenging tasks without immediate rescue.",
+    "description": "Students grapple with complex problems while the teacher provides strategic hints and encouragement rather than solutions. Emphasizes process over speed, normalizes confusion as part of learning, and celebrates breakthrough moments.",
+    "duration": "15-30m",
+    "tags": [
+      "Scaffolding",
+      "Universal",
+      "Metacognition"
+    ]
+  },
+  {
+    "id": "method-sentencestems",
+    "type": "method",
+    "title": "Sentence Stems for Academic Talk",
+    "summary": "Providing language frames to support structured academic discussion.",
+    "description": "Students receive sentence starters like 'I agree because...' or 'The evidence suggests...' to scaffold participation in academic discussions. Reduces cognitive load of language production so students can focus on content.",
+    "duration": "5-10m",
+    "tags": [
+      "Scaffolding",
+      "Literacy",
+      "Language Learning"
+    ]
+  },
+  {
+    "id": "method-frontload",
+    "type": "method",
+    "title": "Frontloading Vocabulary",
+    "summary": "Pre-teaching essential terms with visuals before reading or instruction.",
+    "description": "Before introducing new content, the teacher explicitly teaches 3-5 key terms using images, gestures, and examples. Students practice using the words in context to activate prior knowledge and reduce comprehension barriers.",
+    "duration": "5-10m",
+    "tags": [
+      "Scaffolding",
+      "Visual Learning",
+      "Literacy"
+    ]
+  },
+  {
+    "id": "method-wordbank",
+    "type": "method",
+    "title": "Graphic Organizer with Word Bank",
+    "summary": "Visual organizer paired with key vocabulary to support information processing.",
+    "description": "Students use a graphic organizer with images, word banks, and sentence starters to categorize information. Supports diverse learners by providing multiple entry points and reducing working memory demands.",
+    "duration": "15-25m",
+    "tags": [
+      "Scaffolding",
+      "Visual Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-comprehensible",
+    "type": "method",
+    "title": "Comprehensible Input Routine",
+    "summary": "Adjusting speech, visuals, and gestures to make content accessible.",
+    "description": "The teacher uses slower rate of speech, clear enunciation, gestures, and visual aids while presenting content. Checks for understanding frequently and rephrases as needed to ensure all students grasp essential concepts.",
+    "duration": "10-20m",
+    "tags": [
+      "Scaffolding",
+      "Language Learning",
+      "Universal"
+    ]
+  },
+  {
+    "id": "method-tableau",
+    "type": "method",
+    "title": "Tableau (Frozen Scene)",
+    "summary": "Students create a frozen picture depicting a concept or historical moment.",
+    "description": "Groups collaborate to compose a silent, frozen scene using body positions and facial expressions to represent an academic concept. Other students analyze and discuss what the tableau depicts, deepening comprehension through embodiment.",
+    "duration": "15-25m",
+    "tags": [
+      "Creative",
+      "Kinesthetic",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-readerstheatre",
+    "type": "method",
+    "title": "Reader's Theatre",
+    "summary": "Scripted oral reading performance without memorization or costumes.",
+    "description": "Students rehearse and perform a script derived from curricular content, reading from texts rather than memorizing. Builds fluency, comprehension, and engagement through dramatic interpretation of academic material.",
+    "duration": "20-40m",
+    "tags": [
+      "Literacy",
+      "Speaking",
+      "Collaborative"
+    ]
+  },
+  {
+    "id": "method-puppetry",
+    "type": "method",
+    "title": "Shadow Puppet Narrative",
+    "summary": "Using shadow puppets to retell or explain academic content.",
+    "description": "Students create shadow puppets and use them to narrate stories, explain processes, or dramatize historical events. Combines visual art, performance, and content knowledge in an engaging low-stakes format.",
+    "duration": "30-60m",
+    "tags": [
+      "Creative",
+      "Visual Learning",
+      "Humanities"
+    ]
+  },
+  {
+    "id": "method-erroranalysis",
+    "type": "method",
+    "title": "Error Analysis Protocol",
+    "summary": "Students identify, explain, and correct errors in worked examples.",
+    "description": "The teacher presents solutions containing intentional errors. Students work in pairs to locate the mistake, explain why it is wrong, and correct the reasoning. Develops critical analysis and deepens conceptual understanding.",
+    "duration": "15-25m",
+    "tags": [
+      "STEM",
+      "Critical Thinking",
+      "Formative Assessment"
+    ]
+  },
+  {
+    "id": "method-numbertalk",
+    "type": "method",
+    "title": "Number Talk",
+    "summary": "Mental math discussion where students share and compare solution strategies.",
+    "description": "The teacher presents a computation problem. Students solve mentally and signal readiness with a thumbs-up. Selected students explain their strategies while the teacher records their thinking, highlighting multiple valid approaches.",
+    "duration": "10-15m",
+    "tags": [
+      "STEM",
+      "Discussion",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-cer",
+    "type": "method",
+    "title": "Claim-Evidence-Reasoning",
+    "summary": "Scientific argumentation structure for lab analysis and writing.",
+    "description": "Students make a claim about a scientific phenomenon, support it with specific evidence from observations or data, and provide scientific reasoning connecting the evidence to the claim. Builds scientific argumentation skills.",
+    "duration": "20-40m",
+    "tags": [
+      "STEM",
+      "Critical Thinking",
+      "Writing"
+    ]
+  },
+  {
+    "id": "method-noticewonder",
+    "type": "method",
+    "title": "Notice & Wonder",
+    "summary": "Open-ended exploration of an image or scenario before formal instruction.",
+    "description": "Students examine a provocative image, graph, or problem and generate observations ('I notice...') and questions ('I wonder...'). The teacher records all contributions, building curiosity and surfacing prior knowledge before teaching.",
+    "duration": "5-10m",
+    "tags": [
+      "STEM",
+      "Inquiry",
+      "Engagement"
+    ]
+  },
+  {
+    "id": "method-wodb",
+    "type": "method",
+    "title": "Which One Doesn't Belong?",
+    "summary": "Open-ended reasoning task with multiple valid answers.",
+    "description": "Students examine four items and decide which one does not belong, defending their choice with mathematical or logical reasoning. Every item can be the odd one out depending on the criteria, promoting flexible thinking and discussion.",
+    "duration": "10-20m",
+    "tags": [
+      "STEM",
+      "Critical Thinking",
+      "Discussion"
+    ]
+  },
+  {
+    "id": "method-successcriteria",
+    "type": "method",
+    "title": "Co-Creating Success Criteria",
+    "summary": "Students collaborate with the teacher to define quality work standards.",
+    "description": "After examining exemplars, students discuss what makes work successful and contribute to generating criteria. The teacher records and refines these into a shared rubric. Increases ownership and clarity of expectations.",
+    "duration": "15-20m",
+    "tags": [
+      "Formative Assessment",
+      "Metacognition",
+      "Collaborative"
+    ]
+  },
+  {
+    "id": "method-twostars",
+    "type": "method",
+    "title": "Two Stars and a Wish",
+    "summary": "Structured peer feedback: two positives and one improvement suggestion.",
+    "description": "Peers review each other's work and provide feedback using the protocol: two specific strengths ('stars') and one constructive suggestion ('wish'). Scaffolds kind, specific, and helpful peer critique.",
+    "duration": "10-15m",
+    "tags": [
+      "Peer Review",
+      "Formative Assessment",
+      "Low-Prep"
+    ]
+  },
+  {
+    "id": "method-trafficlight",
+    "type": "method",
+    "title": "Traffic Light Self-Assessment",
+    "summary": "Students signal understanding level with colored cards or gestures.",
+    "description": "Students use red (need help), yellow (getting there), or green (confident) to indicate their level of understanding. The teacher uses this to form small groups for targeted support while confident students assist peers or extend their learning.",
+    "duration": "2-5m",
+    "tags": [
+      "Formative Assessment",
+      "Metacognition",
+      "Low-Prep"
+    ]
   }
 ]
