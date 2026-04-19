@@ -15,71 +15,43 @@ Built with performance and cross-platform compatibility in mind using **Tauri**,
 <h2 align="center">Product Tour</h2>
 
 <p align="center">
-  A quick visual walkthrough of TeacherPro from lesson creation to AI help, planning, export, and settings.
+  A quick visual walkthrough of TeacherPro — from planning and editing to mindmapping and pedagogy.
 </p>
 
 <table align="center">
   <tr>
-    <td colspan="3" align="center"><b>Lesson Planning Core</b></td>
+    <td colspan="2" align="center"><b>Plan &amp; Schedule</b></td>
   </tr>
   <tr>
-    <td align="center" width="33%">
-      <img src="public/screenshot1.png" alt="Lesson Plan Editor workspace" width="100%"><br>
-      <b>1) Lesson Plan Editor</b><br>
-      <sub>Structured lesson workspace with metadata, formatting tools, and pedagogy tables.</sub>
+    <td align="center" width="50%">
+      <img src="public/screenshot1.png" alt="Weekly Planner with subject-coloured lesson cards" width="100%"><br>
+      <b>Weekly Planner</b><br>
+      <sub>See your whole week at a glance. Each lesson card shows its subject with a colour-coded left accent. Drag cards between day columns to reschedule, or bulk-select and move to Trash.</sub>
     </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot2.png" alt="AI chat sidebar open next to lesson plan" width="100%"><br>
-      <b>2) AI Chat Sidebar</b><br>
-      <sub>Ask for summaries, activity ideas, and improvements without leaving your lesson draft.</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot3.png" alt="Private lesson notes sidebar" width="100%"><br>
-      <b>3) Private Notes Sidebar</b><br>
-      <sub>Keep lesson-only notes in a dedicated drawer that stays out of print and PDF exports.</sub>
+    <td align="center" width="50%">
+      <img src="public/screenshot3.png" alt="Lesson Plan Editor with metadata and pedagogy table" width="100%"><br>
+      <b>Lesson Plan Editor</b><br>
+      <sub>Structured rich-text editor with a metadata row (teacher, date, subject) and a built-in pedagogy table tracking Time, Phase, Learning Activity, Social Form, and Media. Full formatting toolbar on the right.</sub>
     </td>
   </tr>
   <tr>
-    <td colspan="3" align="center"><b>Organize and Deliver</b></td>
+    <td colspan="2" align="center"><b>Think &amp; Explore</b></td>
   </tr>
   <tr>
-    <td align="center" width="33%">
-      <img src="public/screenshot4.png" alt="Mindmap workspace with node context actions" width="100%"><br>
-      <b>4) Mindmap Workspace</b><br>
-      <sub>Build connected ideas visually with node links, color presets, and quick right-click actions.</sub>
+    <td align="center" width="50%">
+      <img src="public/screenshot2.png" alt="Mindmap workspace with node colour context menu" width="100%"><br>
+      <b>Mindmap Workspace</b><br>
+      <sub>Build connected ideas on an infinite canvas. Right-click any node to rename it, link new child nodes, apply a preset colour, or pick a custom one. Drop material files onto the canvas to create linked file nodes.</sub>
     </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot5.png" alt="Weekly planner calendar board" width="100%"><br>
-      <b>5) Weekly Planner</b><br>
-      <sub>Plan your week at a glance and manage lessons directly in day-based columns.</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot6.png" alt="Material document preview dialog" width="100%"><br>
-      <b>6) Material Preview</b><br>
-      <sub>Preview source files like PDFs before linking them into lessons and classroom plans.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="3" align="center"><b>Export and Configure</b></td>
-  </tr>
-  <tr>
-    <td align="center" width="33%">
-      <img src="public/screenshot7.png" alt="Lesson plan print and PDF preview" width="100%"><br>
-      <b>7) Print and PDF Preview</b><br>
-      <sub>Check final output before printing or saving polished lesson documents to PDF.</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot8.png" alt="Settings defaults tab" width="100%"><br>
-      <b>8) Defaults Settings</b><br>
-      <sub>Set teacher defaults, subject colors, and paper preferences for faster daily setup.</sub>
-    </td>
-    <td align="center" width="33%">
-      <img src="public/screenshot9.png" alt="AI runtime diagnostics settings" width="100%"><br>
-      <b>9) AI Runtime Diagnostics</b><br>
-      <sub>See local AI runtime health, backend selection, and model routing in one panel.</sub>
+    <td align="center" width="50%">
+      <img src="public/screenshot4.png" alt="Method Bank dock open alongside the lesson editor" width="100%"><br>
+      <b>Method Bank</b><br>
+      <sub>Browse a searchable library of teaching phases, social forms, and pedagogical methods in a slide-out left dock. Filter by Phase, Social, or Method tags and double-click any entry to insert it directly into your active lesson table row.</sub>
     </td>
   </tr>
 </table>
+
+
 
 ---
 
