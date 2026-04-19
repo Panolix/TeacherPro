@@ -496,28 +496,12 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   border-color: #444 !important;
 }
 
-/* In-App A4 Landscape Paper Container - Scales to fit viewport */
+/* In-App A4 Landscape Paper Container */
 #lesson-plan-container {
-  /* A4 Landscape width - true WYSIWYG size */
-  width: 297mm;
+  width: min(297mm, 100%);
+  max-width: 297mm;
   margin: 0 auto;
   border-radius: 14px;
-  /* Scale to fit viewport: down for small screens, up to 1.25x max for large screens */
-  transform-origin: top center;
-  --available-width: calc(100vw - 48px);
-  --scale: clamp(0.5, calc(var(--available-width) / 297mm), 1.25);
-  transform: scale(var(--scale));
-  margin-bottom: calc(297mm * (var(--scale) - 1));
-}
-
-@media print {
-  #lesson-plan-container {
-    width: 100% !important;
-    min-height: auto !important;
-    transform: none !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-  }
 }
 
 .lesson-export-surface {
