@@ -516,11 +516,11 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   outline: none;
   min-height: 50vh;
   color: #f8f8f8;
-  font-size: 12pt; /* True 12pt constraint like Word */
+  font-size: 11pt;
 }
 
 .ProseMirror h1 {
-  font-size: 18pt;
+  font-size: 16pt;
   font-weight: 700;
   margin-top: 14pt;
   margin-bottom: 6pt;
@@ -528,7 +528,7 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
 }
 
 .ProseMirror h2 {
-  font-size: 14pt;
+  font-size: 13pt;
   font-weight: 700;
   margin-top: 12pt;
   margin-bottom: 6pt;
@@ -536,7 +536,7 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
 }
 
 .ProseMirror h3 {
-  font-size: 13pt;
+  font-size: 12pt;
   font-weight: 700;
   margin-top: 10pt;
   margin-bottom: 4pt;
@@ -600,7 +600,6 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   text-align: left;
   background-color: var(--color-panel);
   color: #e5e5e5;
-  font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 2px solid var(--color-border);

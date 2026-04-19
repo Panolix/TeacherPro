@@ -567,7 +567,7 @@ const MenuBar = ({
   }
 
   const FONT_SIZES = ["8pt", "10pt", "11pt", "12pt", "14pt", "16pt", "18pt", "24pt"];
-  const currentFontSize = editor.getAttributes("textStyle").fontSize || "12pt";
+  const currentFontSize = editor.getAttributes("textStyle").fontSize || "11pt";
   const isLightTheme =
     typeof document !== "undefined" &&
     document.documentElement.getAttribute("data-tp-lesson-paper") === "light";
