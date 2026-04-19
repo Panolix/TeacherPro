@@ -1492,7 +1492,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
 
       let savePath = activeFilePath;
+      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const currentFileName = activeFilePath.split(/[\/\\]/).pop() || "";
+
+      // Preserve subfolder prefix (e.g. "History/") from the active file path
+      const lpPrefix = lessonPlansFolder.endsWith("/") ? lessonPlansFolder : lessonPlansFolder + "/";
+      const relativeActive = activeFilePath.startsWith(lpPrefix)
+        ? activeFilePath.slice(lpPrefix.length)
+        : currentFileName;
+      const folderSlash = relativeActive.lastIndexOf("/");
+      const folderPrefix = folderSlash >= 0 ? relativeActive.slice(0, folderSlash + 1) : "";
+
       const dateStr = newLessonData.metadata.plannedFor 
         ? newLessonData.metadata.plannedFor.split("T")[0] 
         : newLessonData.metadata.createdAt.split("T")[0];
@@ -1502,16 +1512,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Intelligent Naming Logic
       if (newLessonData.metadata.subject && newLessonData.metadata.subject.trim() !== "") {
         const sanitizedSubject = newLessonData.metadata.subject.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '-');
-        newFileName = `${dateStr}-${sanitizedSubject}.json`;
+        newFileName = `${folderPrefix}${dateStr}-${sanitizedSubject}.json`;
       } else {
         if (currentFileName.startsWith("Untitled-Lesson")) {
           const id = Date.now().toString().slice(-4);
-          newFileName = `Lesson-${dateStr}-${id}.json`;
+          newFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
         }
       }
 
       if (allowRename && currentFileName !== newFileName) {
-        const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
         const requestedPath = await join(lessonPlansFolder, newFileName);
         let newSavePath = requestedPath;
 

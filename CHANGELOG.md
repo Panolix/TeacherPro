@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-04-19
+### Fixed
+- Renaming a lesson (via the subject field) no longer moves it out of its subfolder. The save path now preserves the relative folder prefix (e.g. `History/`) when building the new filename.
+
 ## [2.0.0] - 2026-04-19
 ### Changed — UI Overhaul
 - **Complete interface redesign.** The entire shell — sidebar, top bar, status bar, and context menus — has been rebuilt from scratch with a cleaner, more focused aesthetic.
