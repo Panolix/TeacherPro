@@ -1453,6 +1453,11 @@ export function Editor() {
       }
 
       const target = event.target as HTMLElement | null;
+      // Allow material links to handle their own context menu
+      const isMaterialLinkTarget = !!target && !!target.closest("material-link");
+      if (isMaterialLinkTarget) {
+        return;
+      }
       const isTableTarget = !!target && !!target.closest("table");
       const { from, to, empty } = editor.state.selection;
       const selectedText = editor.state.doc.textBetween(from, to, "\n", " ").trim();
