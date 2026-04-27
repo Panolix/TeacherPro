@@ -60,11 +60,16 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
       }
     };
 
-    window.addEventListener("click", closeMenu);
+    const onPointerDown = (e: MouseEvent) => {
+      // Don't close on right-click (contextmenu will handle opening)
+      if (e.button === 2) return;
+      closeMenu();
+    };
+    window.addEventListener("mousedown", onPointerDown);
     window.addEventListener("keydown", closeOnEscape, true);
 
     return () => {
-      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("mousedown", onPointerDown);
       window.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [previewBlobUrl]);
