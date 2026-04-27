@@ -6,6 +6,7 @@ import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAppStore } from "../../store";
 
 interface LinkContextMenuState {
@@ -248,7 +249,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         </span>
       </div>
 
-      {contextMenu && (
+      {contextMenu && createPortal(
         <div
           className="tp-context-menu tp-context-menu--legacy fixed z-[85]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
@@ -274,7 +275,8 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
             <Trash2 className="w-4 h-4" />
             <span style={{ flex: 1 }}>Remove Link</span>
           </button>
-        </div>
+        </div>,
+        document.body
       )}
 
       {previewOpen && (
