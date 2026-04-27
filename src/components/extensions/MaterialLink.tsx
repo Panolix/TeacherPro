@@ -38,6 +38,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<LinkContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const previewModalRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -64,6 +65,8 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     const onPointerDown = (e: MouseEvent) => {
       // Don't close on right-click (contextmenu will handle opening)
       if (e.button === 2) return;
+      // Don't close if clicking inside the menu
+      if (contextMenuRef.current?.contains(e.target as Element)) return;
       closeMenu();
     };
     window.addEventListener("mousedown", onPointerDown);
@@ -251,6 +254,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
 
       {contextMenu && createPortal(
         <div
+          ref={contextMenuRef}
           className="tp-context-menu tp-context-menu--legacy fixed z-[85]"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onClick={(event) => event.stopPropagation()}
