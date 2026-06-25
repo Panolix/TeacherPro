@@ -150,7 +150,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 20-24 GB · CPU: 32+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
     defaultNumCtx: 32768,
-    defaultNumPredict: 2048,
+    defaultNumPredict: 4096,
     description: "Neueste Qwen-Generation (3 Wochen alt) mit MoE-Architektur und optimiertem agentischen Coding – beste Wahl für anspruchsvolle Analyse und lange Kontexte auf Highend-Systemen.",
     recommended: false,
     capabilities: ["multilingual", "reasoning", "long-context"],

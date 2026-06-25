@@ -992,6 +992,8 @@ export function Editor() {
   const knowledgeCatList = useKnowledgeStore((s) => s.categories);
   const chatFilter = useKnowledgeStore((s) => s.chatCategoryFilter);
   const setChatFilter = useKnowledgeStore((s) => s.setChatCategoryFilter);
+  const loadKnowledgeIndex = useKnowledgeStore((s) => s.loadIndex);
+  useEffect(() => { void loadKnowledgeIndex(); }, [loadKnowledgeIndex]);
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
@@ -1892,13 +1894,15 @@ export function Editor() {
         const { useKnowledgeStore } = await import("../knowledge/knowledgeStore");
         const ks = useKnowledgeStore.getState();
         if (ks.enabledInChat && ks.index && ks.index.chunks.length > 0) {
-          knowledgeBlock = ks.buildKnowledgeContext(userText + " " + (subject || ""), 8);
+          // Search with user query + lesson context + subject for better matches
+          const searchQuery = `${userText} ${contextText.slice(0, 2000)} ${subject || ""}`;
+          knowledgeBlock = ks.buildKnowledgeContext(searchQuery, 8);
         }
-      } catch {}
+      } catch (e) { console.warn("Knowledge search failed:", e); }
 
       const prompt = [
         `The teacher's current lesson plan is shown below. Read it carefully before responding.\n\n---\n${lessonBlock}\n---`,
-        ...(knowledgeBlock ? [knowledgeBlock] : []),
+        ...(knowledgeBlock ? ["", knowledgeBlock] : []),
         "",
         ...(historyLines.length > 0 ? ["Conversation so far:", ...historyLines, ""] : []),
         `User: ${userText}`,
