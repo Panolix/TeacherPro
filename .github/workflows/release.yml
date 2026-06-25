@@ -9,7 +9,7 @@ jobs:
   create-release:
     permissions:
       contents: write
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       release_id: ${{ steps.create-release.outputs.id }}
     steps:
@@ -54,12 +54,13 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target universal-apple-darwin'
-          - platform: 'ubuntu-22.04'
+          - platform: 'ubuntu-24.04'
             args: ''
           - platform: 'windows-latest'
             args: ''
 
     runs-on: ${{ matrix.platform }}
+    continue-on-error: ${{ matrix.platform != 'windows-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -76,7 +77,7 @@ jobs:
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -104,3 +105,10 @@ jobs:
           prerelease: false
           retryAttempts: 2
           args: ${{ matrix.args }}
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: teacherpro-${{ matrix.platform }}-${{ github.ref_name }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: ignore

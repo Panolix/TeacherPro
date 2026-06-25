@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Ollama GPU-Erkennung auf Windows** — `OLLAMA_LLM_LIBRARY` wird nicht mehr gesetzt;
+  Ollama auto-detect findet jetzt CUDA/cuBLAS korrekt (z. B. RTX 4090, 24 GB VRAM)
+- **Ollama-Prozesse werden nicht mehr gekillt** — Der Windows-Dienst/die Tray-App
+  bleibt beim App-Start erhalten und wird beim Beenden nicht mehr mit `taskkill`
+  beendet; CPU-Fallback bei eigenem Start entfällt
+- **GPU-Erkennung robuster gemacht** — `query_nvidia_gpu_names` probiert jetzt
+  auch Standard-NVIDIA-Pfade (`C:\Program Files\NVIDIA Corporation\NVSMI\`),
+  falls `nvidia-smi` nicht im PATH liegt; zusätzlich Fallback auf den
+  CUDA-Backend-Ordner (`cuda_v12/`)
+
+### Changed
+- **Ollama-Shutdown unter Windows** — Löscht nur den eigenen Child-Prozess;
+  der Windows-Dienst wird nicht mehr mit `sc stop` gestoppt
+
 ## [2.1.1] - 2026-06-25
 ### Fixed
 - **UI freeze on Refresh** — `ai_list_models` made async so clicking Refresh in AI Settings no longer blocks the UI when Ollama isn't running.

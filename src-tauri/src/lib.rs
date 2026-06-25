@@ -89,18 +89,39 @@ fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
 }
 
 fn query_nvidia_gpu_names() -> Vec<String> {
-    match command_for("nvidia-smi")
-        .args(["--query-gpu=name", "--format=csv,noheader"])
-        .output()
-    {
-        Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .map(|line| format!("NVIDIA GPU: {line}"))
-            .collect(),
-        _ => Vec::new(),
+    let run_nvidia_smi = |binary: &str| -> Vec<String> {
+        match command_for(binary)
+            .args(["--query-gpu=name", "--format=csv,noheader"])
+            .output()
+        {
+            Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(|line| format!("NVIDIA GPU: {line}"))
+                .collect(),
+            _ => Vec::new(),
+        }
+    };
+
+    // Try PATH first, then common NVIDIA installation paths
+    let result = run_nvidia_smi("nvidia-smi");
+    if !result.is_empty() {
+        return result;
     }
+    let common_paths = [
+        r"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+        r"C:\Windows\System32\nvidia-smi.exe",
+    ];
+    for path in common_paths {
+        if std::path::Path::new(path).exists() {
+            let result = run_nvidia_smi(path);
+            if !result.is_empty() {
+                return result;
+            }
+        }
+    }
+    Vec::new()
 }
 
 fn probe_hardware() -> HardwareProbe {
@@ -111,6 +132,19 @@ fn probe_hardware() -> HardwareProbe {
             return HardwareProbe {
                 preferred_backend: "cuda".to_string(),
                 detected_hardware,
+            };
+        }
+
+        // Fallback: check if Ollama's CUDA backend library exists on disk
+        // This covers cases where nvidia-smi isn't in PATH
+        let ollama_dir = resolve_ollama_install_dir();
+        let cuda_backend = format!(r"{}\lib\ollama\cuda_v12", ollama_dir);
+        if std::path::Path::new(&cuda_backend).exists() {
+            return HardwareProbe {
+                preferred_backend: "cuda".to_string(),
+                detected_hardware: vec![
+                    "nvidia-smi not found in PATH, but Ollama CUDA backend library detected.".to_string(),
+                ],
             };
         }
 
@@ -181,13 +215,26 @@ fn probe_hardware() -> HardwareProbe {
 }
 
 fn apply_preferred_backend_env(command: &mut Command) {
-    if std::env::var("OLLAMA_LLM_LIBRARY").is_ok() {
+    if let Ok(val) = std::env::var("OLLAMA_LLM_LIBRARY") {
+        eprintln!("[TeacherPro] OLLAMA_LLM_LIBRARY already set in env: {val} (not overriding)");
+        return;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: Don't set OLLAMA_LLM_LIBRARY — let Ollama auto-detect the GPU backend.
+        // Setting it explicitly can break CUDA detection in some Ollama versions.
+        eprintln!("[TeacherPro] Windows: letting Ollama auto-detect GPU backend");
         return;
     }
 
     let probe = &*AI_HARDWARE_PROBE;
     if probe.preferred_backend != "cpu" {
+        eprintln!("[TeacherPro] Setting OLLAMA_LLM_LIBRARY={} (detected: {:?})",
+            probe.preferred_backend, probe.detected_hardware);
         command.env("OLLAMA_LLM_LIBRARY", &probe.preferred_backend);
+    } else {
+        eprintln!("[TeacherPro] No GPU detected; letting Ollama use default backend");
     }
 }
 
@@ -206,35 +253,65 @@ fn is_ollama_server_running() -> bool {
 /// Stores the child process so we can kill it when the app exits.
 fn ensure_ollama_server_started() {
     if is_ollama_server_running() {
+        eprintln!("[TeacherPro] Ollama server already running.");
         return;
     }
-    let binary = resolve_ollama_binary();
-    let mut command = command_for(&binary);
-    apply_preferred_backend_env(&mut command);
 
-    match command
+    // Determine the Ollama install directory for CUDA working directory
+    let ollama_dir = resolve_ollama_install_dir();
+    eprintln!("[TeacherPro] Ollama install dir: {}", ollama_dir);
+
+    let serve_binary = if cfg!(windows) {
+        format!(r"{}\ollama.exe", ollama_dir)
+    } else {
+        resolve_ollama_binary()
+    };
+    eprintln!("[TeacherPro] Starting: {serve_binary} serve");
+
+    let mut command = command_for(&serve_binary);
+    apply_preferred_backend_env(&mut command);
+    command
+        .current_dir(&ollama_dir)  // Set working dir so CUDA libs can be found
         .arg("serve")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
+        .stderr(Stdio::piped());
+
+    match command.spawn() {
+        Ok(mut child) => {
+            eprintln!("[TeacherPro] Ollama server started (pid: {:?})", child.id());
+            if let Some(stderr) = child.stderr.take() {
+                std::thread::spawn(move || {
+                    use std::io::BufRead;
+                    let reader = std::io::BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(text) = line {
+                            if !text.is_empty() {
+                                eprintln!("[Ollama] {text}");
+                            }
+                        }
+                    }
+                });
+            }
             if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
                 *guard = Some(child);
             }
             OLLAMA_WE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
         }
-        Err(_) => return,
-    }
-
-    // Wait for the server to be ready (up to 5 seconds).
-    for _ in 0..20 {
-        std::thread::sleep(std::time::Duration::from_millis(250));
-        if is_ollama_server_running() {
-            break;
+        Err(e) => {
+            eprintln!("[TeacherPro] FAILED: {e}");
+            return;
         }
     }
+
+    for _ in 0..60 {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        if is_ollama_server_running() {
+            eprintln!("[TeacherPro] Ollama server is now responding on port 11434.");
+            return;
+        }
+    }
+    eprintln!("[TeacherPro] Ollama server started but not responding after 15s.");
 }
 
 /// Kill the Ollama server if we started it.
@@ -265,9 +342,8 @@ fn stop_ollama_server() {
     }
     #[cfg(windows)]
     {
-        let _ = command_for("taskkill")
-            .args(["/F", "/IM", "ollama.exe"])
-            .output();
+        // Windows: don't kill Ollama — it may be running as a Windows service.
+        // We only kill the child process handle if we started it.
     }
 
     OLLAMA_WE_STARTED.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -369,11 +445,46 @@ fn resolve_ollama_binary() -> String {
                 return candidate;
             }
         } else if command_for(&candidate).arg("--version").output().is_ok() {
-            return candidate;
+            // Found via PATH
+            #[cfg(target_os = "windows")]
+            {
+                if let Ok(full) = std::fs::canonicalize(&candidate) {
+                    return full.to_string_lossy().to_string();
+                }
+            }
+            return candidate.to_string();
         }
     }
 
     "ollama".to_string()
+}
+
+fn resolve_ollama_install_dir() -> String {
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            let dir = format!(r"{}\Programs\Ollama", local_app_data);
+            if std::path::Path::new(&dir).exists() {
+                return dir;
+            }
+        }
+        let alt = r"C:\Program Files\Ollama".to_string();
+        if std::path::Path::new(&alt).exists() {
+            return alt;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return "/Applications/Ollama.app/Contents/MacOS".to_string();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if std::path::Path::new("/usr/local/bin/ollama").exists() {
+            return "/usr/local".to_string();
+        }
+        return "/usr".to_string();
+    }
+    ".".to_string()
 }
 
 fn run_command(binary: &str, args: &[&str]) -> Result<String, String> {
@@ -993,8 +1104,12 @@ fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
 }
 
 #[tauri::command]
-fn ai_ensure_runtime() -> Result<String, String> {
-    ensure_ollama_runtime()
+async fn ai_ensure_runtime() -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ensure_ollama_runtime()
+    })
+    .await
+    .map_err(|e| format!("Runtime init failed: {e}"))?
 }
 
 #[tauri::command]
@@ -1355,8 +1470,12 @@ async fn ai_generate_text(
         let base_url = base_url.trim_end_matches('/');
 
         #[derive(serde::Deserialize)]
-        struct OllamaGenerateResponse {
-            response: String,
+        struct OllamaChatResponse {
+            message: OllamaChatMessage,
+        }
+        #[derive(serde::Deserialize)]
+        struct OllamaChatMessage {
+            content: String,
             #[serde(default)]
             thinking: String,
         }
@@ -1365,9 +1484,48 @@ async fn ai_generate_text(
             .timeout(std::time::Duration::from_secs(300))
             .build();
 
-        let mut body = serde_json::json!({
-            "model": task_model_id,
-            "prompt": task_prompt,
+        #[derive(serde::Deserialize)]
+        struct OllamaGenerateResponse {
+            response: String,
+            #[serde(default)]
+            thinking: String,
+        }
+
+        // Call an Ollama endpoint and extract content + thinking
+        let call_and_extract = |endpoint: &str, req_body: serde_json::Value|
+         -> Result<(String, String), String>
+        {
+            let resp = agent.post(&format!("{base_url}{endpoint}"))
+                .send_json(req_body);
+            let resp = match resp {
+                Ok(r) => r,
+                Err(ureq::Error::Status(code, resp)) => {
+                    let body = resp.into_string().unwrap_or_default();
+                    return Err(format!("Ollama API ({endpoint}) status {code}: {body}"));
+                }
+                Err(e) => return Err(format!("Ollama API ({endpoint}): {e}")),
+            };
+
+            if endpoint.contains("/api/chat") || endpoint.contains("/v1/chat") {
+                let chat: OllamaChatResponse = resp.into_json()
+                    .map_err(|e| format!("Bad chat JSON: {e}"))?;
+                Ok((chat.message.content, chat.message.thinking))
+            } else {
+                let gen: OllamaGenerateResponse = resp.into_json()
+                    .map_err(|e| format!("Bad generate JSON: {e}"))?;
+                Ok((gen.response, gen.thinking))
+            }
+        };
+
+        // Strategy 1: /api/chat (modern, supports Qwen 3.6, Llama 3, Gemma 4, etc.)
+        let mut messages: Vec<serde_json::Value> = Vec::new();
+        if !task_system.is_empty() {
+            messages.push(serde_json::json!({"role": "system", "content": task_system}));
+        }
+        messages.push(serde_json::json!({"role": "user", "content": task_prompt}));
+        let chat_body = serde_json::json!({
+            "model": &task_model_id,
+            "messages": messages,
             "stream": false,
             "think": task_thinking,
             "options": {
@@ -1377,22 +1535,31 @@ async fn ai_generate_text(
             }
         });
 
-        if !task_system.is_empty() {
-            body["system"] = serde_json::Value::String(task_system);
-        }
+        let (response_text, thinking_text) = match call_and_extract("/api/chat", chat_body) {
+            Ok(r) => r,
+            Err(_) => {
+                // Strategy 2: /api/generate (legacy, supports older models)
+                let mut gen_body = serde_json::json!({
+                    "model": &task_model_id,
+                    "prompt": &task_prompt,
+                    "stream": false,
+                    "think": task_thinking,
+                    "options": {
+                        "temperature": task_temperature,
+                        "num_ctx": task_num_ctx,
+                        "num_predict": task_num_predict,
+                    }
+                });
+                if !task_system.is_empty() {
+                    gen_body["system"] = serde_json::Value::String(task_system);
+                }
+                call_and_extract("/api/generate", gen_body)?
+            }
+        };
 
-        let result = agent
-            .post(&format!("{base_url}/api/generate"))
-            .send_json(body)
-            .map_err(|e| format!("Ollama API request failed: {e}"))?
-            .into_json::<OllamaGenerateResponse>()
-            .map_err(|e| format!("Failed to parse Ollama response: {e}"))?;
-
-        // Strip any residual think blocks in case an older Ollama version ignores think:false.
-        let clean = strip_think_blocks(&result.response);
-        // If thinking was requested, prepend the thinking block so the frontend can parse it.
-        if task_thinking && !result.thinking.is_empty() {
-            Ok(format!("<think>{}</think>\n{}", result.thinking.trim(), clean))
+        let clean = strip_think_blocks(&response_text);
+        if task_thinking && !thinking_text.trim().is_empty() {
+            Ok(format!("<think>{}</think>\n{}", thinking_text.trim(), clean))
         } else {
             Ok(clean)
         }
