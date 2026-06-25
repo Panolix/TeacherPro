@@ -209,6 +209,8 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiErrorMessage(null);
     setAiActionBusy("refresh-models");
     try {
+      // Ensure Ollama is running before listing models
+      await invoke("ai_ensure_runtime");
       const installedModels = await invoke<string[]>("ai_list_models");
       const installed = new Set(installedModels || []);
       setAiInstalledModelIds(Array.from(installed));
@@ -349,12 +351,12 @@ export function SettingsModal({ open, onClose }: Props) {
     });
   }, [aiInstalledModelIds, aiDefaultModelId, aiRewriteTranslateModelId]);
 
-  // Sync diagnostics + installed list whenever the AI tab opens
+  // Sync installed models whenever the AI tab opens (with delay so UI stays responsive)
   useEffect(() => {
     if (!open || tab !== "ai") return;
-    // Don't auto-sync on tab switch — the Refresh buttons handle this.
-    // Auto-syncing triggers Ollama detection which freezes the UI.
-  }, [open, tab, aiProvider]);
+    const timer = setTimeout(() => { void syncInstalledModels(); }, 500);
+    return () => clearTimeout(timer);
+  }, [open, tab, aiProvider, syncInstalledModels]);
 
   // Cleanup pollers on unmount
   useEffect(() => {
