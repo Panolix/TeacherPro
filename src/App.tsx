@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
@@ -61,6 +62,15 @@ function App() {
     // Fixed canvas modes: lesson paper is always light, mindmap canvas is always dark.
     useAppStore.getState().setLessonPaperTone("light");
     useAppStore.getState().setMindmapPaperTone("dark");
+
+    // Start Ollama in background (with GPU backend auto-detection)
+    setTimeout(() => {
+      invoke("ai_ensure_runtime").then(() => {
+        console.log("Ollama backend started successfully");
+      }).catch((err: any) => {
+        console.warn("Could not auto-start Ollama:", err);
+      });
+    }, 2000);
   }, []);
 
   useEffect(() => {
