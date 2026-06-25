@@ -68,6 +68,14 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+    document.addEventListener("contextmenu", handler);
+    return () => document.removeEventListener("contextmenu", handler);
+  }, []);
+
+  useEffect(() => {
     const accent = resolveAccentColor(accentColor);
     document.documentElement.style.setProperty("--tp-accent", accent);
   }, [accentColor]);

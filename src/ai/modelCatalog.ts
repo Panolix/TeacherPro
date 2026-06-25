@@ -4,7 +4,8 @@ export type AiModelCapability =
   | "reasoning"
   | "low-latency"
   | "long-context"
-  | "english-focused";
+  | "english-focused"
+  | "embedding";
 
 export interface AiModelCatalogItem {
   id: string;
@@ -165,9 +166,9 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 8192 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "Leichtes Embedding-Modell (768 Dimensionen) für die Wissensdatenbank – wandelt Texte in Vektoren um, damit die KI in deinen Materialien suchen kann.",
+    description: "Leichtes Embedding-Modell (768 Dimensionen) – universell einsetzbar, schnell, multilingual. Gut für Deutsch und Englisch.",
     recommended: false,
-    capabilities: ["low-latency"],
+    capabilities: ["embedding", "low-latency", "multilingual"],
   },
   {
     id: "bge-m3",
@@ -179,9 +180,23 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 8192 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "Hochwertiges mehrsprachiges Embedding-Modell (1024 Dimensionen) – beste Qualität für deutsche Texte, aber größer und langsamer als nomic-embed-text.",
+    description: "Hochwertiges mehrsprachiges Embedding-Modell (1024 Dimensionen) – beste Qualität für Deutsch, Englisch und 100+ Sprachen. Ideal für Fachtexte.",
     recommended: false,
-    capabilities: ["multilingual", "reasoning"],
+    capabilities: ["embedding", "multilingual"],
+  },
+  {
+    id: "all-minilm:l6-v2",
+    label: "All MiniLM L6 v2",
+    tier: "small",
+    source: "ollama-registry",
+    estimatedDisk: "~80 MB",
+    recommendedRam: "VRAM: 1+ GB · CPU: 4+ GB RAM",
+    recommendedContext: "Max context: 512 tokens",
+    defaultNumCtx: 512,
+    defaultNumPredict: 128,
+    description: "Sehr leichtes Embedding-Modell (384 Dimensionen, 80 MB) – extrem schnell, ideal für englische Texte und Echtzeitsuche. Läuft auf jeder Hardware.",
+    recommended: false,
+    capabilities: ["embedding", "low-latency", "english-focused"],
   },
 ];
 

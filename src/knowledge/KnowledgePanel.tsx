@@ -10,7 +10,6 @@ export function KnowledgePanel() {
     addSource, removeSource, reindexAll,
     selectedSourceId, setSelectedSource,
     enabledInChat, setEnabledInChat, chatCategoryFilter, setChatCategoryFilter,
-    embedderModelId, setEmbedderModelId,
   } = useKnowledgeStore();
 
   useEffect(() => {
@@ -59,46 +58,29 @@ export function KnowledgePanel() {
       {importProgress && (
         <div className="mx-3 mb-2 p-2 rounded-md text-[11px]" style={{ background: "var(--tp-bg-3)" }}>
           <div className="flex items-center gap-1.5 text-[var(--tp-t-2)] mb-1">
-            <Loader2 className="w-3 h-3 animate-spin" />
-            {importProgress.stage === "extracting" && t("knowledge.extracting")}
-            {importProgress.stage === "chunking" && t("knowledge.chunking")}
-            {importProgress.stage === "embedding" && t("knowledge.embedding")}
-            {` ${importProgress.current}/${importProgress.total}`}
+            <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+            <span className="truncate">{importProgress.sourceName}</span>
           </div>
-          <div className="truncate text-[var(--tp-t-4)]">{importProgress.sourceName}</div>
+          <div className="flex items-center gap-2 text-[10px] text-[var(--tp-t-4)]">
+            <span>{t("knowledge.file")} {importProgress.current}/{importProgress.total}</span>
+            <span>·</span>
+            <span>
+              {importProgress.stage === "extracting" && t("knowledge.extracting")}
+              {importProgress.stage === "chunking" && t("knowledge.chunking")}
+              {importProgress.stage === "embedding" && t("knowledge.embedding")}
+            </span>
+          </div>
+          <div className="mt-1.5 w-full h-1.5 rounded-full overflow-hidden" style={{ background: "var(--tp-bg-2)" }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${Math.round((importProgress.current / importProgress.total) * 100)}%`,
+                background: "var(--tp-accent)",
+              }}
+            />
+          </div>
         </div>
       )}
-
-      {/* Embedder Selection */}
-      <div className="mx-3 mb-2">
-        <label className="text-[10px] uppercase tracking-wider" style={{ color: "var(--tp-t-4)" }}>
-          {t("knowledge.embedder")}
-        </label>
-        <div className="flex gap-1 mt-1">
-          <button
-            onClick={() => setEmbedderModelId("nomic-embed-text")}
-            className={`text-[11px] px-2 py-1 rounded transition-colors ${
-              embedderModelId === "nomic-embed-text"
-                ? "bg-[var(--tp-accent)] text-white"
-                : "bg-[var(--tp-bg-3)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-2)]"
-            }`}
-            title="~274 MB · 768 Dim"
-          >
-            nomic-embed-text
-          </button>
-          <button
-            onClick={() => setEmbedderModelId("bge-m3")}
-            className={`text-[11px] px-2 py-1 rounded transition-colors ${
-              embedderModelId === "bge-m3"
-                ? "bg-[var(--tp-accent)] text-white"
-                : "bg-[var(--tp-bg-3)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-2)]"
-            }`}
-            title="~2,2 GB · 1024 Dim · Multilingual"
-          >
-            bge-m3
-          </button>
-        </div>
-      </div>
 
       {/* Chat Toggle */}
       <div className="mx-3 mb-2">

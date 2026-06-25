@@ -647,7 +647,9 @@ const en = {
 
   knowledge: {
     addSource: "Add Knowledge Source",
-    embedder: "Embedding Model",
+    embedder: "Embedding Model (for Knowledge Base)",
+    file: "File",
+    embedderHint: "nomic-embed-text (274 MB) is faster and smaller. bge-m3 (2.2 GB) gives better German results.",
     extracting: "Extracting text...",
     chunking: "Chunking...",
     embedding: "Embedding...",

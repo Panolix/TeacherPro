@@ -647,7 +647,9 @@ const de = {
 
   knowledge: {
     addSource: "Wissensquelle hinzufügen",
-    embedder: "Embedding-Modell",
+    embedder: "Embedding-Modell (für Wissensdatenbank)",
+    file: "Datei",
+    embedderHint: "nomic-embed-text (274 MB) ist schneller und kleiner. bge-m3 (2,2 GB) liefert bessere Ergebnisse für Deutsch.",
     extracting: "Extrahiere Text...",
     chunking: "Zerlege in Chunks...",
     embedding: "Erstelle Embeddings...",

@@ -19,6 +19,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type AccentColor } from "../store";
+import { useKnowledgeStore } from "../knowledge/knowledgeStore";
 import { useTranslation } from "../i18n/useTranslation";
 import {
   AI_MODEL_CATALOG,
@@ -41,6 +42,7 @@ const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
   "low-latency": "settings.aiCapabilities.lowLatency",
   "long-context": "settings.aiCapabilities.longContext",
   "english-focused": "settings.aiCapabilities.englishFocused",
+  embedding: "knowledge.embedder",
 };
 
 interface AiModelInstallProgress {
@@ -122,6 +124,7 @@ export function SettingsModal({ open, onClose }: Props) {
     language,
     setLanguage,
   } = useAppStore();
+  const { embedderModelId, setEmbedderModelId } = useKnowledgeStore();
 
   const { t } = useTranslation();
 
@@ -335,9 +338,12 @@ export function SettingsModal({ open, onClose }: Props) {
   }, []);
 
   const availableRoutingModels = useMemo(() => {
-    const ids = new Set<string>(aiInstalledModelIds);
-    if (aiDefaultModelId) ids.add(aiDefaultModelId);
-    if (aiRewriteTranslateModelId) ids.add(aiRewriteTranslateModelId);
+    const embeddingIds = new Set(
+      AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((m) => m.id)
+    );
+    const ids = new Set<string>(aiInstalledModelIds.filter((id) => !embeddingIds.has(id)));
+    if (aiDefaultModelId && !embeddingIds.has(aiDefaultModelId)) ids.add(aiDefaultModelId);
+    if (aiRewriteTranslateModelId && !embeddingIds.has(aiRewriteTranslateModelId)) ids.add(aiRewriteTranslateModelId);
     if (ids.size === 0) ids.add(DEFAULT_AI_MODEL_ID);
     return Array.from(ids).sort((a, b) => {
       const ai = AI_MODEL_CATALOG.findIndex((m) => m.id === a);
@@ -672,6 +678,46 @@ export function SettingsModal({ open, onClose }: Props) {
                       style={{ height: "auto", minHeight: 90, padding: "10px 12px", resize: "vertical" }}
                     />
                   </FormRow>
+                </Section>
+
+                <Section title={t("knowledge.embedder")}>
+                  <div className="flex flex-col gap-1.5">
+                    {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((model) => {
+                      const isActive = embedderModelId === model.id;
+                      const installState = getModelInstallState(model.id);
+                      return (
+                        <button
+                          key={model.id}
+                          onClick={() => setEmbedderModelId(model.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
+                            isActive ? "ring-2 ring-[var(--tp-accent)]" : "hover:bg-[var(--tp-bg-3)]"
+                          }`}
+                          style={{ background: isActive ? "rgba(45,134,165,0.1)" : "var(--tp-bg-2)" }}
+                        >
+                          <span className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium truncate" style={{ color: "var(--tp-t-1)" }}>
+                              {model.label}
+                            </div>
+                            <div className="text-[10px] mt-0.5" style={{ color: "var(--tp-t-4)" }}>
+                              {model.estimatedDisk} · {model.description.split("–")[0]?.trim() || model.description.slice(0, 60) + "…"}
+                            </div>
+                          </span>
+                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${
+                            installState === "installed"
+                              ? "text-emerald-400 bg-emerald-400/10"
+                              : installState === "installing" || installState === "not-installed"
+                                ? "text-amber-400 bg-amber-400/10"
+                                : "text-red-400 bg-red-400/10"
+                          }`}>
+                            {installState === "installed" ? "✓" : installState === "installing" ? "⋯" : ""}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] mt-1.5" style={{ color: "var(--tp-t-4)" }}>
+                    {t("knowledge.embedderHint")}
+                  </p>
                 </Section>
 
                 <Section title={t("settings.ai.modelCatalog")}>
