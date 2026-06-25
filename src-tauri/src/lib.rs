@@ -204,35 +204,69 @@ fn is_ollama_server_running() -> bool {
 
 /// Start `ollama serve` as a background process if not already running.
 /// Stores the child process so we can kill it when the app exits.
+/// On systems with a dedicated GPU (NVIDIA/AMD/Apple Silicon), sets the
+/// OLLAMA_LLM_LIBRARY env var so Ollama uses the GPU backend automatically.
 fn ensure_ollama_server_started() {
-    if is_ollama_server_running() {
-        return;
-    }
-    let binary = resolve_ollama_binary();
-    let mut command = command_for(&binary);
-    apply_preferred_backend_env(&mut command);
+    let is_running = is_ollama_server_running();
+    let probe = &*AI_HARDWARE_PROBE;
 
-    match command
-        .arg("serve")
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => {
-            if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
-                *guard = Some(child);
-            }
-            OLLAMA_WE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
+    // If the server is NOT running OR is running but without our GPU backend, restart it.
+    let needs_restart = if is_running {
+        // Check if OLLAMA_LLM_LIBRARY is set correctly — if not, kill and restart
+        if probe.preferred_backend != "cpu" {
+            let current_backend = std::env::var("OLLAMA_LLM_LIBRARY").ok();
+            !current_backend.as_deref().map(|v| v == probe.preferred_backend).unwrap_or(false)
+        } else {
+            false
         }
-        Err(_) => return,
+    } else {
+        true
+    };
+
+    if needs_restart {
+        if is_running {
+            // Kill the running server so we can restart with correct backend
+            stop_ollama_server();
+            // Wait for it to fully stop
+            for _ in 0..10 {
+                if !is_ollama_server_running() { break; }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
+        }
+
+        // Set env for the entire process so Ollama child inherits it
+        if probe.preferred_backend != "cpu" {
+            std::env::set_var("OLLAMA_LLM_LIBRARY", &probe.preferred_backend);
+        }
     }
 
-    // Wait for the server to be ready (up to 5 seconds).
-    for _ in 0..20 {
-        std::thread::sleep(std::time::Duration::from_millis(250));
-        if is_ollama_server_running() {
-            break;
+    if needs_restart || !is_running {
+        let binary = resolve_ollama_binary();
+        let mut command = command_for(&binary);
+        apply_preferred_backend_env(&mut command);
+
+        match command
+            .arg("serve")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => {
+                if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
+                    *guard = Some(child);
+                }
+                OLLAMA_WE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            Err(_) => return,
+        }
+
+        // Wait for the server to be ready (up to 10 seconds).
+        for _ in 0..40 {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            if is_ollama_server_running() {
+                break;
+            }
         }
     }
 }
