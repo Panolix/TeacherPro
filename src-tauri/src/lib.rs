@@ -998,9 +998,14 @@ fn ai_ensure_runtime() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn ai_list_models() -> Result<Vec<String>, String> {
-    let raw = run_ollama_command(&["list"])?;
-    Ok(parse_ollama_models(&raw))
+async fn ai_list_models() -> Result<Vec<String>, String> {
+    // Run on blocking thread so the UI doesn't freeze while Ollama starts up
+    tauri::async_runtime::spawn_blocking(move || {
+        let raw = run_ollama_command(&["list"])?;
+        Ok(parse_ollama_models(&raw))
+    })
+    .await
+    .map_err(|e| format!("Model list task failed: {e}"))?
 }
 
 #[tauri::command]
