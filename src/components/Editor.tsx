@@ -983,6 +983,9 @@ export function Editor() {
   const lessonEditorDragDropEnabled = false;
   const knowledgeEnabledChat = useKnowledgeStore((s) => s.enabledInChat);
   const setKnowledgeEnabledChat = useKnowledgeStore((s) => s.setEnabledInChat);
+  const knowledgeCatList = useKnowledgeStore((s) => s.categories);
+  const chatFilter = useKnowledgeStore((s) => s.chatCategoryFilter);
+  const setChatFilter = useKnowledgeStore((s) => s.setChatCategoryFilter);
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
@@ -3921,17 +3924,48 @@ export function Editor() {
               </div>
             </div>
 
-            {/* Knowledge Toggle */}
-            <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-[var(--tp-border-strong)]">
-              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]">
-                <input
-                  type="checkbox"
-                  checked={knowledgeEnabledChat}
-                  onChange={(e) => setKnowledgeEnabledChat(e.target.checked)}
-                  className="w-3 h-3 rounded"
-                />
-                {t("knowledge.useInChat")}
-              </label>
+            {/* Knowledge Toggle + Categories */}
+            <div className="shrink-0 border-b border-[var(--tp-border-strong)]">
+              <div className="flex items-center gap-2 px-3 py-1.5">
+                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]">
+                  <input
+                    type="checkbox"
+                    checked={knowledgeEnabledChat}
+                    onChange={(e) => setKnowledgeEnabledChat(e.target.checked)}
+                    className="w-3 h-3 rounded"
+                  />
+                  {t("knowledge.useInChat")}
+                </label>
+              </div>
+              {knowledgeEnabledChat && knowledgeCatList.length > 0 && (
+                <div className="flex flex-wrap gap-1 px-3 pb-2">
+                  <button
+                    onClick={() => setChatFilter(null)}
+                    className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                      chatFilter === null ? "text-white" : "text-[var(--tp-text-muted)]"
+                    }`}
+                    style={{
+                      background: chatFilter === null ? "var(--tp-accent)" : "var(--tp-panel-muted)",
+                    }}
+                  >
+                    {t("common.all")}
+                  </button>
+                  {knowledgeCatList.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setChatFilter(chatFilter === cat.id ? null : cat.id)}
+                      className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
+                        chatFilter === cat.id ? "text-white" : "text-[var(--tp-text-muted)]"
+                      }`}
+                      style={{
+                        background: chatFilter === cat.id ? "var(--tp-accent)" : "var(--tp-panel-muted)",
+                      }}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Messages */}
