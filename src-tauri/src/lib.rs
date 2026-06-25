@@ -1378,10 +1378,18 @@ async fn ai_generate_text(
             body["system"] = serde_json::Value::String(task_system);
         }
 
-        let result = agent
+        let response = agent
             .post(&format!("{base_url}/api/generate"))
-            .send_json(body)
-            .map_err(|e| format!("Ollama API request failed: {e}"))?
+            .send_json(body);
+        let response = match response {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, resp)) => {
+                let status_text = resp.into_string().unwrap_or_default();
+                return Err(format!("Ollama API (status {code}): {status_text}"));
+            }
+            Err(e) => return Err(format!("Ollama API request failed: {e}")),
+        };
+        let result = response
             .into_json::<OllamaGenerateResponse>()
             .map_err(|e| format!("Failed to parse Ollama response: {e}"))?;
 
