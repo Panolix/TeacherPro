@@ -648,10 +648,8 @@ const de = {
   knowledge: {
     addSource: "Wissensquelle hinzufügen",
     embedder: "Embedding-Modell",
-    embedderTier1: "⚡ Stufe 1 – Leicht (4+ GB RAM, CPU reicht)",
-    embedderTier2: "⭐ Stufe 2 – Premium (16+ GB RAM, GPU empfohlen)",
     file: "Datei",
-    embedderHint: "🇩🇪 Beste Deutsch-Embeddings: BGE M3 (Premium) oder Nomic Embed Text / Paraphrase Multilingual (leicht). Alle laufen auf Apple Silicon (Metal), NVIDIA (CUDA), AMD (ROCm), Intel (Vulkan/CPU).",
+    embedderHint: "🇩🇪 BGE M3 für bestes Deutsch · 🇬🇧 BGE Large EN für bestes Englisch · 🇩🇪🇬🇧 Nomic Embed Text als leichter Allrounder. Alle laufen auf jeder GPU (Apple Silicon, NVIDIA, AMD, Intel).",
     extracting: "Extrahiere Text...",
     chunking: "Zerlege in Chunks...",
     embedding: "Erstelle Embeddings...",

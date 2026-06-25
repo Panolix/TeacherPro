@@ -681,25 +681,10 @@ export function SettingsModal({ open, onClose }: Props) {
                 </Section>
 
                 <Section title={t("knowledge.embedder")}>
-                  <div className="flex flex-col gap-3">
-                    {/* Stufe 1 */}
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier1")}</div>
-                      <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => ["nomic-embed-text", "paraphrase-multilingual", "all-minilm:l6-v2"].includes(m.id)).map((model) => (
-                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
-                        ))}
-                      </div>
-                    </div>
-                    {/* Stufe 2 */}
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier2")}</div>
-                      <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => ["bge-m3", "bge-large:en"].includes(m.id)).map((model) => (
-                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
-                        ))}
-                      </div>
-                    </div>
+                  <div className="flex flex-col gap-1">
+                    {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((model) => (
+                      <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
+                    ))}
                   </div>
                   <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
                     {t("knowledge.embedderHint")}
