@@ -1454,11 +1454,11 @@ fn extract_docx_text(path: &str) -> Result<String, String> {
 
 fn extract_pdf_text_simple(path: &str) -> Result<String, String> {
     // Use a simple approach: search for text between parentheses in PDF stream
-    let content = std::fs::read_to_string(path)
+    let content = std::fs::read(path)
         .map_err(|e| format!("Cannot read PDF: {e}"))?;
     
     let mut text = String::new();
-    let bytes = content.as_bytes();
+    let bytes = &content;
     let mut i = 0;
     
     // Extract text from PDF content streams
@@ -1497,9 +1497,10 @@ fn extract_pdf_text_simple(path: &str) -> Result<String, String> {
     }
 
     if text.trim().is_empty() {
-        // Fallback: try reading raw text
-        text = content.chars()
-            .filter(|&c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+        // Fallback: extract printable ASCII characters from raw bytes
+        text = content.iter()
+            .filter(|&&b| b.is_ascii_graphic() || b.is_ascii_whitespace())
+            .map(|&b| b as char)
             .collect();
     }
 
