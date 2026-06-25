@@ -213,17 +213,22 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiActionBusy("refresh-models");
     try {
       const installedModels = await invoke<string[]>("ai_list_models");
-      const installed = new Set(installedModels || []);
+      // Normalize model IDs: strip ":latest" suffix so bge-m3:latest matches catalog id "bge-m3"
+      const normalizeId = (rawId: string) => rawId.replace(/:latest$/i, "");
+      const installedRaw = new Set(installedModels || []);
+      const installed = new Set(Array.from(installedRaw).map(normalizeId));
       setAiInstalledModelIds(Array.from(installed));
       for (const model of AI_MODEL_CATALOG) {
         setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
       }
       const currentState = useAppStore.getState();
       const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
-      const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
-      if (corrected && !installed.has(currentState.aiDefaultModelId)) setAiDefaultModelId(corrected);
-      if (corrected && !installed.has(currentState.aiRewriteTranslateModelId))
+      const corrected = firstCatalogMatch?.id ?? normalizeId(Array.from(installedRaw)[0] || "");
+      if (corrected && !installed.has(normalizeId(currentState.aiDefaultModelId))) setAiDefaultModelId(corrected);
+      if (corrected && !installed.has(normalizeId(currentState.aiRewriteTranslateModelId)))
         setAiRewriteTranslateModelId(corrected);
+      if (corrected && !installed.has(normalizeId(useKnowledgeStore.getState().embedderModelId)))
+        useKnowledgeStore.getState().setEmbedderModelId(corrected);
     } catch (error) {
       setAiErrorMessage(`Could not refresh models: ${String(error)}`);
     } finally {
