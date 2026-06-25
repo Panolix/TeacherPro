@@ -26,6 +26,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
 import { useAppStore, type MaterialEntry, type VaultRoot } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 import { MiniCalendar } from "./MiniCalendar";
 import { SettingsModal } from "./SettingsModal";
 import { ContextMenu, useContextMenu, type ContextMenuEntry } from "./ContextMenu";
@@ -93,6 +94,8 @@ export function SidebarMinimal() {
     setPendingMaterialDrop,
     currentView,
   } = useAppStore();
+
+  const { t } = useTranslation();
 
   // Panel state
   const [pushPanelOpen, setPushPanelOpen] = useState(true);
@@ -225,9 +228,9 @@ export function SidebarMinimal() {
         }
       }
     };
-    result.push({ root: "Lesson Plans", relativePath: "", label: "Lesson Plans (root)" });
+    result.push({ root: "Lesson Plans", relativePath: "", label: `${t('sidebar.sections.lessonPlans')} (root)` });
     walk(lessonTree, "Lesson Plans", 1);
-    result.push({ root: "Mindmaps", relativePath: "", label: "Mindmaps (root)" });
+    result.push({ root: "Mindmaps", relativePath: "", label: `${t('sidebar.sections.mindmaps')} (root)` });
     walk(mindmapTree, "Mindmaps", 1);
     return result;
   }, [lessonTree, mindmapTree]);
@@ -267,7 +270,7 @@ export function SidebarMinimal() {
       const isLesson = root === "Lesson Plans";
       return [
         {
-          label: "Open",
+          label: t('sidebar.contextMenu.open'),
           icon: <FolderOpen className="w-4 h-4" />,
           onClick: () => {
             if (isLesson) openLesson(relativePath);
@@ -275,24 +278,24 @@ export function SidebarMinimal() {
           },
         },
         {
-          label: "Preview",
+          label: t('sidebar.contextMenu.preview'),
           icon: <Eye className="w-4 h-4" />,
           onClick: () => {
             setVaultPreview({ type: isLesson ? "lesson" : "mindmap", relativePath });
           },
         },
         {
-          label: "Rename",
+          label: t('sidebar.contextMenu.rename'),
           icon: <Pencil className="w-4 h-4" />,
           onClick: () => openRename(root, relativePath, false),
         },
         {
-          label: "Duplicate",
+          label: t('sidebar.contextMenu.duplicate'),
           icon: <Copy className="w-4 h-4" />,
           onClick: () => duplicateVaultPath(root, relativePath),
         },
         {
-          label: "Move to Folder",
+          label: t('sidebar.contextMenu.moveToFolder'),
           icon: <Move className="w-4 h-4" />,
           submenu: allFolders
             .filter((f) => f.root === root)
@@ -303,7 +306,7 @@ export function SidebarMinimal() {
         },
         { type: "divider" },
         {
-          label: "Move to Trash",
+          label: t('sidebar.contextMenu.moveToTrash'),
           icon: <Trash2 className="w-4 h-4" />,
           danger: true,
           onClick: () => deleteVaultPath(root, relativePath, false),
@@ -321,17 +324,17 @@ export function SidebarMinimal() {
       const roots = node.roots;
       return [
         {
-          label: "New Lesson Here",
+          label: t('sidebar.contextMenu.newLessonHere'),
           icon: <FileText className="w-4 h-4" />,
           onClick: () => createNewLesson(undefined, path),
         },
         {
-          label: "New Mindmap Here",
+          label: t('sidebar.contextMenu.newMindmapHere'),
           icon: <Network className="w-4 h-4" />,
           onClick: () => createNewMindmap(path),
         },
         {
-          label: "New Subfolder",
+          label: t('sidebar.contextMenu.newSubfolder'),
           icon: <FolderPlus className="w-4 h-4" />,
           onClick: () => {
             setSelectedFolder(path);
@@ -341,12 +344,12 @@ export function SidebarMinimal() {
         },
         { type: "divider" },
         {
-          label: "Rename Folder",
+          label: t('sidebar.contextMenu.renameFolder'),
           icon: <Pencil className="w-4 h-4" />,
           onClick: () => openRenameUnified(node),
         },
         {
-          label: "Move to Folder",
+          label: t('sidebar.contextMenu.moveToFolder'),
           icon: <Move className="w-4 h-4" />,
           submenu: allFolders
             .filter((f) => f.relativePath !== path && !f.relativePath.startsWith(path + "/"))
@@ -359,7 +362,7 @@ export function SidebarMinimal() {
         },
         { type: "divider" },
         {
-          label: "Delete Folder",
+          label: t('sidebar.contextMenu.deleteFolder'),
           icon: <Trash2 className="w-4 h-4" />,
           danger: true,
           onClick: () => {
@@ -571,7 +574,7 @@ export function SidebarMinimal() {
                 toggleFolder(key);
               }}
               className="shrink-0 p-0.5 -m-0.5 rounded hover:bg-black/20 transition-colors"
-              title={isExpanded ? "Collapse" : "Expand"}
+              title={isExpanded ? t('sidebar.tooltips.collapse') : t('sidebar.tooltips.expand')}
             >
               <ChevronRight
                 className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`}
@@ -616,7 +619,7 @@ export function SidebarMinimal() {
           <div
             onMouseDown={(e) => startSidebarMouseDrag(e, root, node.relativePath, node.name.replace(/\.json$/i, ""))}
             className="shrink-0 flex items-center justify-center w-4 h-4 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors select-none"
-            title="Drag to move to folder"
+            title={t('sidebar.tooltips.dragToFolder')}
           >
             <GripVertical className="w-3 h-3" />
           </div>
@@ -696,13 +699,13 @@ export function SidebarMinimal() {
       try {
         const present = await exists(fullPath);
         if (!present) {
-          alert(`Material not found: ${relativePath}`);
+          alert(t('sidebar.material.notFound', { path: relativePath }));
           return;
         }
         await invoke("open_file_in_default_app", { path: fullPath });
       } catch (err) {
         console.error("Failed to open material", err);
-        alert("Could not open this material in the default app.");
+        alert(t('sidebar.material.couldNotOpen'));
       }
     },
     [resolveMaterialAbsPath],
@@ -715,13 +718,13 @@ export function SidebarMinimal() {
       try {
         const present = await exists(fullPath);
         if (!present) {
-          alert(`Material not found: ${relativePath}`);
+          alert(t('sidebar.material.notFound', { path: relativePath }));
           return;
         }
         await revealItemInDir(fullPath);
       } catch (err) {
         console.error("Failed to reveal material", err);
-        alert("Could not reveal this item in your file manager.");
+        alert(t('sidebar.material.couldNotReveal'));
       }
     },
     [resolveMaterialAbsPath],
@@ -767,18 +770,18 @@ export function SidebarMinimal() {
 
       if (isFile) {
         items.push({
-          label: "Preview",
+          label: t('sidebar.contextMenu.preview'),
           icon: <Eye className="w-4 h-4" />,
           onClick: () => setPreviewPath(entry.relativePath),
         });
         items.push({
-          label: "Open in Default App",
+          label: t('sidebar.contextMenu.openInDefaultApp'),
           icon: <ExternalLink className="w-4 h-4" />,
           onClick: () => openMaterialInDefaultApp(entry.relativePath),
         });
       }
       items.push({
-        label: "Reveal in Finder",
+        label: t('sidebar.contextMenu.revealInFinder'),
         icon: <FolderRevealIcon className="w-4 h-4" />,
         onClick: () => revealMaterial(entry.relativePath),
       });
@@ -786,7 +789,7 @@ export function SidebarMinimal() {
       if (currentView === "editor" && activeFilePath) {
         items.push({ type: "divider" });
         items.push({
-          label: "Insert at Cursor",
+          label: t('sidebar.contextMenu.insertAtCursor'),
           icon: <FileText className="w-4 h-4" />,
           onClick: () => insertMaterialAtCursor(entry.relativePath, entry.isDirectory),
         });
@@ -794,12 +797,12 @@ export function SidebarMinimal() {
 
       items.push({ type: "divider" });
       items.push({
-        label: "Rename",
+        label: t('sidebar.contextMenu.rename'),
         icon: <Pencil className="w-4 h-4" />,
         onClick: () => {
           const segs = entry.relativePath.split("/").filter(Boolean);
           const name = segs[segs.length - 1] || "";
-          const newName = window.prompt("New name:", name);
+          const newName = window.prompt(t('sidebar.renameDialog.newNamePlaceholder'), name);
           if (newName && newName.trim() && newName !== name) {
             renameMaterialEntry(entry.relativePath, newName.trim());
           }
@@ -807,7 +810,7 @@ export function SidebarMinimal() {
       });
       items.push({ type: "divider" });
       items.push({
-        label: "Move to Trash",
+        label: t('sidebar.contextMenu.moveToTrash'),
         icon: <Trash2 className="w-4 h-4" />,
         danger: true,
         onClick: () => deleteMaterialEntry(entry.relativePath, entry.isDirectory),
@@ -894,7 +897,7 @@ export function SidebarMinimal() {
           onContextMenu={(e) => ctxMenu.open(e, buildMaterialMenu(entry))}
           className="w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] cursor-pointer transition-colors truncate select-none"
           style={{ paddingLeft: `${8 + depth * 12 + 14}px`, WebkitUserSelect: "none" }}
-          title={`${entry.name} — double-click to insert at cursor`}
+          title={t('sidebar.material.tooltip', { name: entry.name })}
         >
           <FileText className="w-4 h-4 shrink-0 text-amber-400/80" />
           <span className="truncate">{entry.name}</span>
@@ -922,13 +925,13 @@ export function SidebarMinimal() {
             onContextMenu={(e) =>
               ctxMenu.open(e, [
                 {
-                  label: "Restore",
+                  label: t('sidebar.contextMenu.restore'),
                   icon: <RotateCcw className="w-4 h-4" />,
                   onClick: () => restoreTrashEntry(fullPath, true),
                 },
                 { type: "divider" },
                 {
-                  label: "Delete Permanently",
+                  label: t('sidebar.contextMenu.deletePermanently'),
                   icon: <Trash2 className="w-4 h-4" />,
                   danger: true,
                   onClick: () => permanentlyDeleteTrashEntry(fullPath, true),
@@ -946,7 +949,7 @@ export function SidebarMinimal() {
                 e.stopPropagation();
                 restoreTrashEntry(fullPath, true);
               }}
-              title="Restore"
+              title={t('sidebar.contextMenu.restore')}
               className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -956,7 +959,7 @@ export function SidebarMinimal() {
                 e.stopPropagation();
                 permanentlyDeleteTrashEntry(fullPath, true);
               }}
-              title="Delete permanently"
+              title={t('sidebar.contextMenu.deletePermanently')}
               className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -981,13 +984,13 @@ export function SidebarMinimal() {
             const isTrashJson = entry.name.toLowerCase().endsWith(".json");
             ctxMenu.open(e, [
               {
-                label: "Restore",
+                label: t('sidebar.contextMenu.restore'),
                 icon: <RotateCcw className="w-4 h-4" />,
                 onClick: () => restoreTrashEntry(fullPath, false),
               },
               ...(isTrashJson ? [
                 {
-                  label: "Preview",
+                  label: t('sidebar.contextMenu.previewTrash'),
                   icon: <Eye className="w-4 h-4" />,
                   onClick: () => {
                     // Strip "Lesson Plans/" or "Mindmaps/" prefix from fullPath
@@ -998,7 +1001,7 @@ export function SidebarMinimal() {
               ] : []),
               { type: "divider" },
               {
-                label: "Delete Permanently",
+                label: t('sidebar.contextMenu.deletePermanently'),
                 icon: <Trash2 className="w-4 h-4" />,
                 danger: true,
                 onClick: () => permanentlyDeleteTrashEntry(fullPath, false),
@@ -1017,7 +1020,7 @@ export function SidebarMinimal() {
               e.stopPropagation();
               restoreTrashEntry(fullPath, false);
             }}
-            title="Restore"
+            title={t('sidebar.contextMenu.restore')}
             className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
           >
             <RotateCcw className="w-3.5 h-3.5" />
@@ -1027,7 +1030,7 @@ export function SidebarMinimal() {
               e.stopPropagation();
               permanentlyDeleteTrashEntry(fullPath, false);
             }}
-            title="Delete permanently"
+            title={t('sidebar.contextMenu.deletePermanently')}
             className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -1049,7 +1052,7 @@ export function SidebarMinimal() {
     if (!hasAny) {
       return (
         <div className="px-2 py-4 text-sm text-gray-500 text-center">
-          No files yet. Create a lesson or mindmap to get started.
+          {t('sidebar.empty')}
         </div>
       );
     }
@@ -1079,7 +1082,7 @@ export function SidebarMinimal() {
         {/* Explorer */}
         <button
           onClick={() => handlePanelSwitch("explorer")}
-          title="Explorer"
+          title={t('sidebar.rail.explorer')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "explorer" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1092,7 +1095,7 @@ export function SidebarMinimal() {
         {/* Search */}
         <button
           onClick={() => handlePanelSwitch("search")}
-          title="Search"
+          title={t('sidebar.rail.search')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "search" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1105,7 +1108,7 @@ export function SidebarMinimal() {
         {/* Recent */}
         <button
           onClick={() => handlePanelSwitch("recent")}
-          title="Recent"
+          title={t('sidebar.rail.recent')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "recent" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1118,7 +1121,7 @@ export function SidebarMinimal() {
         {/* Calendar */}
         <button
           onClick={() => handlePanelSwitch("calendar")}
-          title="Calendar"
+          title={t('sidebar.rail.calendar')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "calendar" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1133,7 +1136,7 @@ export function SidebarMinimal() {
         {/* Trash */}
         <button
           onClick={() => handlePanelSwitch("trash")}
-          title={`Trash${trashTotalCount ? ` (${trashTotalCount})` : ""}`}
+          title={trashTotalCount > 0 ? `${t('sidebar.rail.trash')} (${trashTotalCount})` : t('sidebar.rail.trash')}
           className={`relative w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "trash" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1154,7 +1157,7 @@ export function SidebarMinimal() {
         {/* Settings */}
         <button
           onClick={() => setSettingsOpen(true)}
-          title="Settings"
+          title={t('sidebar.rail.settings')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             settingsOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
@@ -1184,15 +1187,15 @@ export function SidebarMinimal() {
             }}
           >
             <span className="font-semibold text-[15px]" style={{ color: "var(--tp-t-1)" }}>
-              {activePanel === "explorer" && "Explorer"}
-              {activePanel === "search" && "Search"}
-              {activePanel === "recent" && "Recent"}
-              {activePanel === "calendar" && "Calendar"}
-              {activePanel === "trash" && "Trash"}
+              {activePanel === "explorer" && t('sidebar.rail.explorer')}
+              {activePanel === "search" && t('sidebar.rail.search')}
+              {activePanel === "recent" && t('sidebar.rail.recent')}
+              {activePanel === "calendar" && t('sidebar.rail.calendar')}
+              {activePanel === "trash" && t('sidebar.rail.trash')}
             </span>
             <button
               onClick={() => setPushPanelOpen(false)}
-              title="Close panel"
+              title={t('sidebar.closePanel')}
               className="h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1207,27 +1210,27 @@ export function SidebarMinimal() {
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleCreateLesson}
-                    title={selectedFolder ? `New Lesson in ${selectedFolder}` : "New Lesson"}
+                    title={selectedFolder ? t('sidebar.tooltips.newLesson', { section: selectedFolder }) : t('sidebar.tooltips.newLessonRoot')}
                     className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    Lesson
+                    {t('sidebar.actions.newLesson')}
                   </button>
                   <button
                     onClick={handleCreateMindmap}
-                    title={selectedFolder ? `New Mindmap in ${selectedFolder}` : "New Mindmap"}
+                    title={selectedFolder ? t('sidebar.tooltips.newMindmap', { section: selectedFolder }) : t('sidebar.tooltips.newMindmapRoot')}
                     className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <Network className="w-3.5 h-3.5" />
-                    Mindmap
+                    {t('sidebar.actions.newMindmap')}
                   </button>
                   <button
                     onClick={handleCreateFolder}
-                    title={selectedFolder ? `New Folder in ${selectedFolder}` : "New Folder in Lesson Plans"}
+                    title={selectedFolder ? t('sidebar.tooltips.newFolderIn', { section: selectedFolder }) : t('sidebar.tooltips.newFolderIn', { section: t('sidebar.sections.lessonPlans') })}
                     className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <FolderPlus className="w-3.5 h-3.5" />
-                    Folder
+                    {t('sidebar.actions.newFolder')}
                   </button>
                 </div>
               </div>
@@ -1246,7 +1249,7 @@ export function SidebarMinimal() {
               >
                 <div className="shrink-0 px-3 pt-2 pb-1.5 flex items-center justify-between">
                   <span className="text-[10.5px] uppercase tracking-wider font-semibold" style={{ color: "var(--tp-t-4)" }}>
-                    Materials
+                    {t('sidebar.sections.materials')}
                     {materials.length > 0 && (
                       <span className="ml-1.5 text-[var(--tp-t-3)] font-normal normal-case">
                         · {materials.length}
@@ -1257,7 +1260,7 @@ export function SidebarMinimal() {
                     <button
                       onClick={handleImportMaterialFiles}
                       disabled={materialsImportBusy}
-                      title="Import files into Materials"
+                      title={t('sidebar.tooltips.importFiles')}
                       className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)] transition-colors disabled:opacity-50"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -1265,7 +1268,7 @@ export function SidebarMinimal() {
                     <button
                       onClick={handleImportMaterialFolder}
                       disabled={materialsImportBusy}
-                      title="Import folder into Materials"
+                      title={t('sidebar.tooltips.importFolder')}
                       className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)] transition-colors disabled:opacity-50"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
@@ -1275,8 +1278,7 @@ export function SidebarMinimal() {
                 <div className="flex-1 overflow-y-auto pb-2">
                   {materials.length === 0 ? (
                     <div className="px-3 py-4 text-center text-[12px]" style={{ color: "var(--tp-t-4)" }}>
-                      No materials yet. Click <Plus className="inline w-3 h-3 -mt-0.5" /> to import files or{" "}
-                      <FolderPlus className="inline w-3 h-3 -mt-0.5" /> for a folder.
+                      {t("sidebar.materialsEmpty")}
                     </div>
                   ) : (
                     <ul className="space-y-0.5 px-2">
@@ -1304,7 +1306,7 @@ export function SidebarMinimal() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search lessons, mindmaps..."
+                    placeholder={t('sidebar.search.placeholder')}
                     className="flex-1 min-w-0 bg-transparent outline-none border-none text-[12.5px]"
                     style={{ color: "var(--tp-t-1)" }}
                   />
@@ -1321,17 +1323,17 @@ export function SidebarMinimal() {
               </div>
               {searchQuery.trim() === "" ? (
                 <div className="px-3 py-4 text-center text-sm text-[var(--tp-t-3)]">
-                  Type to search lessons and mindmaps
+                  {t('sidebar.search.typeToSearch')}
                 </div>
               ) : searchResults.length === 0 ? (
                 <div className="px-3 py-4 text-center text-sm text-[var(--tp-t-3)]">
-                  No results for "{searchQuery}"
+                  {t('sidebar.search.noResults', { query: searchQuery })}
                 </div>
               ) : (
                 <ul className="space-y-0.5 px-2 mt-2">
                   {searchResults.map((item) => {
                     const displayName = item.name.replace(/\.json$/i, "");
-                    const rootLabel = item.type === "lesson" ? "Lesson Plans" : "Mindmaps";
+                    const rootLabel = item.type === "lesson" ? t('sidebar.sections.lessonPlans') : t('sidebar.sections.mindmaps');
                     const fullFolderPath = item.folderPath
                       ? `${rootLabel} / ${item.folderPath.split("/").join(" / ")}`
                       : rootLabel;
@@ -1364,20 +1366,20 @@ export function SidebarMinimal() {
           {activePanel === "recent" && (
             <div className="flex-1 overflow-y-auto py-2">
               <div className="px-3 pb-2 flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-[var(--tp-t-4)]">Recently Opened</span>
+                <span className="text-[11px] uppercase tracking-wider text-[var(--tp-t-4)]">{t('sidebar.recent.title')}</span>
                 {recents.length > 0 && (
                   <button
                     onClick={clearRecents}
                     className="text-[11px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] transition-colors"
-                    title="Clear all recents"
+                    title={t('sidebar.tooltips.clearRecents')}
                   >
-                    Clear
+                    {t('sidebar.recent.clear')}
                   </button>
                 )}
               </div>
               {recents.length === 0 ? (
                 <div className="px-3 py-6 text-center text-sm text-[var(--tp-t-3)]">
-                  Open a lesson or mindmap to see it here.
+                  {t('sidebar.recent.empty')}
                 </div>
               ) : (
                 <ul className="space-y-0.5 px-2">
@@ -1385,7 +1387,7 @@ export function SidebarMinimal() {
                     const segs = r.relativePath.split("/");
                     const name = (segs[segs.length - 1] || "").replace(/\.json$/i, "");
                     const folderPath = segs.slice(0, -1).join(" / ");
-                    const root = r.type === "lesson" ? "Lesson Plans" : "Mindmaps";
+                    const root = r.type === "lesson" ? t('sidebar.sections.lessonPlans') : t('sidebar.sections.mindmaps');
                     const breadcrumb = folderPath ? `${root} / ${folderPath}` : root;
                     return (
                       <li key={`${r.type}-${r.relativePath}`}>
@@ -1433,12 +1435,12 @@ export function SidebarMinimal() {
             <div className="flex-1 overflow-y-auto py-2">
               <div className="px-3 pb-2 flex items-center justify-between">
                 <span className="text-[11px] uppercase tracking-wider text-[var(--tp-t-4)]">
-                  Trash · {trashTotalCount} item{trashTotalCount === 1 ? "" : "s"}
+                  {t('sidebar.trash.title', { count: trashTotalCount })}
                 </span>
                 {trashEntries.length > 0 && (
                   <button
                     onClick={() => {
-                      if (!confirm("Permanently delete ALL trashed items? This cannot be undone.")) return;
+                      if (!confirm(t('sidebar.trash.emptyConfirm'))) return;
                       // Each section's children already carry section name in relativePath
                       trashEntries.forEach((sec) => {
                         sec.children.forEach((child) => {
@@ -1448,13 +1450,13 @@ export function SidebarMinimal() {
                     }}
                     className="text-[11px] text-[var(--tp-t-3)] hover:text-red-400 transition-colors"
                   >
-                    Empty Trash
+                    {t('sidebar.trash.emptyAll')}
                   </button>
                 )}
               </div>
               {trashEntries.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm text-[var(--tp-t-3)]">
-                  Trash is empty.
+                  {t('sidebar.trash.empty')}
                 </div>
               ) : (
                 <ul className="space-y-0.5 px-2">
@@ -1509,10 +1511,10 @@ export function SidebarMinimal() {
               style={{ background: "var(--tp-accent)" }}
             >
               <FolderOpen className="w-4 h-4" />
-              Open Vault
+              {t('sidebar.actions.openVault')}
             </button>
             <p className="mt-3 text-[11.5px] leading-[1.5] text-center" style={{ color: "var(--tp-t-3)" }}>
-              Pick a folder on your computer to use as a TeacherPro vault.
+              {t('sidebar.actions.pickVaultFolder')}
             </p>
           </div>
         </div>
@@ -1557,10 +1559,10 @@ export function SidebarMinimal() {
           >
             <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--tp-b-1)" }}>
               <h3 className="text-[14px] font-semibold" style={{ color: "var(--tp-t-1)" }}>
-                Rename {renameModal.isDirectory ? "folder" : "file"}
+                {t(renameModal.isDirectory ? 'sidebar.renameDialog.folderTitle' : 'sidebar.renameDialog.fileTitle')}
               </h3>
               <p className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                Current: {renameModal.currentName}
+                {t('sidebar.renameDialog.currentName', { name: renameModal.currentName })}
               </p>
             </div>
             <div className="px-5 py-4">
@@ -1573,7 +1575,7 @@ export function SidebarMinimal() {
                   if (e.key === "Enter") submitRename();
                   else if (e.key === "Escape") setRenameModal(null);
                 }}
-                placeholder="New name"
+                placeholder={t('sidebar.renameDialog.newNamePlaceholder')}
                 className="w-full px-3 py-2 rounded-md text-sm outline-none"
                 style={{
                   background: "var(--tp-bg-2)",
@@ -1591,7 +1593,7 @@ export function SidebarMinimal() {
                 className="px-3 py-1.5 rounded-md text-[13px] transition-colors"
                 style={{ color: "var(--tp-t-3)" }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={submitRename}
@@ -1599,7 +1601,7 @@ export function SidebarMinimal() {
                 className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "var(--tp-accent)" }}
               >
-                Rename
+                {t('common.rename')}
               </button>
             </div>
           </div>
@@ -1620,10 +1622,10 @@ export function SidebarMinimal() {
           >
             <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--tp-b-1)" }}>
               <h3 className="text-[14px] font-semibold" style={{ color: "var(--tp-t-1)" }}>
-                Create new folder
+                {t('sidebar.createFolderDialog.title')}
               </h3>
               <p className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                {selectedSub ? `Inside ${selectedSub}` : "At vault root"}
+                {selectedSub ? t('sidebar.createFolderDialog.inside', { name: selectedSub }) : t('sidebar.createFolderDialog.atVaultRoot')}
               </p>
             </div>
             <div className="px-5 py-4">
@@ -1636,7 +1638,7 @@ export function SidebarMinimal() {
                   if (e.key === "Enter") submitNewFolder();
                   else if (e.key === "Escape") setNewFolderModalOpen(false);
                 }}
-                placeholder="Folder name"
+                placeholder={t('sidebar.createFolderDialog.folderNamePlaceholder')}
                 className="w-full px-3 py-2 rounded-md text-sm outline-none"
                 style={{
                   background: "var(--tp-bg-2)",
@@ -1654,7 +1656,7 @@ export function SidebarMinimal() {
                 className="px-3 py-1.5 rounded-md text-[13px] transition-colors"
                 style={{ color: "var(--tp-t-3)" }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={submitNewFolder}
@@ -1662,7 +1664,7 @@ export function SidebarMinimal() {
                 className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "var(--tp-accent)" }}
               >
-                Create
+                {t('common.create')}
               </button>
             </div>
           </div>

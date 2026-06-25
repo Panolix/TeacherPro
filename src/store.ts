@@ -116,6 +116,7 @@ interface UISettings {
   aiThinkingEnabled: boolean;
   aiTranslateTargetLanguage: string;
   trashAutoClearDays: number | null;
+  language: "en" | "de";
 }
 
 interface AppState {
@@ -158,6 +159,7 @@ interface AppState {
   aiThinkingEnabled: boolean;
   aiTranslateTargetLanguage: string;
   trashAutoClearDays: number | null;
+  language: "en" | "de";
   aiModelInstallState: Record<string, AiModelInstallState>;
   lessonSubjectIndex: Record<string, string>;
   debugEvents: DebugEventEntry[];
@@ -219,6 +221,7 @@ interface AppState {
   setAiThinkingEnabled: (enabled: boolean) => void;
   setAiTranslateTargetLanguage: (language: string) => void;
   setTrashAutoClearDays: (days: number | null) => void;
+  setLanguage: (language: "en" | "de") => void;
   setAiModelInstallState: (modelId: string, state: AiModelInstallState) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
@@ -337,6 +340,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiThinkingEnabled: true,
   aiTranslateTargetLanguage: "English",
   trashAutoClearDays: 30,
+  language: "de",
 };
 
 function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISettings {
@@ -412,6 +416,10 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
         : typeof source.trashAutoClearDays === "number" && source.trashAutoClearDays >= 1
           ? Math.floor(source.trashAutoClearDays)
           : DEFAULT_UI_SETTINGS.trashAutoClearDays,
+    language:
+      source.language === "en" || source.language === "de"
+        ? source.language
+        : DEFAULT_UI_SETTINGS.language,
   };
 }
 
@@ -895,6 +903,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiThinkingEnabled: DEFAULT_UI_SETTINGS.aiThinkingEnabled,
   aiTranslateTargetLanguage: DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
   trashAutoClearDays: DEFAULT_UI_SETTINGS.trashAutoClearDays,
+  language: DEFAULT_UI_SETTINGS.language,
   aiModelInstallState: {},
   lessonSubjectIndex: {},
   debugEvents: [],
@@ -945,6 +954,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         aiSystemPrompt: normalizedSettings.aiSystemPrompt,
         aiThinkingEnabled: normalizedSettings.aiThinkingEnabled,
         aiTranslateTargetLanguage: normalizedSettings.aiTranslateTargetLanguage,
+        language: normalizedSettings.language,
       });
 
       if (!savedSettings && loadedSettings) {
@@ -1090,6 +1100,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     const validDays = days === null ? null : Math.max(1, Math.floor(days));
     set({ trashAutoClearDays: validDays });
     void persistUiSettings({ trashAutoClearDays: validDays });
+  },
+  setLanguage: (language) => {
+    set({ language });
+    void persistUiSettings({ language });
   },
   setAiModelInstallState: (modelId, installState) => {
     set((state) => ({
@@ -1338,7 +1352,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         content: {
           type: "doc",
           content: [
-            { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "New Lesson Plan" }] }
+            { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: get().language === "de" ? "Neue Stunde" : "New Lesson Plan" }] }
           ]
         }
       };

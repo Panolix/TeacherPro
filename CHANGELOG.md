@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-06-25
+### Added
+- **German localization (i18n)** — Complete UI translation, language switcher in Settings, persistent language selection
+- **German Method Bank** — `method-bank.de.json` with all content translated
+- **11 new teaching methods**: Kugellager/Speed Dating, Placemat, Card Query, Traffic Light Self-Assessment, Learning Diary, Portfolio Work, Weekly Plan Work, Tandem Work, Free Work, Learning Circuit, Learning Pace Duet
+- **3 new lesson phases**: Homework Review, Consolidation/Written Record, Repetition/Drill Practice
+- **Time suggestions via `/`** in lesson table Time column (5-60 min in 5-min steps)
+- **New AI models**: Qwen 3.5 4B/9B/27B, Qwen 3.6 27B, TranslateGemma
+- **German date formatting** — Weekdays and months now localized via date-fns locale
+
+### Changed
+- Default AI model changed to **Qwen 3.5 9B** (256K context, 201 languages, thinking support)
+- Slash menu limit increased from 7 to 30 suggestions
+- "Social Form" column width increased from 100px to 140px
+- Ollama now always terminates on app exit (all platforms)
+- Removed 28 exotic/niche method bank entries
+
+### Removed
+- Outdated models: Qwen 3 8B/14B, Phi 4 14B, Gemma 4 31B
+- Runtime diagnostics section from AI Settings (removed freeze-on-tab-switch)
+
+### Fixed
+- "New Lesson Plan" now shows "Neue Stunde" on German setting
+- Calendar showing raw key "calendar.defaultlessontitle"
+- Language buttons in Settings were illegible (used color-swatch class)
+- Method Bank entries were limited to 7 in slash menu
+
 ## [2.0.4] - 2026-04-19
 ### Added
 - **Method Bank expansion** — 20 new teaching methods added (103 total): All-Student Response, Peer Teaching Protocol, Self-Regulation Check-in, Purposeful Questioning Sequence, Productive Struggle Support, Sentence Stems for Academic Talk, Frontloading Vocabulary, Graphic Organizer with Word Bank, Comprehensible Input Routine, Tableau (Frozen Scene), Reader's Theatre, Shadow Puppet Narrative, Error Analysis Protocol, Number Talk, Claim-Evidence-Reasoning, Notice & Wonder, Which One Doesn't Belong?, Co-Creating Success Criteria, Two Stars and a Wish, Traffic Light Self-Assessment.

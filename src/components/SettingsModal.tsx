@@ -19,27 +19,28 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type AccentColor } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 import {
   AI_MODEL_CATALOG,
   DEFAULT_AI_MODEL_ID,
   type AiModelCapability,
 } from "../ai/modelCatalog";
 
-const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; color: string }> = [
-  { value: "blue", label: "Blue", color: "#2d86a5" },
-  { value: "emerald", label: "Emerald", color: "#22c55e" },
-  { value: "indigo", label: "Indigo", color: "#3b82f6" },
-  { value: "violet", label: "Violet", color: "#a855f7" },
-  { value: "amber", label: "Amber", color: "#f59e0b" },
-  { value: "rose", label: "Rose", color: "#e11d48" },
+const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; labelKey: string; color: string }> = [
+  { value: "blue", label: "Blue", labelKey: "settings.accentLabels.blue", color: "#2d86a5" },
+  { value: "emerald", label: "Emerald", labelKey: "settings.accentLabels.emerald", color: "#22c55e" },
+  { value: "indigo", label: "Indigo", labelKey: "settings.accentLabels.indigo", color: "#3b82f6" },
+  { value: "violet", label: "Violet", labelKey: "settings.accentLabels.violet", color: "#a855f7" },
+  { value: "amber", label: "Amber", labelKey: "settings.accentLabels.amber", color: "#f59e0b" },
+  { value: "rose", label: "Rose", labelKey: "settings.accentLabels.rose", color: "#e11d48" },
 ];
 
 const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
-  multilingual: "Multilingual",
-  reasoning: "Reasoning",
-  "low-latency": "Low-Latency",
-  "long-context": "Long-Context",
-  "english-focused": "English-Focused",
+  multilingual: "settings.aiCapabilities.multilingual",
+  reasoning: "settings.aiCapabilities.reasoning",
+  "low-latency": "settings.aiCapabilities.lowLatency",
+  "long-context": "settings.aiCapabilities.longContext",
+  "english-focused": "settings.aiCapabilities.englishFocused",
 };
 
 interface AiModelInstallProgress {
@@ -49,34 +50,29 @@ interface AiModelInstallProgress {
   detail?: string | null;
 }
 
-interface AiRuntimeModelProcessor {
-  model_id: string;
-  processor: string;
-  size?: string | null;
-}
-
-interface AiRuntimeDiagnostics {
-  provider: string;
-  available: boolean;
-  version?: string | null;
-  server_running: boolean;
-  server_managed_by_app: boolean;
-  platform: string;
-  architecture: string;
-  preferred_backend: string;
-  backend_policy: string;
-  detected_hardware: string[];
-  active_models: AiRuntimeModelProcessor[];
-  recommendation?: string | null;
-  detail?: string | null;
-}
-
 const TERMINAL_INSTALL_STATUSES = new Set<AiModelInstallProgress["status"]>([
   "not-started",
   "completed",
   "failed",
   "cancelled",
 ]);
+
+const TRANSLATE_LANGUAGES = [
+  { code: "en", name: "English" },
+  { code: "de", name: "German" },
+  { code: "fr", name: "French" },
+  { code: "es", name: "Spanish" },
+  { code: "it", name: "Italian" },
+  { code: "nl", name: "Dutch" },
+  { code: "pt", name: "Portuguese" },
+  { code: "ru", name: "Russian" },
+  { code: "zh", name: "Chinese" },
+  { code: "ja", name: "Japanese" },
+  { code: "ko", name: "Korean" },
+  { code: "tr", name: "Turkish" },
+  { code: "ar", name: "Arabic" },
+  { code: "el", name: "Greek" },
+];
 
 type SettingsTab = "appearance" | "lessons" | "ai" | "backup" | "advanced";
 
@@ -123,7 +119,11 @@ export function SettingsModal({ open, onClose }: Props) {
     setShowActionButtonLabels,
     trashAutoClearDays,
     setTrashAutoClearDays,
+    language,
+    setLanguage,
   } = useAppStore();
+
+  const { t } = useTranslation();
 
   const [tab, setTab] = useState<SettingsTab>("appearance");
 
@@ -133,8 +133,6 @@ export function SettingsModal({ open, onClose }: Props) {
   const [aiInfoMessage, setAiInfoMessage] = useState<string | null>(null);
   const [aiInstalledModelIds, setAiInstalledModelIds] = useState<string[]>([]);
   const [aiInstallProgress, setAiInstallProgress] = useState<Record<string, AiModelInstallProgress>>({});
-  const [aiRuntimeDiagnostics, setAiRuntimeDiagnostics] = useState<AiRuntimeDiagnostics | null>(null);
-  const [aiRuntimeBusy, setAiRuntimeBusy] = useState(false);
   const aiInstallPollersRef = useRef<Record<string, number>>({});
 
   const getModelInstallState = (modelId: string) => aiModelInstallState[modelId] || "not-installed";
@@ -160,20 +158,20 @@ export function SettingsModal({ open, onClose }: Props) {
         clearInstallPoller(modelId);
         setAiModelInstallState(modelId, "installed");
         setAiDefaultModelId(modelId);
-        setAiInfoMessage(`Installed ${modelId}.`);
+        setAiInfoMessage(t("settings.ai.installedModel", { model: modelId }));
         void syncInstalledModels();
         return;
       }
       if (progress.status === "cancelled") {
         clearInstallPoller(modelId);
         setAiModelInstallState(modelId, "not-installed");
-        setAiInfoMessage(`Cancelled install for ${modelId}.`);
+        setAiInfoMessage(t("settings.ai.cancelledModel", { model: modelId }));
         return;
       }
       if (progress.status === "failed") {
         clearInstallPoller(modelId);
         setAiModelInstallState(modelId, "error");
-        setAiErrorMessage(progress.detail || `Failed to install ${modelId}.`);
+        setAiErrorMessage(progress.detail || t("settings.ai.failedModel", { model: modelId }));
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,26 +228,13 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   };
 
-  const syncRuntimeDiagnostics = async () => {
-    setAiRuntimeBusy(true);
-    try {
-      const diagnostics = await invoke<AiRuntimeDiagnostics>("ai_runtime_diagnostics");
-      setAiRuntimeDiagnostics(diagnostics);
-    } catch (error) {
-      setAiRuntimeDiagnostics(null);
-      setAiErrorMessage(`Could not refresh runtime diagnostics: ${String(error)}`);
-    } finally {
-      setAiRuntimeBusy(false);
-    }
-  };
-
   const handleInstallModel = async (modelId: string) => {
     setAiInfoMessage(null);
     setAiErrorMessage(null);
     setAiModelInstallState(modelId, "installing");
     setAiInstallProgress((prev) => ({
       ...prev,
-      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: "Preparing local runtime..." },
+      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: t("settings.ai.preparingRuntime") },
     }));
     try {
       const progress = await invoke<AiModelInstallProgress>("ai_start_model_install", { modelId });
@@ -285,7 +270,7 @@ export function SettingsModal({ open, onClose }: Props) {
       setAiModelInstallState(modelId, "not-installed");
       if (aiDefaultModelId === modelId) setAiDefaultModelId(DEFAULT_AI_MODEL_ID);
       if (aiRewriteTranslateModelId === modelId) setAiRewriteTranslateModelId(DEFAULT_AI_MODEL_ID);
-      setAiInfoMessage(`Removed ${modelId}.`);
+      setAiInfoMessage(t("settings.ai.removedModel", { model: modelId }));
       void syncInstalledModels();
     } catch (error) {
       setAiModelInstallState(modelId, "error");
@@ -301,8 +286,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiActionBusy("ensure-runtime");
     try {
       const result = await invoke<string>("ai_ensure_runtime");
-      setAiInfoMessage(result || "Local runtime is ready.");
-      void syncRuntimeDiagnostics();
+      setAiInfoMessage(result || t("settings.ai.localRuntimeReady"));
     } catch (error) {
       setAiErrorMessage(`Automatic runtime setup failed: ${String(error)}`);
     } finally {
@@ -329,7 +313,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiModelInstallState(modelId, "installing");
     setAiInstallProgress((prev) => ({
       ...prev,
-      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: "Preparing runtime for GGUF import..." },
+      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: t("settings.ai.preparingRuntime") },
     }));
     try {
       const progress = await invoke<AiModelInstallProgress>("ai_import_local_model", {
@@ -368,9 +352,8 @@ export function SettingsModal({ open, onClose }: Props) {
   // Sync diagnostics + installed list whenever the AI tab opens
   useEffect(() => {
     if (!open || tab !== "ai") return;
-    void syncInstalledModels();
-    void syncRuntimeDiagnostics();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Don't auto-sync on tab switch — the Refresh buttons handle this.
+    // Auto-syncing triggers Ollama detection which freezes the UI.
   }, [open, tab, aiProvider]);
 
   // Cleanup pollers on unmount
@@ -394,11 +377,11 @@ export function SettingsModal({ open, onClose }: Props) {
   if (!open) return null;
 
   const TABS: Array<{ key: SettingsTab; label: string; icon: any }> = [
-    { key: "appearance", label: "Appearance", icon: SettingsIcon },
-    { key: "lessons", label: "Lessons", icon: FileText },
-    { key: "ai", label: "AI Features", icon: Sparkles },
-    { key: "backup", label: "Backup", icon: HardDrive },
-    { key: "advanced", label: "Advanced", icon: SlidersHorizontal },
+    { key: "appearance", label: t("settings.tabs.appearance"), icon: SettingsIcon },
+    { key: "lessons", label: t("settings.tabs.lessons"), icon: FileText },
+    { key: "ai", label: t("settings.tabs.aiFeatures"), icon: Sparkles },
+    { key: "backup", label: t("settings.tabs.backup"), icon: HardDrive },
+    { key: "advanced", label: t("settings.tabs.advanced"), icon: SlidersHorizontal },
   ];
 
   return (
@@ -413,8 +396,8 @@ export function SettingsModal({ open, onClose }: Props) {
         style={{ width: "min(900px, calc(100vw - 3rem))", height: "min(720px, calc(100vh - 3rem))" }}
       >
         <div className="tp-settings-header">
-          <span className="tp-settings-title">Settings</span>
-          <button onClick={onClose} className="tp-settings-close" aria-label="Close settings">
+          <span className="tp-settings-title">{t("settings.title")}</span>
+          <button onClick={onClose} className="tp-settings-close" aria-label={t("settings.close")}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -432,13 +415,32 @@ export function SettingsModal({ open, onClose }: Props) {
           <div className="tp-settings-content">
             {tab === "appearance" && (
               <>
-                <Section title="Accent Color">
+                <Section title={t("settings.appearance.language")}>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLanguage("en")}
+                      className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "en" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
+                      title={t("languages.en")}
+                    >
+                      🇬🇧 {t("languages.en")}
+                    </button>
+                    <button
+                      onClick={() => setLanguage("de")}
+                      className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "de" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
+                      title={t("languages.de")}
+                    >
+                      🇩🇪 {t("languages.de")}
+                    </button>
+                  </div>
+                </Section>
+
+                <Section title={t("settings.appearance.accentColor")}>
                   <div className="tp-color-group">
                     {ACCENT_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         onClick={() => setAccentColor(opt.value)}
-                        title={opt.label}
+                        title={t(opt.labelKey)}
                         className={`tp-color-option ${accentColor === opt.value ? "active" : ""}`}
                         style={{ background: opt.color }}
                       />
@@ -448,15 +450,15 @@ export function SettingsModal({ open, onClose }: Props) {
                       value={accentColor.startsWith("#") ? accentColor : "#2d86a5"}
                       onChange={(e) => setAccentColor(e.target.value.toLowerCase())}
                       className="tp-color-custom"
-                      title="Custom color"
+                      title={t("settings.appearance.customColor")}
                     />
                   </div>
                 </Section>
 
-                <Section title="Editor Preferences">
+                <Section title={t("settings.appearance.editorPreferences")}>
                   <ToggleRow
-                    label="Show action button labels"
-                    desc="Display text labels next to icons in the top bar"
+                    label={t("settings.appearance.showActionButtonLabels")}
+                    desc={t("settings.appearance.showActionButtonLabelsDesc")}
                     value={showActionButtonLabels}
                     onChange={setShowActionButtonLabels}
                   />
@@ -466,17 +468,17 @@ export function SettingsModal({ open, onClose }: Props) {
 
             {tab === "lessons" && (
               <>
-                <Section title="Default Lesson Settings">
-                  <FormRow label="Default Teacher Name" hint="Used as default in new lesson plans">
+                <Section title={t("settings.lessons.defaultLessonSettings")}>
+                  <FormRow label={t("settings.lessons.defaultTeacherName")} hint={t("settings.lessons.defaultTeacherNameHint")}>
                     <input
                       type="text"
                       className="tp-input"
-                      placeholder="Your name..."
+                      placeholder={t("editor.meta.yourName")}
                       value={defaultTeacherName}
                       onChange={(e) => setDefaultTeacherName(e.target.value)}
                     />
                   </FormRow>
-                  <FormRow label="Default Table Rows">
+                  <FormRow label={t("settings.lessons.defaultTableRows")}>
                     <NumberInput
                       value={defaultLessonTableBodyRows}
                       min={1}
@@ -486,10 +488,10 @@ export function SettingsModal({ open, onClose }: Props) {
                   </FormRow>
                 </Section>
 
-                <Section title="Subjects">
+                <Section title={t("settings.lessons.subjects")}>
                   {subjects.length === 0 && (
                     <p className="text-[12px] mb-2" style={{ color: "var(--tp-t-3)" }}>
-                      Add up to 4 subjects to color-code lessons in the calendar.
+                      {t("settings.lessons.subjectsHint")}
                     </p>
                   )}
                   <div className="flex flex-col gap-2">
@@ -507,7 +509,7 @@ export function SettingsModal({ open, onClose }: Props) {
                         <input
                           type="text"
                           className="tp-input flex-1"
-                          placeholder="e.g. Mathematics"
+                          placeholder={t("settings.lessons.egMathematics")}
                           value={s.name}
                           onChange={(e) => {
                             const next = subjects.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x));
@@ -529,7 +531,7 @@ export function SettingsModal({ open, onClose }: Props) {
                       className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
                       style={{ background: "var(--tp-bg-3)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-2)" }}
                     >
-                      <Plus className="w-3.5 h-3.5" /> Add Subject
+                      <Plus className="w-3.5 h-3.5" /> {t("settings.lessons.addSubject")}
                     </button>
                   )}
                 </Section>
@@ -538,36 +540,36 @@ export function SettingsModal({ open, onClose }: Props) {
 
             {tab === "ai" && (
               <>
-                <Section title="AI Runtime">
+                <Section title={t("settings.ai.aiRuntime")}>
                   <ToggleRow
-                    label="Enable Local AI"
-                    desc="Use a local Ollama instance for AI assistance in the editor"
+                    label={t("settings.ai.enableLocalAi")}
+                    desc={t("settings.ai.enableLocalAiDesc")}
                     value={aiEnabled}
                     onChange={setAiEnabled}
                   />
                   <ToggleRow
-                    label="Persist Chats"
-                    desc="Keep AI chat history across editor sessions"
+                    label={t("settings.ai.persistChats")}
+                    desc={t("settings.ai.persistChatsDesc")}
                     value={aiPersistChats}
                     onChange={setAiPersistChats}
                   />
                   <ToggleRow
-                    label="Thinking Mode"
-                    desc="Request thinking traces from supported reasoning models"
+                    label={t("settings.ai.thinkingMode")}
+                    desc={t("settings.ai.thinkingModeDesc")}
                     value={aiThinkingEnabled}
                     onChange={setAiThinkingEnabled}
                   />
                 </Section>
 
-                <Section title="Provider">
-                  <FormRow label="AI Provider">
+                <Section title={t("settings.ai.provider")}>
+                  <FormRow label={t("settings.ai.aiProvider")}>
                     <select
                       className="tp-input"
                       value={aiProvider}
                       onChange={(e) => setAiProvider(e.target.value as any)}
                     >
-                      <option value="ollama">Ollama (Local)</option>
-                      <option value="direct-download">Direct Download</option>
+                      <option value="ollama">{t("settings.ai.ollama")}</option>
+                      <option value="direct-download">{t("settings.ai.directDownload")}</option>
                     </select>
                   </FormRow>
                   <div className="flex items-center gap-2 mt-2">
@@ -576,72 +578,17 @@ export function SettingsModal({ open, onClose }: Props) {
                       disabled={aiActionBusy === "ensure-runtime"}
                       className="tp-btn"
                     >
-                      {aiActionBusy === "ensure-runtime" ? "Preparing Runtime..." : "Set Up Runtime Automatically"}
+                      {aiActionBusy === "ensure-runtime" ? t("settings.ai.preparingRuntime") : t("settings.ai.setupRuntime")}
                     </button>
                     <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
-                      Optional — you can also just press Install on any model below.
+                      {t("settings.ai.setupRuntimeHint")}
                     </span>
                   </div>
                 </Section>
 
-                <Section title="Runtime Diagnostics">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[12px]" style={{ color: "var(--tp-t-3)" }}>
-                      {aiRuntimeDiagnostics
-                        ? `${aiRuntimeDiagnostics.provider} on ${aiRuntimeDiagnostics.platform}/${aiRuntimeDiagnostics.architecture}`
-                        : "Diagnostics not yet loaded"}
-                    </span>
-                    <button
-                      onClick={() => void syncRuntimeDiagnostics()}
-                      disabled={aiRuntimeBusy}
-                      className="tp-btn"
-                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                    >
-                      <RefreshCw className={`w-3 h-3 ${aiRuntimeBusy ? "animate-spin" : ""}`} />
-                      {aiRuntimeBusy ? "Refreshing..." : "Refresh"}
-                    </button>
-                  </div>
-                  {aiRuntimeDiagnostics ? (
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <DiagCard label="Runtime" value={aiRuntimeDiagnostics.available ? "Available" : "Unavailable"} good={aiRuntimeDiagnostics.available} />
-                      <DiagCard label="Server" value={aiRuntimeDiagnostics.server_running ? "Running" : "Stopped"} good={aiRuntimeDiagnostics.server_running} />
-                      <DiagCard label="Backend" value={aiRuntimeDiagnostics.preferred_backend.toUpperCase()} />
-                      <DiagCard label="Version" value={aiRuntimeDiagnostics.version || "—"} />
-                    </div>
-                  ) : (
-                    <div className="text-[12px]" style={{ color: "var(--tp-t-4)" }}>
-                      Click Refresh to load runtime status.
-                    </div>
-                  )}
-                  {aiRuntimeDiagnostics?.detected_hardware && aiRuntimeDiagnostics.detected_hardware.length > 0 && (
-                    <div className="mt-2 text-[11px]" style={{ color: "var(--tp-t-3)" }}>
-                      <span className="uppercase tracking-wider mr-1" style={{ color: "var(--tp-t-4)" }}>
-                        Hardware:
-                      </span>
-                      {aiRuntimeDiagnostics.detected_hardware.join(" · ")}
-                    </div>
-                  )}
-                  {aiRuntimeDiagnostics?.recommendation && (
-                    <div
-                      className="mt-2 text-[11px] rounded-md px-2 py-1.5"
-                      style={{ background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd" }}
-                    >
-                      {aiRuntimeDiagnostics.recommendation}
-                    </div>
-                  )}
-                  {aiRuntimeDiagnostics?.detail && !aiRuntimeDiagnostics.available && (
-                    <div
-                      className="mt-2 text-[11px] rounded-md px-2 py-1.5"
-                      style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24" }}
-                    >
-                      {aiRuntimeDiagnostics.detail}
-                    </div>
-                  )}
-                </Section>
-
-                <Section title="Model Routing">
+                <Section title={t("settings.ai.modelRouting")}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <FormRow label="Chat Model">
+                    <FormRow label={t("settings.ai.chatModel")}>
                       <select
                         className="tp-input"
                         value={aiDefaultModelId}
@@ -652,13 +599,13 @@ export function SettingsModal({ open, onClose }: Props) {
                           const label = modelLabelById.get(id) || id;
                           return (
                             <option key={`chat-${id}`} value={id}>
-                              {installed ? label : `${label} (not installed)`}
+                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
                             </option>
                           );
                         })}
                       </select>
                     </FormRow>
-                    <FormRow label="Rewrite + Translate Model">
+                    <FormRow label={t("settings.ai.rewriteTranslateModel")}>
                       <select
                         className="tp-input"
                         value={aiRewriteTranslateModelId}
@@ -669,60 +616,57 @@ export function SettingsModal({ open, onClose }: Props) {
                           const label = modelLabelById.get(id) || id;
                           return (
                             <option key={`rw-${id}`} value={id}>
-                              {installed ? label : `${label} (not installed)`}
+                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
                             </option>
                           );
                         })}
                       </select>
                     </FormRow>
                   </div>
-                  <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
-                    "Set Default" in the catalog sets both slots at once. Use these selectors to assign each slot to a different installed model.
-                  </p>
                 </Section>
 
-                <Section title="Generation Parameters">
-                  <FormRow label="Memory (turns)">
+                <Section title={t("settings.ai.generationParameters")}>
+                  <FormRow label={t("settings.ai.memoryTurns")}>
                     <select
                       className="tp-input"
                       value={aiChatHistoryLimit}
                       onChange={(e) => setAiChatHistoryLimit(Number(e.target.value))}
                     >
-                      <option value={4}>4</option>
-                      <option value={10}>10</option>
-                      <option value={20}>20 (default)</option>
-                      <option value={40}>40</option>
-                      <option value={9999}>All</option>
+                      <option value={4}>{t("settings.ai.memoryTurnsOptions.4")}</option>
+                      <option value={10}>{t("settings.ai.memoryTurnsOptions.10")}</option>
+                      <option value={20}>{t("settings.ai.memoryTurnsOptions.20")}</option>
+                      <option value={40}>{t("settings.ai.memoryTurnsOptions.40")}</option>
+                      <option value={9999}>{t("settings.ai.memoryTurnsOptions.all")}</option>
                     </select>
                   </FormRow>
-                  <FormRow label="Creativity">
+                  <FormRow label={t("settings.ai.creativity")}>
                     <select
                       className="tp-input"
                       value={aiTemperature}
                       onChange={(e) => setAiTemperature(Number(e.target.value))}
                     >
-                      <option value={0.1}>Precise (0.1)</option>
-                      <option value={0.4}>Focused (0.4)</option>
-                      <option value={0.7}>Balanced (0.7)</option>
-                      <option value={1.0}>Creative (1.0)</option>
-                      <option value={1.4}>Wild (1.4)</option>
+                      <option value={0.1}>{t("settings.ai.creativityOptions.0.1")}</option>
+                      <option value={0.4}>{t("settings.ai.creativityOptions.0.4")}</option>
+                      <option value={0.7}>{t("settings.ai.creativityOptions.0.7")}</option>
+                      <option value={1.0}>{t("settings.ai.creativityOptions.1.0")}</option>
+                      <option value={1.4}>{t("settings.ai.creativityOptions.1.4")}</option>
                     </select>
                   </FormRow>
-                  <FormRow label="Translation Target Language">
+                  <FormRow label={t("settings.ai.translationTargetLanguage")}>
                     <select
                       className="tp-input"
                       value={aiTranslateTargetLanguage}
                       onChange={(e) => setAiTranslateTargetLanguage(e.target.value)}
                     >
-                      {["English","German","French","Spanish","Italian","Dutch","Portuguese","Russian","Chinese","Japanese","Korean","Turkish","Arabic","Greek"].map((lang) => (
-                        <option key={lang} value={lang}>{lang}</option>
+                      {TRANSLATE_LANGUAGES.map((lang) => (
+                        <option key={lang.code} value={lang.name}>{t(`languages.${lang.code}`)}</option>
                       ))}
                     </select>
                   </FormRow>
-                  <FormRow label="Custom AI Personality" hint="Leave blank for default. Used as the system prompt.">
+                  <FormRow label={t("settings.ai.customAiPersonality")} hint={t("settings.ai.customAiPersonalityHint")}>
                     <textarea
                       className="tp-input"
-                      placeholder="e.g. You are a helpful teaching assistant. Be brief and use simple language."
+                      placeholder={t("settings.ai.customAiPersonalityPlaceholder")}
                       value={aiSystemPrompt}
                       onChange={(e) => setAiSystemPrompt(e.target.value)}
                       style={{ height: "auto", minHeight: 90, padding: "10px 12px", resize: "vertical" }}
@@ -730,10 +674,10 @@ export function SettingsModal({ open, onClose }: Props) {
                   </FormRow>
                 </Section>
 
-                <Section title="Model Catalog">
+                <Section title={t("settings.ai.modelCatalog")}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[12px]" style={{ color: "var(--tp-t-3)" }}>
-                      Install, remove, or import local GGUF models.
+                      {t("settings.ai.modelCatalogHint")}
                     </span>
                     <button
                       onClick={() => void syncInstalledModels()}
@@ -742,7 +686,7 @@ export function SettingsModal({ open, onClose }: Props) {
                       style={{ height: 30, padding: "0 12px", fontSize: 12 }}
                     >
                       <RefreshCw className={`w-3 h-3 ${aiActionBusy === "refresh-models" ? "animate-spin" : ""}`} />
-                      {aiActionBusy === "refresh-models" ? "Refreshing..." : "Refresh"}
+                      {aiActionBusy === "refresh-models" ? t("settings.ai.refreshing") : t("settings.ai.refresh")}
                     </button>
                   </div>
 
@@ -752,7 +696,7 @@ export function SettingsModal({ open, onClose }: Props) {
                       style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
                     >
                       <div className="text-[10px] uppercase tracking-wider mb-1.5 font-semibold" style={{ color: "var(--tp-t-4)" }}>
-                        Detected Installed Models
+                        {t("settings.ai.detectedInstalledModels")}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {aiInstalledModelIds.map((id) => (
@@ -768,7 +712,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                   : "border-[var(--tp-b-2)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)]"
                               }`}
                               style={aiDefaultModelId === id ? { background: "rgba(45,134,165,0.18)" } : undefined}
-                              title="Set as default for chat and rewrite/translate"
+                              title={t("settings.ai.installedModelTooltip")}
                             >
                               {id}
                             </button>
@@ -801,7 +745,7 @@ export function SettingsModal({ open, onClose }: Props) {
                       const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
                       const progressText =
                         installProgress?.detail ||
-                        (isInstalling ? `Downloading... ${Math.round(progressValue)}%` : undefined);
+                        (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
 
                       return (
                         <div
@@ -816,9 +760,9 @@ export function SettingsModal({ open, onClose }: Props) {
                                   {model.label}
                                 </span>
                                 <Badge>{model.tier}</Badge>
-                                {model.recommended && <BadgeAccent>Recommended</BadgeAccent>}
+                                {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
                                 {model.capabilities?.map((cap) => (
-                                  <Badge key={`${model.id}-${cap}`}>{AI_MODEL_CAPABILITY_LABELS[cap]}</Badge>
+                                  <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
                                 ))}
                               </div>
                               <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
@@ -828,9 +772,9 @@ export function SettingsModal({ open, onClose }: Props) {
                                 <span className="inline-flex items-center gap-1">
                                   <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
                                 </span>
-                                <span>RAM/VRAM: {model.recommendedRam}</span>
-                                <span>Context: {model.recommendedContext}</span>
-                                <span>Source: Ollama</span>
+                                <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
+                                <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
+                                <span>{t("settings.ai.sourceOllama")}</span>
                               </div>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
@@ -869,7 +813,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                   className="tp-btn tp-btn-primary"
                                   style={{ height: 30, padding: "0 12px", fontSize: 12 }}
                                 >
-                                  {isInstalling ? "Installing..." : "Install"}
+                                  {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
                                 </button>
                                 <button
                                   onClick={() => void handleImportGguf(model.id)}
@@ -877,7 +821,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                   className="tp-btn"
                                   style={{ height: 30, padding: "0 12px", fontSize: 12 }}
                                 >
-                                  {isInstalling ? "Importing..." : "Import .gguf"}
+                                  {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
                                 </button>
                                 {isInstalling && (
                                   <button
@@ -886,7 +830,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                     className="tp-btn"
                                     style={{ height: 30, padding: "0 12px", fontSize: 12 }}
                                   >
-                                    {isCanceling ? "Cancelling..." : "Cancel"}
+                                    {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
                                   </button>
                                 )}
                               </>
@@ -899,9 +843,9 @@ export function SettingsModal({ open, onClose }: Props) {
                                   }}
                                   className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
                                   style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  title="Sets default for both chat and rewrite/translate"
+                                  title={t("settings.ai.setDefaultTooltip")}
                                 >
-                                  {isDefault ? "Default" : "Set Default"}
+                                  {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
                                 </button>
                                 <button
                                   onClick={() => void handleRemoveModel(model.id)}
@@ -909,7 +853,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                   className="tp-btn"
                                   style={{ height: 30, padding: "0 12px", fontSize: 12 }}
                                 >
-                                  Remove
+                                  {t("settings.ai.remove")}
                                 </button>
                               </>
                             )}
@@ -920,7 +864,7 @@ export function SettingsModal({ open, onClose }: Props) {
                   </div>
 
                   <p className="text-[11px] mt-3" style={{ color: "var(--tp-t-4)" }}>
-                    Models are installed via Ollama. Use <strong style={{ color: "var(--tp-t-3)" }}>Install</strong> to download from the Ollama registry, or <strong style={{ color: "var(--tp-t-3)" }}>Import .gguf</strong> to load a file you already downloaded (e.g. from Hugging Face). RAM/VRAM values are estimates.
+                    {t("settings.ai.installHelp")}
                   </p>
 
                   {aiInfoMessage && (
@@ -944,22 +888,22 @@ export function SettingsModal({ open, onClose }: Props) {
             )}
 
             {tab === "backup" && (
-              <Section title="Vault Backup">
+              <Section title={t("settings.backup.vaultBackup")}>
                 <p className="text-[13px]" style={{ color: "var(--tp-t-3)" }}>
-                  Settings are automatically backed up inside your vault under{" "}
+                  {t("settings.backup.descriptionBefore")}{" "}
                   <code style={{ background: "var(--tp-bg-3)", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>
                     .teacherpro/ui-settings.backup.json
                   </code>
-                  . When you reopen the vault on another machine, your settings are restored.
+                  . {t("settings.backup.descriptionAfter")}
                 </p>
               </Section>
             )}
 
             {tab === "advanced" && (
               <>
-                <Section title="Trash">
+                <Section title={t("settings.advanced.trash")}>
                   <div className="tp-form-row">
-                    <label className="tp-form-label">Auto-clear trash</label>
+                    <label className="tp-form-label">{t("settings.advanced.autoClearTrash")}</label>
                     <div className="flex items-center gap-3">
                       <select
                         value={trashAutoClearDays === null ? "never" : String(trashAutoClearDays)}
@@ -969,22 +913,22 @@ export function SettingsModal({ open, onClose }: Props) {
                         }}
                         className="tp-input"
                       >
-                        <option value="never">Never (manual only)</option>
-                        <option value="7">After 7 days</option>
-                        <option value="14">After 14 days</option>
-                        <option value="30">After 30 days</option>
-                        <option value="90">After 90 days</option>
+                        <option value="never">{t("settings.advanced.trashOptions.never")}</option>
+                        <option value="7">{t("settings.advanced.trashOptions.after7")}</option>
+                        <option value="14">{t("settings.advanced.trashOptions.after14")}</option>
+                        <option value="30">{t("settings.advanced.trashOptions.after30")}</option>
+                        <option value="90">{t("settings.advanced.trashOptions.after90")}</option>
                       </select>
                     </div>
                     <span className="tp-form-hint">
-                      Items in trash are permanently deleted after this period
+                      {t("settings.advanced.autoClearTrashHint")}
                     </span>
                   </div>
                 </Section>
-                <Section title="Diagnostics">
+                <Section title={t("settings.advanced.diagnostics")}>
                   <ToggleRow
-                    label="Debug mode"
-                    desc="Show diagnostic information in the in-app console"
+                    label={t("settings.advanced.debugMode")}
+                    desc={t("settings.advanced.debugModeDesc")}
                     value={debugMode}
                     onChange={setDebugMode}
                   />
@@ -995,10 +939,10 @@ export function SettingsModal({ open, onClose }: Props) {
         </div>
 
         <div className="tp-settings-footer">
-          <button onClick={onClose} className="tp-btn">Cancel</button>
+          <button onClick={onClose} className="tp-btn">{t("common.cancel")}</button>
           <button onClick={onClose} className="tp-btn tp-btn-primary">
             <Save className="w-3.5 h-3.5" />
-            Done
+            {t("common.done")}
           </button>
         </div>
       </div>
@@ -1053,6 +997,7 @@ function ToggleRow({
 }
 
 function NumberInput({ value, min, max, onChange }: { value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2">
       <button onClick={() => onChange(Math.max(min, value - 1))} className="tp-num-btn" type="button">
@@ -1072,18 +1017,7 @@ function NumberInput({ value, min, max, onChange }: { value: number; min: number
       <button onClick={() => onChange(Math.min(max, value + 1))} className="tp-num-btn" type="button">
         <Plus className="w-3.5 h-3.5" />
       </button>
-      <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>Range {min}–{max}</span>
-    </div>
-  );
-}
-
-function DiagCard({ label, value, good }: { label: string; value: string; good?: boolean }) {
-  return (
-    <div className="rounded-md px-2.5 py-1.5" style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}>
-      <div className="text-[10px] uppercase tracking-wider" style={{ color: "var(--tp-t-4)" }}>{label}</div>
-      <div className="text-[12px] font-medium" style={{ color: good === undefined ? "var(--tp-t-1)" : good ? "#34d399" : "#fbbf24" }}>
-        {value}
-      </div>
+      <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>{t("common.range", { min, max })}</span>
     </div>
   );
 }

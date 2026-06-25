@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
 import { Eye, Plus, Save, Printer, Download, X, FolderOpen, ExternalLink } from "lucide-react";
+import { useTranslation } from "../i18n/useTranslation";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
@@ -318,6 +319,7 @@ export function MindmapView() {
     setPendingMaterialDrop,
     logDebug,
   } = useAppStore();
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<Node, Edge> | null>(null);
@@ -480,7 +482,7 @@ export function MindmapView() {
       const position = findAvailablePosition(preferredPosition, existing);
       const newNode: Node = {
         id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        data: { label: "New Idea" },
+        data: { label: t("mindmap.newIdea") },
         position,
         style: { ...NODE_STYLE },
       };
@@ -513,7 +515,7 @@ export function MindmapView() {
 
       const isPresent = await exists(absolutePath);
       if (!isPresent) {
-        alert(`Material path not found: ${relativePath}`);
+        alert(t("mindmap.alerts.materialPathNotFound", { path: relativePath }));
         return;
       }
 
@@ -531,7 +533,7 @@ export function MindmapView() {
 
       const isPresent = await exists(absolutePath);
       if (!isPresent) {
-        alert(`Material path not found: ${relativePath}`);
+        alert(t("mindmap.alerts.materialPathNotFound", { path: relativePath }));
         return;
       }
 
@@ -547,7 +549,7 @@ export function MindmapView() {
         setMaterialPreviewState({
           title: fileName,
           kind: "error",
-          message: "Folder preview is not available. Use Open or Reveal In File Manager.",
+          message: t("mindmap.alerts.folderPreviewNotAvailable"),
         });
         return;
       }
@@ -558,7 +560,7 @@ export function MindmapView() {
         setMaterialPreviewState({
           title: fileName,
           kind: "error",
-          message: "Please open a vault first.",
+          message: t("mindmap.alerts.pleaseOpenVault"),
         });
         return;
       }
@@ -568,7 +570,7 @@ export function MindmapView() {
         setMaterialPreviewState({
           title: fileName,
           kind: "error",
-          message: `Material path not found: ${relativePath}`,
+          message: t("mindmap.alerts.materialPathNotFound", { path: relativePath }),
         });
         return;
       }
@@ -607,7 +609,7 @@ export function MindmapView() {
       setMaterialPreviewState({
         title: fileName,
         kind: "error",
-        message: "Preview is not available for this file type.",
+        message: t("mindmap.alerts.previewNotAvailable"),
       });
     },
     [resolveMaterialAbsolutePath, setMaterialPreviewState],
@@ -624,7 +626,9 @@ export function MindmapView() {
 
       setNodes((existing) => {
         const position = findAvailablePosition(preferredPosition, existing);
-        const nodeLabel = payload.itemType === "folder" ? `[Folder] ${fileName}` : `[Material] ${fileName}`;
+        const nodeLabel = payload.itemType === "folder"
+          ? t("mindmap.materialNode.folder", { name: fileName })
+          : t("mindmap.materialNode.material", { name: fileName });
         const newNode: Node = {
           id: nodeId,
           data: {
@@ -873,7 +877,7 @@ export function MindmapView() {
     const position = findAvailablePosition(preferred, nodes);
     const newNode: Node = {
       id: `${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      data: { label: "New Idea" },
+      data: { label: t("mindmap.newIdea") },
       position,
       style: { ...NODE_STYLE },
     };
@@ -995,7 +999,7 @@ export function MindmapView() {
       await openMaterialItem(contextMaterialMeta.relativePath);
     } catch (error) {
       console.error("Failed to open mindmap material", error);
-      alert("Could not open this material item in the default app.");
+      alert(t("mindmap.alerts.couldNotOpen"));
     }
   };
 
@@ -1009,7 +1013,7 @@ export function MindmapView() {
       await revealMaterialItem(contextMaterialMeta.relativePath);
     } catch (error) {
       console.error("Failed to reveal mindmap material", error);
-      alert("Could not reveal this item in your file manager.");
+      alert(t("mindmap.alerts.couldNotReveal"));
     }
   };
 
@@ -1095,7 +1099,7 @@ export function MindmapView() {
 
   const handleExportPDF = async () => {
     if (!vaultPath) {
-      alert("Please open a vault before exporting.");
+      alert(t("mindmap.alerts.pleaseOpenVault"));
       return;
     }
 
@@ -1108,15 +1112,15 @@ export function MindmapView() {
         pdfBytes,
         fileName,
         vaultPath,
-        dialogTitle: "Export Mindmap as PDF",
+        dialogTitle: t("mindmap.alerts.exportDialogTitle"),
       });
 
       if (savedPath) {
-        alert("Mindmap exported successfully.");
+        alert(t("mindmap.alerts.exportedSuccessfully"));
       }
     } catch (error) {
       console.error("Mindmap PDF export failed:", error);
-      alert(`Export failed: ${String(error)}`);
+      alert(t("mindmap.alerts.exportFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1134,7 +1138,7 @@ export function MindmapView() {
       });
     } catch (error) {
       console.error("Mindmap PDF preview failed:", error);
-      alert(`Preview failed: ${String(error)}`);
+      alert(t("mindmap.alerts.previewFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1151,7 +1155,7 @@ export function MindmapView() {
 
   const handlePrintPDF = async () => {
     if (!vaultPath) {
-      alert("Please open a vault before printing.");
+      alert(t("mindmap.alerts.pleaseOpenVault"));
       return;
     }
 
@@ -1192,7 +1196,7 @@ export function MindmapView() {
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Mindmap PDF print failed:", error);
-      alert(`Print failed: ${String(error)}`);
+      alert(t("mindmap.alerts.printFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1202,16 +1206,16 @@ export function MindmapView() {
     return (
       <div className="tp-mindmap h-full flex items-center justify-center" style={{ background: "var(--tp-bg-app)" }}>
         <div className="text-center max-w-md p-8">
-          <h2 className="text-3xl font-bold text-gray-100 mb-4">Mindmaps Ready</h2>
+          <h2 className="text-3xl font-bold text-gray-100 mb-4">{t("mindmap.readyState")}</h2>
           <p className="text-gray-400 mb-8">
-            Select a mindmap from the sidebar or create a new one to start brainstorming.
+            {t("mindmap.selectMindmap")}
           </p>
           <button
             onClick={() => createNewMindmap()}
             className="tp-accent-btn text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
           >
             <Plus className="w-5 h-5" />
-            Create New Mindmap
+            {t("mindmap.createNewMindmap")}
           </button>
         </div>
       </div>
@@ -1223,22 +1227,22 @@ export function MindmapView() {
       <div className="absolute top-0 left-0 w-full p-3 z-10 pointer-events-none flex justify-between print:hidden">
         <div className="flex items-center gap-4">
           <div>
-            <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">Mindmap Workspace</h1>
+            <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">{t("mindmap.workspaceTitle")}</h1>
             <p className="text-gray-400 text-xs pointer-events-auto mt-1">
-              Right-click nodes for actions. Drop materials to create linked file nodes.
+              {t("mindmap.workspaceHint")}
             </p>
           </div>
           <button
             onClick={handleAddNode}
             className="pointer-events-auto bg-[#2d2d2d] hover:bg-[#3d3d3d] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2 h-fit mt-1"
           >
-            <Plus className="w-4 h-4" /> Add Node
+            <Plus className="w-4 h-4" /> {t("mindmap.addNode")}
           </button>
         </div>
         <div className="pointer-events-auto flex items-center gap-2 h-fit mt-1">
           <button
             onClick={handlePreviewPDF}
-            title={isPdfBusy ? "Preview PDF (busy)" : "Preview PDF"}
+            title={isPdfBusy ? t("mindmap.actions.previewPdf") + " (busy)" : t("mindmap.actions.previewPdf")}
             disabled={isPdfBusy}
             className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
@@ -1246,7 +1250,7 @@ export function MindmapView() {
           </button>
           <button
             onClick={handlePrintPDF}
-            title={isPdfBusy ? "Print or Save PDF (busy)" : "Print or Save PDF"}
+            title={isPdfBusy ? t("mindmap.actions.printSavePdf") + " (busy)" : t("mindmap.actions.printSavePdf")}
             disabled={isPdfBusy}
             className="bg-[#2f2f2f] hover:bg-[#3a3a3a] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
@@ -1254,7 +1258,7 @@ export function MindmapView() {
           </button>
           <button
             onClick={handleExportPDF}
-            title={isPdfBusy ? "Export PDF (busy)" : "Export PDF"}
+            title={isPdfBusy ? t("mindmap.actions.exportPdf") + " (busy)" : t("mindmap.actions.exportPdf")}
             disabled={isPdfBusy}
             className="bg-[#333] hover:bg-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
@@ -1262,7 +1266,7 @@ export function MindmapView() {
           </button>
           <button
             onClick={handleSave}
-            title="Save Mindmap"
+            title={t("mindmap.actions.saveMindmap")}
             className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
@@ -1275,7 +1279,7 @@ export function MindmapView() {
         <div className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center">
           <div className="bg-[#1e1e1e] border border-[#333] p-6 rounded-xl shadow-xl min-w-[300px]">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-semibold">Edit Node</h3>
+              <h3 className="text-white font-semibold">{t("mindmap.editNode")}</h3>
               <button onClick={() => setEditingNodeId(null)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -1290,10 +1294,10 @@ export function MindmapView() {
             />
             <div className="flex justify-end gap-2">
               <button onClick={() => setEditingNodeId(null)} className="px-4 py-2 text-sm text-gray-400 hover:text-white">
-                Cancel
+                {t("mindmap.cancel")}
               </button>
               <button onClick={saveEdit} className="tp-accent-btn px-4 py-2 text-sm text-white rounded-md">
-                Save
+                {t("mindmap.save")}
               </button>
             </div>
           </div>
@@ -1310,7 +1314,7 @@ export function MindmapView() {
             onClick={handleAddFromContextMenu}
             className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
           >
-            {contextMenu.target.kind === "pane" ? "Add Node Here" : "Add Linked Node"}
+            {contextMenu.target.kind === "pane" ? t("mindmap.contextMenu.addNodeHere") : t("mindmap.contextMenu.addLinkedNode")}
           </button>
 
           {contextMenu.target.kind === "node" && (
@@ -1323,7 +1327,7 @@ export function MindmapView() {
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
                   >
-                    Preview Material
+                    {t("mindmap.contextMenu.previewMaterial")}
                   </button>
                   <button
                     onClick={() => {
@@ -1331,7 +1335,7 @@ export function MindmapView() {
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> Open
+                    <ExternalLink className="w-3.5 h-3.5" /> {t("mindmap.contextMenu.open")}
                   </button>
                   <button
                     onClick={() => {
@@ -1339,7 +1343,7 @@ export function MindmapView() {
                     }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded flex items-center gap-2"
                   >
-                    <FolderOpen className="w-3.5 h-3.5" /> Reveal In File Manager
+                    <FolderOpen className="w-3.5 h-3.5" /> {t("mindmap.contextMenu.revealInFileManager")}
                   </button>
                 </>
               ) : (
@@ -1348,16 +1352,16 @@ export function MindmapView() {
                     onClick={handleRenameFromContextMenu}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded"
                   >
-                    Rename Node
+                    {t("mindmap.contextMenu.renameNode")}
                   </button>
 
                   <div className="px-2 py-2">
-                    <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Node Color</div>
+                    <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">{t("mindmap.contextMenu.nodeColor")}</div>
                     <div className="grid grid-cols-4 gap-2">
                       {NODE_COLOR_PRESETS.map((preset) => (
                         <button
                           key={preset.id}
-                          title={preset.label}
+                          title={t("mindmap.nodeColors." + preset.id)}
                           onClick={() => handleApplyNodeColor(preset)}
                           className="h-6 rounded border border-[#444] hover:scale-[1.06] transition-transform"
                           style={{ backgroundColor: preset.style.background }}
@@ -1371,13 +1375,13 @@ export function MindmapView() {
                         value={customNodeColor}
                         onChange={(event) => setCustomNodeColor(event.target.value)}
                         className="h-7 w-10 rounded border border-[#444] bg-transparent cursor-pointer"
-                        title="Custom node color"
+                        title={t("mindmap.contextMenu.customNodeColor")}
                       />
                       <button
                         onClick={handleApplyCustomNodeColor}
                         className="px-2 py-1 text-xs rounded border border-[#3e3e3e] text-gray-200 hover:bg-[#2d2d2d]"
                       >
-                        Apply Custom
+                        {t("mindmap.contextMenu.applyCustom")}
                       </button>
                     </div>
                   </div>
@@ -1388,7 +1392,7 @@ export function MindmapView() {
                 onClick={handleDeleteFromContextMenu}
                 className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded"
               >
-                Delete Node
+                {t("mindmap.contextMenu.deleteNode")}
               </button>
             </>
           )}
@@ -1441,7 +1445,7 @@ export function MindmapView() {
 
               {materialPreview.kind === "text" && (
                 <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed bg-[#101010] border border-[#2d2d2d] rounded-md p-4">
-                  {materialPreview.text || "(Empty file)"}
+                  {materialPreview.text || t("mindmap.emptyFile")}
                 </pre>
               )}
             </div>
@@ -1461,13 +1465,13 @@ export function MindmapView() {
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
-              <div className="text-sm text-gray-200 font-medium">Mindmap PDF Preview</div>
+              <div className="text-sm text-gray-200 font-medium">{t("editor.pdf.mindmapPreview")}</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintPDF}
                   className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
                 >
-                  Print / Save PDF
+                  {t("editor.pdf.printSavePDF")}
                 </button>
                 <button
                   onClick={() => setPdfPreviewUrl(null)}
@@ -1477,7 +1481,7 @@ export function MindmapView() {
                 </button>
               </div>
             </div>
-            <iframe src={pdfPreviewUrl} title="Mindmap PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
+            <iframe src={pdfPreviewUrl} title={t("editor.pdf.mindmapPreview")} className="w-full h-[calc(88vh-48px)] bg-white" />
           </div>
         </div>
       )}

@@ -1,0 +1,899 @@
+﻿[
+    {
+        "id":  "phase-hook",
+        "type":  "phase",
+        "title":  "Hinführung / Advance Organizer (Hook)",
+        "summary":  "Kurze Einstiegsaktivität, die Aufmerksamkeit weckt und an Vorwissen anknüpft.",
+        "description":  "Die Lehrkraft eröffnet die Stunde mit einer provokativen Frage, einem Bild, einer kurzen Geschichte oder einem knappen Problem, das direkt mit dem Unterrichtsziel verknüpft ist. Die Schülerinnen und Schüler prognostizieren, diskutieren oder notieren erste Ideen. Dies schafft emotionales Engagement und Bedeutsamkeit, bevor neue Inhalte eingeführt werden.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Einstieg",
+                     "Motivation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-objective",
+        "type":  "phase",
+        "title":  "Lernzielsetzung \u0026 Transparenz",
+        "summary":  "Die Lehrkraft macht Lernziele und Erfolgskriterien für die Schülerinnen und Schüler explizit.",
+        "description":  "Die Lehrkraft präsentiert das konkrete Lernziel in schülerverständlicher Sprache. Sie erläutert die Relevanz des Ziels sowie die spezifischen Erfolgskriterien, sodass die Lernenden genau wissen, was von ihnen erwartet wird.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Universell",
+                     "Klarheit",
+                     "Explizites Lehren"
+                 ]
+    },
+    {
+        "id":  "phase-recall",
+        "type":  "phase",
+        "title":  "Vorwissen aktivieren",
+        "summary":  "Systematische Wiederholung, die Schülerinnen und Schüler dazu anregt, bereits Gelerntes abzurufen.",
+        "description":  "Die Lehrkraft initiiert ein kurzes Quiz, zügiges Abfragen oder einen kurzen Schreibimpuls zu vorherigem Stoff. Die Schülerinnen und Schüler rufen diese Informationen aktiv aus dem Gedächtnis ab, was neuronale Bahnen stärkt, bevor neuer, darauf aufbauender Stoff eingeführt wird.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Kognitionswissenschaft",
+                     "Formative Evaluation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-input",
+        "type":  "phase",
+        "title":  "Direkte Instruktion (Input)",
+        "summary":  "Die Lehrkraft präsentiert wesentliche Informationen, Konzepte und Vorgehensweisen.",
+        "description":  "Die Lehrkraft vermittelt Kerninhalte in strukturierten Schritten mithilfe von Visualisierungen, Strukturhilfen und klaren Erklärungen. Das Tempo wird bewusst kontrolliert, um kognitive Überlastung zu vermeiden und sicherzustellen, dass grundlegende Konzepte verankert werden.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "Direkte Instruktion",
+                     "Wissensvermittlung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-model",
+        "type":  "phase",
+        "title":  "Lehrkraft-Modellierung (Ich mache es vor)",
+        "summary":  "Die Lehrkraft zeigt eine neue Fertigkeit und spricht dabei die eigenen Denkschritte laut aus.",
+        "description":  "Die Lehrkraft löst ein Problem oder analysiert einen Text vor der Klasse mithilfe der „Lautes-Denken”-Strategie. Sie kommentiert Entscheidungen, Strategien und Kontrollschritte und bietet so eine kognitive Vorlage für die spätere selbstständige Übung.",
+        "duration":  "5-15m",
+        "tags":  [
+                     "Scaffolding",
+                     "Graduelle Kompetenzvermittlung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-guided",
+        "type":  "phase",
+        "title":  "Gelenkte Übung (Wir machen es gemeinsam)",
+        "summary":  "Schülerinnen und Schüler üben das Gelernte mit umfassender Unterstützung der Lehrkraft.",
+        "description":  "Die Schülerinnen und Schüler wenden den modellierten Prozess Schritt für Schritt in kurzen Aufgaben an. Die Lehrkraft geht umher, gibt Impulse und korrigiert Fehler in Echtzeit, wobei die Hilfestellung mit zunehmender Kompetenz schrittweise reduziert wird.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "Scaffolding",
+                     "Formative Evaluation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-collab",
+        "type":  "phase",
+        "title":  "Kooperative Übung (Ihr macht es gemeinsam)",
+        "summary":  "Schülerinnen und Schüler arbeiten in Gruppen, um das Gelernte ohne ständige Lenkung durch die Lehrkraft anzuwenden.",
+        "description":  "Die Lehrkraft stellt eine anspruchsvolle Aufgabe, die gemeinsames Problemlösen erfordert. Die Schülerinnen und Schüler verhandeln Rollen, erklären Ideen und hinterfragen das Denken der anderen. Die Lehrkraft greift nur ein, wenn Gruppen nicht weiterkommen.",
+        "duration":  "15-30m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Aktives Lernen",
+                     "Graduelle Kompetenzvermittlung"
+                 ]
+    },
+    {
+        "id":  "phase-independent",
+        "type":  "phase",
+        "title":  "Selbstständige Übung (Du machst es allein)",
+        "summary":  "Schülerinnen und Schüler wenden das Gelernte eigenständig an, um Kompetenz zu festigen.",
+        "description":  "Die Schülerinnen und Schüler arbeiten einzeln an Aufgaben, die auf das Lernziel abgestimmt sind. Die Lehrkraft beobachtet zurückhaltend und fokussiert auf den eigenständigen Strategieeinsatz. Dies dient als Indikator für den Kompetenzerwerb und beeinflusst die weitere Unterrichtsplanung.",
+        "duration":  "15-40m",
+        "tags":  [
+                     "Kompetenzorientierung",
+                     "Beurteilung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-check",
+        "type":  "phase",
+        "title":  "Formativer Checkpoint",
+        "summary":  "Kurze Zwischenevaluation, um den Unterricht in Echtzeit anzupassen.",
+        "description":  "Die Lehrkraft unterbricht den Unterricht, um durch gezieltes Nachfragen, Minitests oder digitale Abstimmungen rasch Belege für das Verständnis zu sammeln. Auf Basis der Rückmeldungen entscheidet sie sofort, ob sie wiederholen, verlangsamen oder vertiefen muss.",
+        "duration":  "3-5m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Responsiver Unterricht",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-closure",
+        "type":  "phase",
+        "title":  "Unterrichtsabschluss / Sicherung",
+        "summary":  "Strukturierter Abschluss, der die zentralen Lernergebnisse der Stunde zusammenfasst.",
+        "description":  "Die Lehrkraft regt die Schülerinnen und Schüler an, die Hauptgedanken zusammenzufassen, mit den Zielen zu verknüpfen und den eigenen Lernfortschritt zu reflektieren. Die Lehrkraft hebt gemeinsame Themen hervor und korrigiert verbleibende Missverständnisse vor dem Abschluss.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Reflexion",
+                     "Synthese",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "phase-5e-engage",
+        "type":  "phase",
+        "title":  "Phase „Einstimmen” (5E)",
+        "summary":  "Weckt Neugier und aktiviert vorhandene Vorstellungen, ohne Antworten vorzugeben.",
+        "description":  "Die Lehrkraft präsentiert ein verblüffendes Phänomen oder Szenario. Die Schülerinnen und Schüler teilen erste Ideen einzeln oder zu zweit mit. Die Lehrkraft erkundet das Denken mit offenen Fragen und bereitet die Lernenden darauf vor, nach Erklärungen zu suchen.",
+        "duration":  "5-15m",
+        "tags":  [
+                     "MINT",
+                     "Forschendes Lernen",
+                     "5E-Modell"
+                 ]
+    },
+    {
+        "id":  "phase-5e-explore",
+        "type":  "phase",
+        "title":  "Phase „Erkunden” (5E)",
+        "summary":  "Schülerinnen und Schüler untersuchen durch praktische Aufgaben, bevor formelle Erklärungen erfolgen.",
+        "description":  "Die Schülerinnen und Schüler arbeiten kooperativ daran, Materialien zu erkunden, Variablen zu testen und Beobachtungen ohne direkte prozedurale Einflussnahme zu notieren. Sie entwickeln vorläufiges konzeptuelles Verständnis aus empirischen Erfahrungen.",
+        "duration":  "20-45m",
+        "tags":  [
+                     "MINT",
+                     "Aktives Lernen",
+                     "5E-Modell"
+                 ]
+    },
+    {
+        "id":  "phase-5e-explain",
+        "type":  "phase",
+        "title":  "Phase „Erklären” (5E)",
+        "summary":  "Schülerinnen und Schüler formulieren ihre Ergebnisse, bevor die Lehrkraft die Fachsprache einführt.",
+        "description":  "Die Schülerinnen und Schüler beschreiben ihre Beobachtungen und Hypothesen. Die Lehrkraft führt anschließend die fachlich korrekte Fachsprache, Definitionen und Modelle ein und verknüpft die praktischen Erfahrungen mit formellen Konzepten.",
+        "duration":  "15-25m",
+        "tags":  [
+                     "MINT",
+                     "Konzeptbildung",
+                     "5E-Modell"
+                 ]
+    },
+    {
+        "id":  "phase-5e-elaborate",
+        "type":  "phase",
+        "title":  "Phase „Vertiefen” (5E)",
+        "summary":  "Schülerinnen und Schüler wenden das Gelernte in unterschiedlichen, komplexen Kontexten an.",
+        "description":  "Die Lehrkraft stellt ein neues, komplexeres Problem vor, das die Anwendung der heutigen Fachkonzepte erfordert. Die Schülerinnen und Schüler passen ihr theoretisches Verständnis an, um diese Herausforderung zu lösen, und stärken so den flexiblen Wissenstransfer.",
+        "duration":  "20-40m",
+        "tags":  [
+                     "MINT",
+                     "Höheres Denken",
+                     "5E-Modell"
+                 ]
+    },
+    {
+        "id":  "phase-5e-evaluate",
+        "type":  "phase",
+        "title":  "Phase „Evaluieren” (5E)",
+        "summary":  "Abschließende Beurteilung von Verständnis und Fertigkeiten im Rahmen des Inquiry-Zyklus.",
+        "description":  "Die Lehrkraft führt eine formelle Leistungsmessung durch (Test, praktische Aufgabe, Laborbericht). Die Schülerinnen und Schüler zeigen ihre Beherrschung der Kernkonzepte. Die Lehrkraft nutzt diese Daten, um die Wirksamkeit des Unterrichtszyklus zu bewerten.",
+        "duration":  "15-30m",
+        "tags":  [
+                     "MINT",
+                     "Summative Evaluation",
+                     "5E-Modell"
+                 ]
+    },
+    {
+        "id":  "phase-transition",
+        "type":  "phase",
+        "title":  "Übergangs- / Umbauphase",
+        "summary":  "Kurzer, bewusster Wechsel zwischen Aktivitäten oder Arbeitsformen.",
+        "description":  "Die Lehrkraft signalisiert einen Wechsel mit einer Routine oder einem Signal. Die Schülerinnen und Schüler räumen Materialien weg, ändern die Sitzordnung und erhalten einen Vorblick auf die nächste Aufgabe, wodurch Schwung erhalten und Leerlauf reduziert wird.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Klassenführung",
+                     "Universell",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "phase-metacognitive",
+        "type":  "phase",
+        "title":  "Metakognitive Reflexion",
+        "summary":  "Schülerinnen und Schüler reflektieren darüber, wie sie gelernt haben, nicht nur darüber, was sie gelernt haben.",
+        "description":  "Die Schülerinnen und Schüler überlegen, welche Strategien geholfen haben, wo sie Schwierigkeiten hatten und wie sie sich verbessern können. Sie verfassen kurze Reflexionen oder teilen diese in Paaren, wodurch das Bewusstsein für die eigenen Lernprozesse gestärkt wird.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Metakognition",
+                     "SEL",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-solo",
+        "type":  "socialForm",
+        "title":  "Einzelarbeit (Solo)",
+        "summary":  "Jede Schülerin und jeder Schüler arbeitet allein und im eigenen Tempo an Aufgaben.",
+        "description":  "Die Schülerinnen und Schüler konzentrieren sich still auf eigenständige Aufgaben und verlassen sich auf ihre eigenen Strategien. Unerlässlich für konzentriertes Arbeiten, eigenständige Übung und summative Leistungsnachweise.",
+        "duration":  "10-40m",
+        "tags":  [
+                     "Kompetenzorientierung",
+                     "Beurteilung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-pair",
+        "type":  "socialForm",
+        "title":  "Partnerarbeit (Dyaden)",
+        "summary":  "Schülerinnen und Schüler arbeiten zu zweit an Lernaufgaben.",
+        "description":  "Partnerinnen und Partner tauschen Ideen aus, überprüfen gegenseitig ihre Arbeit und geben Feedback. Dies vereint Unterstützung und Eigenverantwortung und eignet sich hervorragend für kurze Diskussionen und Peer-Review.",
+        "duration":  "5-25m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Geringe Vorbereitung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-turntalk",
+        "type":  "socialForm",
+        "title":  "Turn-and-Talk (Gespräch mit Sitznachbarn)",
+        "summary":  "Schnelle Gruppenbildung, bei der sich Schülerinnen und Schüler mit einer benachbarten Person austauschen.",
+        "description":  "Die Lehrkraft stellt eine Frage, und die Schülerinnen und Schüler wenden sich kurz einer benachbarten Person für ein zeitlich begrenztes Gespräch zu. Die Klasse kehrt dann zur Besprechung der Erkenntnisse im Plenum zurück.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Aktives Lernen",
+                     "Geringe Vorbereitung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-smallgroup",
+        "type":  "socialForm",
+        "title":  "Kleingruppen (3–5 Schülerinnen und Schüler)",
+        "summary":  "Schülerinnen und Schüler arbeiten in kleinen Teams mit geteilter Verantwortung für die Ergebnisse.",
+        "description":  "Die Schülerinnen und Schüler planen Vorgehensweisen, verteilen Teilaufgaben und fassen Ergebnisse zu einem Produkt zusammen. Unterstützt komplexe Aufgaben, Problemlösen und Peer-Teaching.",
+        "duration":  "15-40m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Projektbasiert",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "social-plenum",
+        "type":  "socialForm",
+        "title":  "Plenum / Gesamte Klasse",
+        "summary":  "Lehrkraft und alle Schülerinnen und Schüler interagieren in einem gemeinsamen Diskussionsraum.",
+        "description":  "Die Schülerinnen und Schüler sind auf einen zentralen Punkt ausgerichtet. Die Lehrkraft steuert den Informationsfluss, hält Vorträge oder moderiert gemeinsame Diskussionen. Gewährleistet eine einheitliche grundlegende Wissensvermittlung.",
+        "duration":  "10-30m",
+        "tags":  [
+                     "Direkte Instruktion",
+                     "Universell",
+                     "Effizient"
+                 ]
+    },
+    {
+        "id":  "social-station",
+        "type":  "socialForm",
+        "title":  "Stationen- / Lernzirkelarbeit",
+        "summary":  "Schülerinnen und Schüler durchlaufen mehrere Aktivitätsstationen im Raum.",
+        "description":  "Verschiedene Stationen bieten unterschiedliche Zugänge oder Aufgaben. Die Schülerinnen und Schüler bewegen sich in Kleingruppen nach einem Zeitplan. Ermöglicht Differenzierung und effiziente Nutzung von Materialien.",
+        "duration":  "20-45m",
+        "tags":  [
+                     "Differenzierung",
+                     "Aktives Lernen",
+                     "MINT"
+                 ]
+    },
+    {
+        "id":  "social-homogeneous",
+        "type":  "socialForm",
+        "title":  "Homogene Leistungsgruppen",
+        "summary":  "Schülerinnen und Schüler werden nach ähnlichem Leistungsstand für gezielte Instruktion zusammengefasst.",
+        "description":  "Die Lehrkraft teilt die Schülerinnen und Schüler anhand von Leistungsdaten in leistungshomogene Stufen ein. Ermöglicht intensive, spezifische Unterstützung für förderbedürftige Gruppen und anspruchsvolle Erweiterung für leistungsstärkere Gruppen.",
+        "duration":  "20-45m",
+        "tags":  [
+                     "Differenzierung",
+                     "Zielgerichtete Unterstützung",
+                     "Aufwändige Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "social-heterogeneous",
+        "type":  "socialForm",
+        "title":  "Heterogene Lerngruppen",
+        "summary":  "Schülerinnen und Schüler werden mit unterschiedlichen Leistungsniveaus gemischt, um Peer-Tutoring zu fördern.",
+        "description":  "Eine berechnete Mischung aus leistungsstarken, durchschnittlichen und leistungsschwächeren Schülerinnen und Schülern innerhalb einer Gruppe. Unterschiedliche kognitive Stärken fließen zusammen, um komplexe kooperative Aufgaben zu bewältigen.",
+        "duration":  "30-60m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Chancengleichheit",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-expert",
+        "type":  "socialForm",
+        "title":  "Expertengruppen (Jigsaw-Basis)",
+        "summary":  "Schülerinnen und Schüler arbeiten zusammen, um ein Unterthema zu erarbeiten, bevor sie es Gleichaltrigen vermitteln.",
+        "description":  "Jede Gruppe erhält ein eigenes Unterthema. Die Mitglieder arbeiten zusammen, um ihren Teil zu verstehen und zusammenzufassen, bevor sie sich in gemischten Gruppen neu formieren und ihn den anderen vermitteln.",
+        "duration":  "15-30m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Lesekompetenz",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "social-peertutor",
+        "type":  "socialForm",
+        "title":  "Peer-Tutoring / Coaching",
+        "summary":  "Schülerinnen und Schüler unterstützen sich gegenseitig in strukturierten Tutor-Tutee-Paaren.",
+        "description":  "Geschulte Tutorinnen und Tutoren begleiten Gleichaltrige durch Aufgaben, während die Lehrkraft beaufsichtigt. Die Paare werden strategisch gebildet, oft indem Stärken mit Bedarfen verknüpft werden. Die Rollen wechseln, um Gegenseitigkeit zu gewährleisten.",
+        "duration":  "15-30m",
+        "tags":  [
+                     "Differenzierung",
+                     "Unterstützung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "social-onlineforum",
+        "type":  "socialForm",
+        "title":  "Online-Diskussionsforum",
+        "summary":  "Asynchrone, textbasierte Diskussion in einem digitalen Raum.",
+        "description":  "Die Lehrkraft stellt online einen Impuls ein. Die Schülerinnen und Schüler antworten mit ersten Beiträgen und reagieren konstruktiv auf die Beiträge der Mitschülerinnen und Mitschüler. Erweitert die Beteiligung über die Unterrichtszeit hinaus und kommt reflektierten Schreibern entgegen.",
+        "duration":  "10-30m",
+        "tags":  [
+                     "Blended Learning",
+                     "Diskussion",
+                     "Lesekompetenz"
+                 ]
+    },
+    {
+        "id":  "method-tps",
+        "type":  "method",
+        "title":  "Think-Pair-Share (Denken – Austauschen – Vorstellen)",
+        "summary":  "Individuelles Nachdenken, Partnergespräch und anschließender Austausch im Plenum.",
+        "description":  "Die Schülerinnen und Schüler denken still über einen Impuls nach, besprechen ihn mit einer Partnerin oder einem Partner und teilen die Erkenntnisse anschließend mit der ganzen Klasse. Hohes Engagement bei niedriger Einstiegshürde.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Diskussion",
+                     "Aktives Lernen",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-jigsaw",
+        "type":  "method",
+        "title":  "Jigsaw-Methode (Gruppenpuzzle)",
+        "summary":  "Schülerinnen und Schüler werden zu Expertinnen und Experten für Teilthemen und vermitteln ihr Wissen in gemischten Gruppen.",
+        "description":  "Ein Thema wird in Teile gegliedert. „Expertengruppen” erarbeiten einen Teil, mischen sich dann in „Puzzlegruppen”, um ihr Segment an Gleichaltrige zu vermitteln. Die Lehrkraft klärt Lücken in einer abschließenden Plenumsrunde.",
+        "duration":  "30-60m",
+        "tags":  [
+                     "Kooperatives Lernen",
+                     "Lesekompetenz",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-socratic",
+        "type":  "method",
+        "title":  "Sokratisches Seminar",
+        "summary":  "Schülergeleitete, evidenzbasierte Diskussion über einen komplexen Text.",
+        "description":  "Die Schülerinnen und Schüler bereiten sich vor, indem sie einen Text annotieren. Im Kreis sitzend führen sie einen unvermittelten Dialog unter Verwendung von Textbelegen. Die Lehrkraft bleibt still, beobachtet und evaluiert.",
+        "duration":  "45-60m",
+        "tags":  [
+                     "Diskussion",
+                     "Kritisches Denken",
+                     "Geisteswissenschaften"
+                 ]
+    },
+    {
+        "id":  "method-snowball",
+        "type":  "method",
+        "title":  "Schneeball-Diskussion",
+        "summary":  "Expandierende Diskussion, die Konsens erzwingt, während Gruppen sich verdoppeln.",
+        "description":  "Die Schülerinnen und Schüler reagieren einzeln auf einen Impuls, fassen die Antworten zu zweit zusammen und fusionieren dann mit einem weiteren Paar. Diese Verdopplung wird fortgesetzt, bis die gesamte Klasse in einer einzigen Debatte vereint ist.",
+        "duration":  "20-30m",
+        "tags":  [
+                     "Konsensbildung",
+                     "Kollaborativ",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-pbl",
+        "type":  "method",
+        "title":  "Problembasiertes Lernen (PBL)",
+        "summary":  "Schülerinnen und Schüler bearbeiten ein offenes, authentisches Problem vor der Instruktion.",
+        "description":  "Die Lehrkraft präsentiert ein komplexes Szenario. Die Schülerinnen und Schüler recherchieren mithilfe von Ressourcen und Experteninput. Die Lehrkraft coacht die Untersuchung und Zusammenarbeit, anstatt Lösungen vorzugeben.",
+        "duration":  "Multi-Day",
+        "tags":  [
+                     "MINT",
+                     "Forschung",
+                     "Projektbasiert"
+                 ]
+    },
+    {
+        "id":  "method-flipped",
+        "type":  "method",
+        "title":  "Invertierter Unterricht (Flipped Classroom)",
+        "summary":  "Inhaltserwerb zu Hause; die Unterrichtszeit konzentriert sich auf die Anwendung.",
+        "description":  "Die Schülerinnen und Schüler sehen sich Videovorträge an oder lesen zu Hause. Die Unterrichtszeit wird für Problemlösen, Projekte und Diskussionen genutzt. Verschiebt den Fokus der Unterrichtszeit hin zu höheren Denkprozessen.",
+        "duration":  "1 lesson + HW",
+        "tags":  [
+                     "Blended Learning",
+                     "Aktives Lernen",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-muddiest",
+        "type":  "method",
+        "title":  "Minutenpapier / Muddiest Point",
+        "summary":  "Schnelle Endevaluation des Gelernten und bestehender Unklarheiten.",
+        "description":  "Die Schülerinnen und Schüler schreiben 60 Sekunden lang auf, was sie am wichtigsten fanden und was noch unklar ist. Die Lehrkraft nutzt diese Daten, um in der nächsten Stunde gezielt nachzubessern.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Reflexion",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-braindump",
+        "type":  "method",
+        "title":  "Brain Dump (Abrufübung)",
+        "summary":  "Schülerinnen und Schüler schreiben alles auf, woran sie sich aus der vorherigen Stunde erinnern.",
+        "description":  "Zu Beginn der Stunde räumen die Schülerinnen und Schüler ihre Tische leer und schreiben ohne Notizen alles auf, woran sie sich aus der vorherigen Sitzung erinnern. Stärkt effektiv die langfristigen Gedächtnisbahnen.",
+        "duration":  "3-5m",
+        "tags":  [
+                     "Kognitionswissenschaft",
+                     "Formative Evaluation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-exit",
+        "type":  "method",
+        "title":  "Exit Tickets (Ausgangskarten)",
+        "summary":  "Kurze Impulse am Ende der Stunde, die rasch Lernbelege liefern.",
+        "description":  "Die Schülerinnen und Schüler beantworten vor dem Verlassen fokussierte Fragen, die auf das Lernziel abgestimmt sind. Die Lehrkraft sortiert die Antworten nach Verstehensmustern, um die nächste Stunde anzupassen.",
+        "duration":  "3-7m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Geringe Vorbereitung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-conceptmap",
+        "type":  "method",
+        "title":  "Concept Mapping (Begriffsnetz)",
+        "summary":  "Visuelle Darstellung von Beziehungen zwischen Schlüsselideen.",
+        "description":  "Die Schülerinnen und Schüler ordnen Fachbegriffe oder Konzepte räumlich an und zeichnen Verbindungslinien. Sie schreiben kurze Phrasen entlang der Linien, die theoretische Zusammenhänge erklären, und fördern so die Synthesefähigkeit.",
+        "duration":  "20-30m",
+        "tags":  [
+                     "Visuelles Lernen",
+                     "Synthese",
+                     "Marzano"
+                 ]
+    },
+    {
+        "id":  "method-casestudy",
+        "type":  "method",
+        "title":  "Fallstudienanalyse",
+        "summary":  "Tiefgehende Untersuchung eines realen Szenarios.",
+        "description":  "Die Schülerinnen und Schüler analysieren konkurrierende Variablen, Stakeholder-Interessen und Daten innerhalb einer detaillierten Erzählung. Gruppen entwickeln logische Lösungen und präsentieren ihre strategische Argumentation.",
+        "duration":  "45-60m",
+        "tags":  [
+                     "Problemlösen",
+                     "Realitätsbezug",
+                     "Geisteswissenschaften"
+                 ]
+    },
+    {
+        "id":  "method-roleplay",
+        "type":  "method",
+        "title":  "Rollenspiel / Simulation",
+        "summary":  "Schülerinnen und Schüler schlüpfen in realitätsnahen Situationen in Rollen, um Perspektiven zu erkunden.",
+        "description":  "Die Schülerinnen und Schüler bereiten Rollen vor und interagieren gemäß den Szenarioregeln, um Ergebnisse auszuhandeln. Eine Auswertungsrunde macht die Lernerfahrungen sichtbar und verknüpft sie mit den theoretischen Konzepten.",
+        "duration":  "20-60m",
+        "tags":  [
+                     "SEL",
+                     "Geisteswissenschaften",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-gallery",
+        "type":  "method",
+        "title":  "Galerierundgang / Museumsgang",
+        "summary":  "Schülerinnen und Schüler gehen umher, um kuratierte Artefakte oder Arbeiten von Mitschülerinnen und Mitschülern zu betrachten und zu kommentieren.",
+        "description":  "Materialien werden im Raum ausgehängt. Die Schülerinnen und Schüler gehen von Station zu Station, analysieren die Materialien und hinterlassen Feedback auf Haftnotizen. Die Klasse bespricht anschließend übergreifende Themen.",
+        "duration":  "20-30m",
+        "tags":  [
+                     "Kinästhetisch",
+                     "Peer-Review",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-mini",
+        "type":  "method",
+        "title":  "Direkte Instruktion – Minilektion",
+        "summary":  "Knappe, fokussierte Erklärung eines bestimmten Konzepts.",
+        "description":  "Die Lehrkraft stellt ein Lernziel mit einer präzisen Erklärung und einem klaren Beispiel vor. Betont die wichtigsten Schritte mithilfe von Visualisierungen, unmittelbar gefolgt von einer Übungsphase.",
+        "duration":  "5-15m",
+        "tags":  [
+                     "Direkte Instruktion",
+                     "Geringe Vorbereitung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-worked",
+        "type":  "method",
+        "title":  "Vorgegebene Lösungsbeispiele (Worked Examples)",
+        "summary":  "Die Lehrkraft präsentiert vollständig gelöste Beispiele und hebt die zugrundeliegenden Denkschritte hervor.",
+        "description":  "Die Lehrkraft zeigt vollständige Lösungen, weist auf Schritte und Begründungen hin. Die Schülerinnen und Schüler annotieren die Kopien. Die Lehrkraft entfernt schrittweise Lösungsschritte in teilweise bearbeiteten Beispielen, um die selbstständige Arbeit zu unterstützen.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "MINT",
+                     "Scaffolding",
+                     "Kompetenzorientierung"
+                 ]
+    },
+    {
+        "id":  "method-similarities",
+        "type":  "method",
+        "title":  "Gemeinsamkeiten und Unterschiede identifizieren",
+        "summary":  "Schülerinnen und Schüler vergleichen und klassifizieren, um das Verständnis zu vertiefen.",
+        "description":  "Die Schülerinnen und Schüler nutzen Venn-Diagramme oder Matrizen, um gemeinsame und unterscheidende Merkmale von Konzepten zu identifizieren. Sie formulieren Verallgemeinerungen oder erstellen Analogien, was höheres Denken fördert.",
+        "duration":  "10-25m",
+        "tags":  [
+                     "Marzano",
+                     "Kritisches Denken",
+                     "Geisteswissenschaften"
+                 ]
+    },
+    {
+        "id":  "method-inquirylab",
+        "type":  "method",
+        "title":  "Forschendes Labor (Inquiry Lab)",
+        "summary":  "Schülerinnen und Schüler entwerfen und führen Untersuchungen durch, um Fragen zu beantworten.",
+        "description":  "Die Schülerinnen und Schüler planen Vorgehensweisen, identifizieren Variablen und sammeln Daten. Die Lehrkraft unterstützt bei der Analyse, um evidenzbasierte Schlussfolgerungen zu ziehen. Endet oft mit schriftlichen Berichten.",
+        "duration":  "30-90m",
+        "tags":  [
+                     "MINT",
+                     "Forschung",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-reciprocal",
+        "type":  "method",
+        "title":  "Reziprokes Lehren",
+        "summary":  "Schülerinnen und Schüler übernehmen in Kleingruppen Strategien zur Leseverständnisförderung.",
+        "description":  "Die Schülerinnen und Schüler durchlaufen Rollen (Vorhersager, Fragesteller, Klärer, Zusammenfasser), um Gleichaltrige durch Texte zu führen. Die Lehrkraft modelliert zunächst und beaufsichtigt dann den Strategieeinsatz.",
+        "duration":  "20-40m",
+        "tags":  [
+                     "Lesekompetenz",
+                     "Metakognition",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-peerinstruction",
+        "type":  "method",
+        "title":  "Peer Instruction (Konzeptfragen)",
+        "summary":  "Schülerinnen und Schüler beantworten Konzeptfragen, diskutieren und stimmen erneut ab.",
+        "description":  "Die Lehrkraft stellt eine anspruchsvolle Multiple-Choice-Frage. Die Schülerinnen und Schüler stimmen ab, diskutieren/verteidigen ihre Antworten zu zweit und stimmen erneut ab. Deckt Fehlvorstellungen auf und nutzt die Erklärungen Gleichaltriger.",
+        "duration":  "8-15m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "MINT",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-debate",
+        "type":  "method",
+        "title":  "Strukturierte akademische Debatte",
+        "summary":  "Schülerinnen und Schüler vertreten gegensätzliche Positionen auf der Grundlage von Belegen.",
+        "description":  "Die Schülerinnen und Schüler recherchieren, bereiten Argumente vor und antizipieren Gegenargumente. Folgt einem klaren Format mit zeitlich begrenzten Reden und Repliken. Die Reflexion zielt auf die Qualität der Argumentation ab.",
+        "duration":  "30-60m",
+        "tags":  [
+                     "Kritisches Denken",
+                     "Geisteswissenschaften",
+                     "Sprechen"
+                 ]
+    },
+    {
+        "id":  "method-interactivelecture",
+        "type":  "method",
+        "title":  "Interaktiver Vortrag mit Prüfpunkten",
+        "summary":  "Vortrag, der durch aktive Aufgaben und kurze Evaluationen unterbrochen wird.",
+        "description":  "Die Inhalte werden in Minivorträge segmentiert, die durch Think-Pair-Share, Abstimmungen oder Problemlöseaufgaben unterbrochen werden. Die Schülerinnen und Schüler verarbeiten jeden Abschnitt, bevor es weitergeht.",
+        "duration":  "20-40m",
+        "tags":  [
+                     "Universell",
+                     "Formative Evaluation",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-quickwrites",
+        "type":  "method",
+        "title":  "Schreiben zum Lernen (Quick Writes)",
+        "summary":  "Kurze, niederschwellige Schreibaufgaben, um Inhalte zu verarbeiten.",
+        "description":  "Die Schülerinnen und Schüler schreiben für kurze Zeit durchgehend, um Ideen zu erklären oder zu hinterfragen, ohne sich um formale Korrektheit zu sorgen. Macht Gedanken sichtbar und unterstützt die Behaltensleistung.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Lesekompetenz",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-hypotheses",
+        "type":  "method",
+        "title":  "Hypothesen bilden und überprüfen",
+        "summary":  "Schülerinnen und Schüler stellen Vorhersagen auf und testen sie durch logisches Denken.",
+        "description":  "Die Schülerinnen und Schüler formulieren Hypothesen über Ergebnisse oder Zusammenhänge. Sie entwerfen Gedankenexperimente oder Tests, analysieren Ergebnisse und gleichen Unterschiede mit Belegen ab.",
+        "duration":  "20-60m",
+        "tags":  [
+                     "Marzano",
+                     "MINT",
+                     "Kritisches Denken"
+                 ]
+    },
+    {
+        "id":  "method-fourcorners",
+        "type":  "method",
+        "title":  "Vier Ecken (Four Corners)",
+        "summary":  "Kinästhetisches Multiple-Choice-Verfahren mit den Ecken des Raums.",
+        "description":  "Die Ecken sind mit Meinungen oder Wahlmöglichkeiten beschriftet. Die Schülerinnen und Schüler gehen zu der Ecke, die ihrer Wahl entspricht, diskutieren die Begründung mit Gleichgesinnten und debattieren dann mit anderen.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "Kinästhetisch",
+                     "Formative Evaluation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-peerreview",
+        "type":  "method",
+        "title":  "Peer Review (bewertungsbasiert)",
+        "summary":  "Schülerinnen und Schüler bewerten die Arbeit einer Mitschülerin oder eines Mitschülers anhand eines Bewertungsrasters.",
+        "description":  "Die Schülerinnen und Schüler tauschen Entwürfe aus, bewerten die Arbeit unabhängig anhand des Rasters und geben konstruktive Rückmeldung. Anschließend überarbeiten sie ihre eigene Arbeit auf der Grundlage des erhaltenen Feedbacks.",
+        "duration":  "30-45m",
+        "tags":  [
+                     "Schreiben",
+                     "Evaluation",
+                     "Aufwändige Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-whiparound",
+        "type":  "method",
+        "title":  "Whip Around (Blitzlicht)",
+        "summary":  "Schnelles Verfahren, bei dem jede Schülerin und jeder Schüler eine Antwort mit einem einzigen Wort gibt.",
+        "description":  "Die Lehrkraft zeigt zügig auf die Schülerinnen und Schüler, die nacheinander ein einziges, sehr präzises Wort als ihr Fazit nennen. So wird sichergestellt, dass jede Stimme zur Zusammenfassung beiträgt.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Unterrichtssicherung",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-spacedrep",
+        "type":  "method",
+        "title":  "Verteiltes Üben \u0026 Abrufübung (Spaced Repetition)",
+        "summary":  "Lerneinheiten über die Zeit verteilen und das Gedächtnis gezielt abrufen.",
+        "description":  "Anstatt zu büffeln, plant die Lehrkraft in zunehmenden Abständen (z. B. nach 1 Tag, 3 Tagen, 1 Woche) niederschwellige Tests oder Wiederholungsspiele zu älterem Stoff ein. Nutzt den Verteilungseffekt für langfristiges Behalten.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Kognitionswissenschaft",
+                     "Formative Evaluation",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-speeddating",
+        "type":  "method",
+        "title":  "Kugellager / Speed Dating",
+        "summary":  "Schülerpaare rotieren und tauschen sich in kurzen Gesprächsrunden aus.",
+        "description":  "Zwei konzentrische Kreise stehen sich gegenüber. Nach einem kurzen Diskussionsimpuls rotiert der äußere Kreis, sodass jeder Schüler einen neuen Gesprächspartner erhält. Hocheffizient für das schnelle Sammeln vieler Perspektiven.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "Diskussion",
+                     "Aktives Lernen",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-placemat",
+        "type":  "method",
+        "title":  "Platzdeckchen-Methode",
+        "summary":  "Gruppen sammeln Ideen auf einem gemeinsamen Arbeitsblatt und synthetisieren sie anschließend.",
+        "description":  "Jeder Schüler notiert seine Ideen im eigenen Bereich eines großen Papiers. Die Gruppe diskutiert alle Beiträge und hält gemeinsame Ergebnisse in der Mitte fest. Stellt sicher, dass jede Stimme gehört wird.",
+        "duration":  "15-25m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Brainstorming",
+                     "Aktives Lernen"
+                 ]
+    },
+    {
+        "id":  "method-cardquery",
+        "type":  "method",
+        "title":  "Kartenabfrage",
+        "summary":  "Schüler schreiben Antworten auf Karten, die dann gemeinsam sortiert und besprochen werden.",
+        "description":  "Die Schüler notieren kurze Antworten, Fragen oder Ideen auf Karten. Die Lehrkraft sammelt sie, zeigt sie an der Tafel und die Klasse sortiert sie in Kategorien zur Diskussion.",
+        "duration":  "10-20m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Diskussion",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-trafficlight",
+        "type":  "method",
+        "title":  "Ampelabfrage",
+        "summary":  "Schüler zeigen ihr Verständnis mit farbigen Karten oder Gesten.",
+        "description":  "Die Schüler halten grüne (ich verstehe), gelbe (ich bin unsicher) oder rote (ich brauche Hilfe) Karten hoch. Die Lehrkraft erkennt sofort den Verständnisstand der Klasse und kann den Unterricht anpassen.",
+        "duration":  "2-5m",
+        "tags":  [
+                     "Formative Evaluation",
+                     "Metakognition",
+                     "Geringe Vorbereitung"
+                 ]
+    },
+    {
+        "id":  "method-learningdiary",
+        "type":  "method",
+        "title":  "Lerntagebuch",
+        "summary":  "Schüler dokumentieren regelmäßig ihren Lernfortschritt, Reflexionen und Fragen.",
+        "description":  "Die Schüler führen ein persönliches Tagebuch, in dem sie festhalten, was sie gelernt haben, welche Schwierigkeiten auftraten, welche Strategien sie nutzten und welche Fragen offen sind. Fördert Metakognition und selbstreguliertes Lernen.",
+        "duration":  "5-10m",
+        "tags":  [
+                     "Metakognition",
+                     "Reflexion",
+                     "Langfristig"
+                 ]
+    },
+    {
+        "id":  "method-portfolio",
+        "type":  "method",
+        "title":  "Portfolioarbeit",
+        "summary":  "Sammeln und Reflektieren von Arbeitsproben zur Dokumentation des Lernfortschritts.",
+        "description":  "Die Schüler sammeln ausgewählte Arbeitsproben, Entwürfe und Reflexionen in einem Portfolio. Sie analysieren ihren eigenen Fortschritt und setzen Ziele. Die Portfolios werden regelmäßig mit der Lehrkraft besprochen.",
+        "duration":  "Fortlaufend",
+        "tags":  [
+                     "Reflexion",
+                     "Beurteilung",
+                     "Schülerzentriert"
+                 ]
+    },
+    {
+        "id":  "method-weeklyplan",
+        "type":  "method",
+        "title":  "Wochenplanarbeit",
+        "summary":  "Schüler arbeiten eigenverantwortlich an einem vorbereiteten Aufgabenset für die Woche.",
+        "description":  "Die Lehrkraft erstellt einen Wochenplan mit Pflicht- und Wahlaufgaben unterschiedlicher Schwierigkeit. Die Schüler organisieren ihre Zeit selbst, haken Erledigtes ab und reflektieren ihren Fortschritt. Fördert Eigenverantwortung und Zeitmanagement.",
+        "duration":  "Mehrere Tage",
+        "tags":  [
+                     "Einzelarbeit",
+                     "Differenzierung",
+                     "Selbstregulation"
+                 ]
+    },
+    {
+        "id":  "method-tandem",
+        "type":  "method",
+        "title":  "Tandemarbeit",
+        "summary":  "Strukturierte Partnerarbeit mit festgelegten, wechselnden Rollen.",
+        "description":  "Zwei Schüler arbeiten gemeinsam an einer Aufgabe mit klar definierten Rollen (z. B. einer liest/erklärt, der andere prüft/notiert). Die Rollen wechseln. Bietet strukturierte Unterstützung bei gleichzeitiger Eigenverantwortung.",
+        "duration":  "10-25m",
+        "tags":  [
+                     "Kollaborativ",
+                     "Scaffolding",
+                     "Universell"
+                 ]
+    },
+    {
+        "id":  "method-freework",
+        "type":  "method",
+        "title":  "Freiarbeit",
+        "summary":  "Schüler wählen aus einem Angebot an Aktivitäten aus und arbeiten in eigenem Tempo.",
+        "description":  "Die Lehrkraft bereitet eine Lernumgebung mit verschiedenen Materialien und Aufgaben vor. Die Schüler wählen frei, woran sie arbeiten möchten, wie lange und mit wem. Verbreitet in der Montessori-Pädagogik und Reformpädagogik.",
+        "duration":  "20-45m",
+        "tags":  [
+                     "Schülerzentriert",
+                     "Einzelarbeit",
+                     "Differenzierung"
+                 ]
+    },
+    {
+        "id":  "method-learningcircuit",
+        "type":  "method",
+        "title":  "Lernzirkel / Stationenlernen",
+        "summary":  "Schüler durchlaufen vorbereitete Stationen zu verschiedenen Teilaspekten eines Themas.",
+        "description":  "Die Lehrkraft richtet Stationen im Raum ein, jede mit einer anderen Aktivität oder einem Teilthema. Die Schüler rotieren in Gruppen nach einem Zeitplan. Ermöglicht vielfältige Zugänge und effiziente Materialnutzung.",
+        "duration":  "20-45m",
+        "tags":  [
+                     "Differenzierung",
+                     "Aktives Lernen",
+                     "Kollaborativ"
+                 ]
+    },
+    {
+        "id":  "method-learningpaceduet",
+        "type":  "method",
+        "title":  "Lerntempoduett",
+        "summary":  "Zweierteams arbeiten Aufgabe für Aufgabe im eigenen Tempo und helfen sich gegenseitig.",
+        "description":  "Zwei Schüler bearbeiten dieselbe Aufgabenfolge in ihrem eigenen Tempo. Wer einen Schritt abschließt, wird zum Tutor, bis der Partner aufholt. Verbindet Eigenverantwortung mit gegenseitiger Unterstützung.",
+        "duration":  "15-30m",
+        "tags":  [
+                      "Kollaborativ",
+                      "Differenzierung",
+                      "Aktives Lernen"
+                  ]
+     },
+    {
+        "id":  "phase-homework",
+        "type":  "phase",
+        "title":  "Hausaufgabenbesprechung",
+        "summary":  "Lehrkraft und Schüler besprechen Hausaufgaben, klären Missverständnisse und geben Feedback.",
+        "description":  "Die Lehrkraft initiiert eine strukturierte Besprechung der Hausaufgaben der vorherigen Stunde. Die Schüler vergleichen Lösungen, stellen Fragen zu Schwierigkeiten und erhalten korrigierendes Feedback. Die Lehrkraft greift typische Fehler auf und verknüpft die Erkenntnisse mit den Zielen der aktuellen Stunde.",
+        "duration":  "5-15m",
+        "tags":  [
+                      "Wiederholung",
+                      "Formative Evaluation",
+                      "Universell"
+                  ]
+     },
+    {
+        "id":  "phase-consolidation",
+        "type":  "phase",
+        "title":  "Ergebnissicherung / Tafelbildsicherung",
+        "summary":  "Die Schüler halten die zentralen Lernergebnisse der Stunde schriftlich und strukturiert fest.",
+        "description":  "Die Lehrkraft leitet die Schüler an, die wesentlichen Inhalte der Stunde zusammenzufassen und in strukturierter Form zu sichern (z. B. Tafelbild-Übertrag, geführtes Mitschreiben, Zusammenfassung). Diese Phase stellt sicher, dass jede Schülerin und jeder Schüler eine vollständige und korrekte Referenz für die Nachbereitung und Wiederholung besitzt.",
+        "duration":  "5-10m",
+        "tags":  [
+                      "Synthese",
+                      "Klarheit",
+                      "Universell"
+                  ]
+     },
+    {
+        "id":  "phase-repetition",
+        "type":  "phase",
+        "title":  "Wiederholung / Übungsphase",
+        "summary":  "Gezielte Wiederholung von Kernwissen, Vokabeln oder Prozeduren zur Automatisierung.",
+        "description":  "Die Lehrkraft führt eine kurze, fokussierte Übungseinheit zu bereits gelerntem Stoff durch, z. B. Einmaleins, Vokabeln, Grammatikformen oder Kernfakten. Die Schüler antworten einzeln, im Chor oder in schnellen Partnerquizzen. Fördert das Langzeitbehalten und die Geläufigkeit durch Überlernen.",
+        "duration":  "5-10m",
+        "tags":  [
+                      "Kognitionswissenschaft",
+                      "Kompetenzorientierung",
+                      "Universell"
+                  ]
+     }
+]

@@ -3,6 +3,7 @@ import { X, FileText, Network, Calendar, User, BookOpen } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore, type LessonData, type MindmapData } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 import {
   ReactFlow,
   Background,
@@ -90,6 +91,7 @@ function escapeHtml(text: string): string {
 
 export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }: Props) {
   const { vaultPath } = useAppStore();
+  const { t } = useTranslation();
   const [lessonData, setLessonData] = useState<LessonData | null>(null);
   const [mindmapData, setMindmapData] = useState<MindmapData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,9 +99,9 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   const fileName = useMemo(() => {
-    if (!relativePath) return "Preview";
+    if (!relativePath) return t("vaultPreview.title");
     return relativePath.split("/").pop()?.replace(/\.json$/i, "") || relativePath;
-  }, [relativePath]);
+  }, [relativePath, t]);
 
   // Load content when modal opens
   useEffect(() => {
@@ -122,7 +124,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
 
         const present = await exists(fullPath);
         if (!present) {
-          if (!cancelled) setError("File not found in vault.");
+          if (!cancelled) setError(t("vaultPreview.fileNotFound"));
           return;
         }
 
@@ -136,7 +138,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
         }
       } catch (err) {
         console.error("Failed to load preview:", err);
-        if (!cancelled) setError("Could not load preview: " + String(err));
+        if (!cancelled) setError(t("vaultPreview.couldNotLoad", { error: String(err) }));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -145,7 +147,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
     return () => {
       cancelled = true;
     };
-  }, [open, relativePath, vaultPath, itemType]);
+  }, [open, relativePath, vaultPath, itemType, t]);
 
   // Esc to close
   useEffect(() => {
@@ -168,7 +170,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
 
   // Format metadata dates
   const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "Not set";
+    if (!dateStr) return t("vaultPreview.notSet");
     try {
       const date = new Date(dateStr);
       return date.toLocaleDateString(undefined, { 
@@ -185,7 +187,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
   if (!open || !relativePath) return null;
 
   const Icon = itemType === "lesson" ? FileText : Network;
-  const typeLabel = itemType === "lesson" ? "Lesson Plan" : "Mindmap";
+  const typeLabel = itemType === "lesson" ? t("vaultPreview.lessonPlan") : t("vaultPreview.mindmap");
 
   return (
     <div
@@ -216,7 +218,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
           <button
             onClick={onClose}
             className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded-md transition-colors"
-            title="Close (Esc)"
+            title={t("materialPreview.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -226,7 +228,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
         <div className="flex-1 overflow-auto">
           {loading && (
             <div className="h-full flex items-center justify-center text-gray-400">
-              Loading preview...
+              {t("vaultPreview.loading")}
             </div>
           )}
 
@@ -248,35 +250,35 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">Teacher</div>
-                      <div className="text-sm text-gray-200">{lessonData.metadata?.teacher || "Not set"}</div>
+                      <div className="text-xs text-gray-500">{t("vaultPreview.teacher")}</div>
+                      <div className="text-sm text-gray-200">{lessonData.metadata?.teacher || t("vaultPreview.notSet")}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">Subject</div>
-                      <div className="text-sm text-gray-200">{lessonData.metadata?.subject || "Not set"}</div>
+                      <div className="text-xs text-gray-500">{t("vaultPreview.subject")}</div>
+                      <div className="text-sm text-gray-200">{lessonData.metadata?.subject || t("vaultPreview.notSet")}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">Created</div>
+                      <div className="text-xs text-gray-500">{t("vaultPreview.created")}</div>
                       <div className="text-sm text-gray-200">{formatDate(lessonData.metadata?.createdAt)}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">Planned For</div>
+                      <div className="text-xs text-gray-500">{t("vaultPreview.plannedFor")}</div>
                       <div className="text-sm text-gray-200">{formatDate(lessonData.metadata?.plannedFor)}</div>
                     </div>
                   </div>
                 </div>
                 {lessonData.notes && (
                   <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--tp-b-1, #2d2d2d)" }}>
-                    <div className="text-xs text-gray-500 mb-1">Notes</div>
+                    <div className="text-xs text-gray-500 mb-1">{t("vaultPreview.notes")}</div>
                     <div className="text-sm text-gray-300 whitespace-pre-wrap">{lessonData.notes}</div>
                   </div>
                 )}
@@ -310,6 +312,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
 
 // Read-only mindmap preview component
 function MindmapPreview({ nodes, edges }: { nodes: any[]; edges: any[] }) {
+  const { t } = useTranslation();
   const [rfNodes, setRfNodes] = useState<Node[]>([]);
   const [rfEdges, setRfEdges] = useState<Edge[]>([]);
 
@@ -319,7 +322,7 @@ function MindmapPreview({ nodes, edges }: { nodes: any[]; edges: any[] }) {
       id: n.id || String(Math.random()),
       position: { x: n.position?.x || 0, y: n.position?.y || 0 },
       data: { 
-        label: n.data?.label || "Untitled",
+        label: n.data?.label || t("mindmap.newIdea"),
         style: n.data?.style || {}
       },
       style: {
@@ -350,7 +353,7 @@ function MindmapPreview({ nodes, edges }: { nodes: any[]; edges: any[] }) {
   if (rfNodes.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-gray-400">
-        No nodes in this mindmap
+        {t("vaultPreview.noNodes")}
       </div>
     );
   }

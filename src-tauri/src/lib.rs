@@ -239,9 +239,6 @@ fn ensure_ollama_server_started() {
 
 /// Kill the Ollama server if we started it.
 fn stop_ollama_server() {
-    if !OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
-        return;
-    }
     // Try killing via the Child handle first (works when serve runs in-process).
     if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
         if let Some(ref mut child) = *guard {

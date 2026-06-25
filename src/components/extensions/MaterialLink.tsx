@@ -8,6 +8,7 @@ import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAppStore } from "../../store";
+import { useTranslation } from "../../i18n/useTranslation";
 
 interface LinkContextMenuState {
   x: number;
@@ -28,9 +29,10 @@ function clampMenuToViewport(
 }
 
 const MaterialLinkComponent = (props: NodeViewProps) => {
+  const { t } = useTranslation();
   const { vaultPath } = useAppStore();
   const filePath = String(props.node.attrs.filePath ?? props.node.attrs.fileName ?? "");
-  const fileName = filePath ? filePath.split("/").pop() || filePath : "Material";
+  const fileName = filePath ? filePath.split("/").pop() || filePath : t('editor.materialLink.material');
   const itemType = props.node.attrs.itemType === "folder" ? "folder" : "file";
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtmlSrc, setPreviewHtmlSrc] = useState<string | null>(null);
@@ -129,13 +131,13 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     try {
       const isPresent = await exists(fullPath);
       if (!isPresent) {
-        alert(`Material path not found: ${filePath}`);
+        alert(t('editor.materialLink.pathNotFound', { path: filePath }));
         return;
       }
       await invoke("open_file_in_default_app", { path: fullPath });
     } catch (error) {
       console.error("Failed to open file", error);
-      alert("Could not open this material item in the default app.");
+      alert(t('editor.materialLink.couldNotOpen'));
     }
   };
 
@@ -146,13 +148,13 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     try {
       const isPresent = await exists(fullPath);
       if (!isPresent) {
-        alert(`Material path not found: ${filePath}`);
+        alert(t('editor.materialLink.pathNotFound', { path: filePath }));
         return;
       }
       await revealItemInDir(fullPath);
     } catch (error) {
       console.error("Failed to reveal file", error);
-      alert("Could not reveal this item in your file manager.");
+      alert(t('editor.materialLink.couldNotReveal'));
     }
   };
 
@@ -171,13 +173,13 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
     try {
       const isPresent = await exists(fullPath);
       if (!isPresent) {
-        setPreviewError(`Material path not found: ${filePath}`);
+        setPreviewError(t('editor.materialLink.pathNotFound', { path: filePath }));
         setPreviewOpen(true);
         return;
       }
 
       if (!previewKind) {
-        setPreviewError("Preview is not available for this file type.");
+        setPreviewError(t('editor.materialLink.previewNotAvailable'));
         setPreviewOpen(true);
         return;
       }
@@ -202,7 +204,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
       setPreviewOpen(true);
     } catch (error) {
       console.error("Failed to preview file", error);
-      setPreviewError("Could not load a preview for this item.");
+      setPreviewError(t('editor.materialLink.couldNotLoadPreview'));
       setPreviewOpen(true);
     }
   };
@@ -237,7 +239,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
           void handlePreview();
         }}
         className="flex items-center gap-2 px-3 py-2 bg-[#222] border border-[#333] rounded-lg hover:border-[color:var(--tp-accent)] transition-all shadow-sm max-w-full cursor-pointer"
-        title={`${filePath || fileName} — right-click for actions, double-click to preview`}
+        title={t('editor.materialLink.tooltip', { name: filePath || fileName })}
       >
         {itemType === "folder" ? (
           <Folder className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
@@ -261,15 +263,15 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         >
           <button onClick={() => { closeContextMenu(); void handlePreview(); }}>
             <Eye className="w-4 h-4" />
-            <span style={{ flex: 1 }}>Preview</span>
+            <span style={{ flex: 1 }}>{t('editor.materialLink.contextMenuPreview')}</span>
           </button>
           <button onClick={() => { closeContextMenu(); void handleOpen(); }}>
             <ExternalLink className="w-4 h-4" />
-            <span style={{ flex: 1 }}>Open in Default App</span>
+            <span style={{ flex: 1 }}>{t('editor.materialLink.contextMenuOpen')}</span>
           </button>
           <button onClick={() => { closeContextMenu(); void handleReveal(); }}>
             <FolderOpen className="w-4 h-4" />
-            <span style={{ flex: 1 }}>Reveal in Finder</span>
+            <span style={{ flex: 1 }}>{t('editor.materialLink.contextMenuReveal')}</span>
           </button>
           <div className="h-px" />
           <button
@@ -277,7 +279,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
             className="text-red-400"
           >
             <Trash2 className="w-4 h-4" />
-            <span style={{ flex: 1 }}>Remove Link</span>
+            <span style={{ flex: 1 }}>{t('editor.materialLink.contextMenuRemove')}</span>
           </button>
         </div>,
         document.body
@@ -322,7 +324,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
 
               {!previewError && previewKind === "text" && (
                 <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed bg-[#101010] border border-[#2d2d2d] rounded-md p-4">
-                  {previewText || "(Empty file)"}
+                  {previewText || t('editor.materialLink.emptyFile')}
                 </pre>
               )}
             </div>

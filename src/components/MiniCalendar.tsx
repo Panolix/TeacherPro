@@ -12,10 +12,14 @@ import {
   isSameDay,
   isToday,
 } from "date-fns";
+import { de } from "date-fns/locale";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 
 export function MiniCalendar() {
+  const { t, language } = useTranslation();
+  const dateLocale = language === "de" ? de : undefined;
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const { createNewLesson, vaultPath } = useAppStore();
@@ -50,7 +54,7 @@ export function MiniCalendar() {
             className="text-[15px] font-semibold tracking-[-0.01em]"
             style={{ color: "var(--tp-t-1)" }}
           >
-            {format(currentDate, "MMMM yyyy")}
+            {format(currentDate, "MMMM yyyy", { locale: dateLocale })}
           </span>
           <div className="flex gap-1">
             <button
@@ -71,7 +75,7 @@ export function MiniCalendar() {
         </div>
 
         <div className="grid grid-cols-7 gap-[3px] text-center mb-1.5">
-          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) => (
+          {Array.from({ length: 7 }, (_, i) => t(`calendar.dayHeader${i}`)).map((day) => (
             <div
               key={day}
               className="text-[11px] font-semibold uppercase tracking-[0.04em] py-1"
@@ -135,7 +139,7 @@ export function MiniCalendar() {
             }}
           >
             <Plus className="w-4 h-4" />
-            Plan for {format(selectedDate, "MMM d")}
+            {t("calendar.createLesson", { date: format(selectedDate, "MMM d", { locale: dateLocale }) })}
           </button>
         )}
       </div>

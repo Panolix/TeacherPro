@@ -1,6 +1,8 @@
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+import { de } from "date-fns/locale";
 import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
+import { useTranslation } from "../i18n/useTranslation";
 import { useAppStore } from "../store";
 
 export function CalendarView() {
@@ -20,6 +22,9 @@ export function CalendarView() {
     subjects,
     lessonSubjectIndex,
   } = useAppStore();
+
+  const { t, language } = useTranslation();
+  const dateLocale = language === "de" ? de : undefined;
 
   const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
   
@@ -201,7 +206,7 @@ export function CalendarView() {
     }
 
     const names = Array.from(selectedLessons);
-    const confirmed = confirm(`Move ${names.length} selected lesson plan(s) to Trash?`);
+    const confirmed = confirm(t('calendar.confirm.moveMultiple', { count: names.length }));
     if (!confirmed) {
       return;
     }
@@ -230,8 +235,8 @@ export function CalendarView() {
       return;
     }
 
-    const dateLabel = format(date, "EEE, MMM d");
-    const confirmed = confirm(`Move all ${lessons.length} lesson plan(s) for ${dateLabel} to Trash?`);
+    const dateLabel = format(date, "EEE, MMM d", { locale: dateLocale });
+    const confirmed = confirm(t('calendar.confirm.moveAllForDate', { count: lessons.length, date: dateLabel }));
     if (!confirmed) {
       return;
     }
@@ -274,7 +279,7 @@ export function CalendarView() {
             onClick={prevWeek}
             className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
             style={{ color: "var(--tp-t-2)" }}
-            title="Previous week"
+            title={t('calendar.navigation.previousWeek')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -282,7 +287,7 @@ export function CalendarView() {
             onClick={nextWeek}
             className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
             style={{ color: "var(--tp-t-2)" }}
-            title="Next week"
+            title={t('calendar.navigation.nextWeek')}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -296,13 +301,13 @@ export function CalendarView() {
             color: "var(--tp-t-2)",
           }}
         >
-          Today
+          {t('calendar.navigation.today')}
         </button>
         <span
           className="text-[15px] font-semibold tracking-[-0.01em]"
           style={{ color: "var(--tp-t-1)" }}
         >
-          {format(start, "MMM d")} – {format(addDays(start, 6), "MMM d, yyyy")}
+          {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, "MMM d", { locale: dateLocale }), end: format(addDays(start, 6), "MMM d, yyyy", { locale: dateLocale }) })}
         </span>
 
         <div className="flex-1" />
@@ -321,8 +326,8 @@ export function CalendarView() {
         >
           <Trash2 className="h-4 w-4" />
           {isDeletingLessons
-            ? "Moving..."
-            : `Move Selected to Trash (${selectedLessons.size})`}
+            ? t('calendar.actions.moving')
+            : t('calendar.actions.moveSelectedToTrash', { count: selectedLessons.size })}
         </button>
       </div>
 
@@ -360,7 +365,7 @@ export function CalendarView() {
                   className="text-[11px] font-semibold uppercase tracking-[0.08em]"
                   style={{ color: "var(--tp-t-4)" }}
                 >
-                  {format(day, "EEE")}
+                  {format(day, "EEE", { locale: dateLocale })}
                 </div>
                 <div
                   className="text-[17px] font-semibold leading-none mt-0.5 tabular-nums"
@@ -377,7 +382,7 @@ export function CalendarView() {
                     className="h-full flex items-center justify-center text-[12px] italic min-h-[60px]"
                     style={{ color: "var(--tp-t-4)" }}
                   >
-                    Free day
+                    {t('calendar.placeholders.freeDay')}
                   </div>
                 ) : (
                   lessons.map((lesson, lIdx) => {
@@ -399,7 +404,7 @@ export function CalendarView() {
                     const titleEqualsSubject = !!subjectName && derivedTitle.toLowerCase() === subjectName.toLowerCase();
                     const cleanTitle = (derivedTitle && !titleEqualsSubject)
                       ? derivedTitle
-                      : `Lesson · ${format(day, "MMM d")}`;
+                       : t('calendar.defaultLessonTitle', { date: format(day, "MMM d", { locale: dateLocale }) });
                     return (
                       <div
                         key={lIdx}
@@ -442,7 +447,7 @@ export function CalendarView() {
                             onMouseDown={(e) => startMouseDrag(e, lessonName, cleanTitle)}
                             className="h-6 w-6 inline-flex items-center justify-center rounded cursor-grab active:cursor-grabbing select-none"
                             style={{ color: "var(--tp-t-3)" }}
-                            title="Drag to reschedule"
+                            title={t('calendar.tooltips.dragToReschedule')}
                           >
                             <GripVertical className="h-3.5 w-3.5" />
                           </div>
@@ -457,7 +462,7 @@ export function CalendarView() {
                             }}
                             className="h-6 w-6 inline-flex items-center justify-center rounded"
                             style={{ color: isSelected ? "var(--tp-accent)" : "var(--tp-t-3)" }}
-                            title={isSelected ? "Deselect" : "Select"}
+                            title={isSelected ? t('calendar.tooltips.deselect') : t('calendar.tooltips.select')}
                           >
                             {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                           </button>
@@ -467,7 +472,7 @@ export function CalendarView() {
                             <button
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                if (confirm(`Move "${cleanTitle}" to Trash?`)) {
+                                if (confirm(t('calendar.confirm.moveSingle', { title: cleanTitle }))) {
                                   setIsDeletingLessons(true);
                                   try {
                                     await deleteLesson(lessonName);
@@ -478,7 +483,7 @@ export function CalendarView() {
                                     });
                                   } catch (err) {
                                     console.error("Failed to delete lesson:", err);
-                                    alert("Error deleting: " + String(err));
+                                    alert(t("common.deleteError", { detail: String(err) }));
                                   } finally {
                                     setIsDeletingLessons(false);
                                   }
@@ -487,7 +492,7 @@ export function CalendarView() {
                               disabled={isDeletingLessons}
                               className="h-6 w-6 inline-flex items-center justify-center rounded disabled:opacity-30 disabled:cursor-not-allowed hover:text-red-400 hover:bg-red-400/10 active:text-red-500 transition-colors"
                               style={{ color: "var(--tp-t-3)" }}
-                              title="Move to Trash"
+                              title={t('calendar.tooltips.moveToTrash')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -509,7 +514,7 @@ export function CalendarView() {
                   className="flex-1 h-7 inline-flex items-center justify-center gap-1 rounded text-[11.5px] font-medium transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
                   style={{ color: "var(--tp-t-3)" }}
                 >
-                  <Plus className="w-3 h-3" /> Add
+                                   <Plus className="w-3 h-3" /> {t('calendar.actions.add')}
                 </button>
                 <button
                   onClick={() => void handleDeleteAllForDate(day)}
@@ -522,9 +527,9 @@ export function CalendarView() {
                     background: isDeletingLessons ? "transparent" : lessons.length > 0 ? "rgba(239,68,68,0.12)" : "transparent",
                     border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
                   }}
-                  title={isDeletingLessons ? "Deleting..." : lessons.length > 0 ? `Move all ${lessons.length} lesson(s) to Trash` : "No lessons to delete"}
+                  title={isDeletingLessons ? t('calendar.actions.deleting') : lessons.length > 0 ? t('calendar.tooltips.moveAllForDate', { count: lessons.length }) : t('calendar.tooltips.noLessons')}
                 >
-                  <Trash2 className="w-3 h-3" /> All
+                                  <Trash2 className="w-3 h-3" /> {t('calendar.actions.all')}
                 </button>
               </div>
             </div>

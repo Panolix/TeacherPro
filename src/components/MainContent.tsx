@@ -1,5 +1,6 @@
 import { FolderOpen } from "lucide-react";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 import { Editor } from "./Editor";
 import { CalendarView } from "./CalendarView";
 import { MindmapView } from "./MindmapView";
@@ -7,6 +8,7 @@ import { TopBar } from "./TopBar";
 import { StatusBar } from "./StatusBar";
 
 export function MainContent() {
+  const { t } = useTranslation();
   const { vaultPath, openVault, activeFilePath, currentView } = useAppStore();
   const editorDocumentOpen = currentView === "editor" && !!activeFilePath;
 
@@ -28,10 +30,9 @@ export function MainContent() {
       >
         {!vaultPath ? (
           <div className="text-center mt-20 max-w-xl mx-auto p-8">
-            <h1 className="text-4xl font-bold text-gray-100 mb-6">Welcome to TeacherPro</h1>
+            <h1 className="text-4xl font-bold text-gray-100 mb-6">{t('main.welcome')}</h1>
             <p className="text-gray-400 mb-8 leading-relaxed">
-              Start by opening a Vault on your computer. Your Vault is a standard folder where all your lesson plans,
-              mindmaps, and materials will be securely organized and stored locally.
+              {t('main.description')}
             </p>
 
             <button
@@ -39,7 +40,7 @@ export function MainContent() {
               className="tp-accent-btn text-white px-6 py-2.5 rounded-lg shadow-sm transition-colors font-medium flex items-center gap-2 mx-auto"
             >
               <FolderOpen className="w-5 h-5" />
-              Select Vault Folder
+              {t('main.selectVault')}
             </button>
           </div>
         ) : (

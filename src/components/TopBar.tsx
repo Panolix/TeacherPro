@@ -13,6 +13,7 @@ import {
   Table,
 } from "lucide-react";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 
 /**
  * TopBar — shared management bar across all views.
@@ -30,6 +31,7 @@ export function TopBar() {
     setCurrentView,
     editorActions,
   } = useAppStore();
+  const { t } = useTranslation();
 
   const lessonName = activeFilePath
     ? (activeFilePath.split(/[\/\\]/).pop() || "").replace(/\.json$/i, "")
@@ -62,7 +64,7 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            title="Expand sidebar"
+            title={t('topbar.expandSidebar')}
             className="tp-chrome-btn h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors"
             style={{ color: "var(--tp-t-2)" }}
           >
@@ -87,10 +89,10 @@ export function TopBar() {
             borderColor: currentView === "calendar" ? "var(--tp-accent)" : "var(--tp-b-1)",
             color: currentView === "calendar" ? "var(--tp-t-1)" : "var(--tp-t-2)",
           }}
-          title="Open Weekly Planner"
+          title={t('topbar.openWeeklyPlanner')}
         >
           <CalendarDays className="w-3.5 h-3.5" />
-          <span>Weekly View</span>
+          <span>{t('topbar.weeklyView')}</span>
         </button>
       </div>
 
@@ -122,7 +124,7 @@ export function TopBar() {
               className="truncate font-medium"
               style={{ color: "var(--tp-t-1)" }}
             >
-              {lessonName || "Mindmaps"}
+              {lessonName || t('topbar.mindmaps')}
             </span>
           </>
         )}
@@ -133,7 +135,7 @@ export function TopBar() {
               className="truncate font-medium"
               style={{ color: "var(--tp-t-1)" }}
             >
-              Weekly Planner
+              {t('topbar.weeklyPlanner')}
             </span>
           </>
         )}
@@ -144,26 +146,26 @@ export function TopBar() {
         {currentView === "editor" && editorActions && (
           <>
             <TopAct
-              label="Insert Lesson Table"
+              label={t('topbar.insertLessonTable')}
               icon={<Table className="w-3.5 h-3.5" />}
               onClick={editorActions.insertTable}
             />
             {editorActions.aiEnabled && (
               <TopAct
-                label="AI Chat"
+                label={t('topbar.aiChat')}
                 icon={<MessageSquare className="w-3.5 h-3.5" />}
                 onClick={editorActions.toggleChat}
                 active={editorActions.chatOpen}
               />
             )}
             <TopAct
-              label="Notes"
+              label={t('topbar.notes')}
               icon={<FileText className="w-3.5 h-3.5" />}
               onClick={editorActions.toggleNotes}
               active={editorActions.notesOpen}
             />
             <TopAct
-              label="Methods"
+              label={t('topbar.methods')}
               icon={<BookOpen className="w-3.5 h-3.5" />}
               onClick={editorActions.toggleMethodBank}
               active={editorActions.methodBankOpen}
@@ -175,27 +177,27 @@ export function TopBar() {
             />
             <TopAct
               iconOnly
-              title="Preview PDF"
+              title={t('topbar.previewPdf')}
               icon={<Eye className="w-3.5 h-3.5" />}
               onClick={editorActions.preview}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
               iconOnly
-              title="Print or Save PDF"
+              title={t('topbar.printSavePdf')}
               icon={<Printer className="w-3.5 h-3.5" />}
               onClick={editorActions.print}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
               iconOnly
-              title="Export PDF"
+              title={t('topbar.exportPdf')}
               icon={<Download className="w-3.5 h-3.5" />}
               onClick={editorActions.export}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
-              label="Save"
+              label={t('topbar.save')}
               icon={<Save className="w-3.5 h-3.5" />}
               onClick={editorActions.save}
               primary

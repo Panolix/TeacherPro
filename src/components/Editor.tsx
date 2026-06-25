@@ -20,8 +20,10 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { de as deLocale } from "date-fns/locale";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { MaterialLink } from "./extensions/MaterialLink";
@@ -99,15 +101,9 @@ interface SlashMenuState {
   to: number;
   x: number;
   y: number;
-  requiredType: MethodBankType;
+  requiredType: MethodBankType | "time";
   selectedIndex: number;
 }
-
-const METHOD_TYPE_LABELS: Record<MethodBankType, string> = {
-  phase: "Phase",
-  socialForm: "Social Form",
-  method: "Method",
-};
 
 const METHOD_TYPE_ACCENT: Record<MethodBankType, string> = {
   phase: "text-cyan-300",
@@ -522,6 +518,7 @@ const MenuBar = ({
   editor: any;
   onInsertCustomTable: () => void;
 }) => {
+  const { t } = useTranslation();
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
   const [fontSizeOpen, setFontSizeOpen] = useState(false);
@@ -618,7 +615,7 @@ const MenuBar = ({
             border: "1px solid var(--tp-b-2)",
             color: "var(--tp-t-1)",
           }}
-          title="Font size"
+          title={t("editor.toolbar.fontSize")}
           aria-haspopup="listbox"
           aria-expanded={fontSizeOpen}
         >
@@ -682,7 +679,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleBold().run()}
         disabled={!editor.can().chain().focus().toggleBold().run()}
         className={railBtn(editor.isActive("bold"))}
-        title="Bold (⌘B)"
+        title={t("editor.toolbar.bold")}
       >
         <Bold className="w-4 h-4" />
       </button>
@@ -690,7 +687,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleItalic().run()}
         disabled={!editor.can().chain().focus().toggleItalic().run()}
         className={railBtn(editor.isActive("italic"))}
-        title="Italic (⌘I)"
+        title={t("editor.toolbar.italic")}
       >
         <Italic className="w-4 h-4" />
       </button>
@@ -698,7 +695,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         disabled={!editor.can().chain().focus().toggleUnderline().run()}
         className={railBtn(editor.isActive("underline"))}
-        title="Underline (⌘U)"
+        title={t("editor.toolbar.underline")}
       >
         <Underline className="w-4 h-4" />
       </button>
@@ -706,7 +703,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleStrike().run()}
         disabled={!editor.can().chain().focus().toggleStrike().run()}
         className={railBtn(editor.isActive("strike"))}
-        title="Strikethrough"
+        title={t("editor.toolbar.strikethrough")}
       >
         <Strikethrough className="w-4 h-4" />
       </button>
@@ -724,7 +721,7 @@ const MenuBar = ({
         <div className="flex gap-0.5">
           <label
             className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
-            title="Text Color"
+            title={t("editor.toolbar.textColor")}
             style={{ color: "var(--tp-t-1)" }}
           >
             A
@@ -742,7 +739,7 @@ const MenuBar = ({
           <button
             onClick={() => editor.chain().focus().unsetColor().run()}
             className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
-            title="Reset Text Color"
+            title={t("editor.toolbar.resetTextColor")}
           >
             A-
           </button>
@@ -750,7 +747,7 @@ const MenuBar = ({
         <div className="flex gap-0.5">
           <label
             className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
-            title="Underline Color"
+            title={t("editor.toolbar.underlineColor")}
             style={{ color: "var(--tp-t-1)" }}
           >
             U
@@ -781,7 +778,7 @@ const MenuBar = ({
                 .run()
             }
             className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
-            title="Reset Underline Color"
+            title={t("editor.toolbar.resetUnderlineColor")}
           >
             U-
           </button>
@@ -789,7 +786,7 @@ const MenuBar = ({
         <div className="flex gap-0.5">
           <label
             className="inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
-            title="Highlight Color"
+            title={t("editor.toolbar.highlightColor")}
             style={{ background: currentHighlightColor, color: "#1a1a1a" }}
           >
             H
@@ -805,7 +802,7 @@ const MenuBar = ({
           <button
             onClick={() => editor.chain().focus().unsetHighlight().run()}
             className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
-            title="Clear Highlight"
+            title={t("editor.toolbar.clearHighlight")}
           >
             H-
           </button>
@@ -818,21 +815,21 @@ const MenuBar = ({
       <button
         onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
         className={railBtn(editor.isActive("heading", { level: 1 }))}
-        title="Heading 1"
+        title={t("editor.toolbar.heading1")}
       >
         <Heading1 className="w-4 h-4" />
       </button>
       <button
         onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         className={railBtn(editor.isActive("heading", { level: 2 }))}
-        title="Heading 2"
+        title={t("editor.toolbar.heading2")}
       >
         <Heading2 className="w-4 h-4" />
       </button>
       <button
         onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         className={railBtn(editor.isActive("heading", { level: 3 }))}
-        title="Heading 3"
+        title={t("editor.toolbar.heading3")}
       >
         <Heading3 className="w-4 h-4" />
       </button>
@@ -843,14 +840,14 @@ const MenuBar = ({
       <button
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         className={railBtn(editor.isActive("bulletList"))}
-        title="Bullet list"
+        title={t("editor.toolbar.bulletList")}
       >
         <List className="w-4 h-4" />
       </button>
       <button
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         className={railBtn(editor.isActive("orderedList"))}
-        title="Ordered list"
+        title={t("editor.toolbar.orderedList")}
       >
         <ListOrdered className="w-4 h-4" />
       </button>
@@ -861,7 +858,7 @@ const MenuBar = ({
       <button
         onClick={() => editor.chain().focus().setHorizontalRule().run()}
         className={railBtn(false)}
-        title="Horizontal rule"
+        title={t("editor.toolbar.horizontalRule")}
       >
         <MinusIcon className="w-4 h-4" />
       </button>
@@ -871,7 +868,7 @@ const MenuBar = ({
           editor.chain().focus().selectAll().clearNodes().unsetAllMarks().run();
         }}
         className={railBtn(false)}
-        title="Clear all formatting"
+        title={t("editor.toolbar.clearFormatting")}
       >
         <Eraser className="w-4 h-4" />
       </button>
@@ -882,7 +879,7 @@ const MenuBar = ({
       <button
         onClick={onInsertCustomTable}
         className={railBtn(false)}
-        title="Insert Custom Table"
+        title={t("editor.toolbar.insertTable")}
       >
         <TableIcon className="w-4 h-4" />
       </button>
@@ -894,7 +891,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().chain().focus().undo().run()}
         className={`${railBtn(false)} disabled:opacity-40`}
-        title="Undo"
+        title={t("editor.toolbar.undo")}
       >
         <Undo className="w-4 h-4" />
       </button>
@@ -902,7 +899,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().chain().focus().redo().run()}
         className={`${railBtn(false)} disabled:opacity-40`}
-        title="Redo"
+        title={t("editor.toolbar.redo")}
       >
         <Redo className="w-4 h-4" />
       </button>
@@ -939,7 +936,14 @@ export function Editor() {
     lessonZoomFixed,
     setLessonZoomMode,
     setLessonZoomFixed,
+    language,
   } = useAppStore();
+  const { t } = useTranslation();
+  const getMethodTypeLabel = (type: MethodBankType): string => {
+    if (type === "phase") return t("editor.methodBank.phase");
+    if (type === "socialForm") return t("editor.methodBank.social");
+    return t("editor.methodBank.method");
+  };
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
   const [lessonNotes, setLessonNotes] = useState(activeFileContent?.notes || "");
@@ -1120,7 +1124,8 @@ export function Editor() {
       setMethodBankError(null);
 
       try {
-        const response = await fetch("/method-bank.json", { cache: "no-store" });
+        const url = language === "de" ? "/method-bank.de.json" : "/method-bank.json";
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -1133,7 +1138,7 @@ export function Editor() {
       } catch (error) {
         if (!isCancelled) {
           setMethodBankItems([]);
-          setMethodBankError(`Could not load Method Bank: ${String(error)}`);
+          setMethodBankError(`${t("editor.methodBank.loadingFailed")}: ${String(error)}`);
         }
       } finally {
         if (!isCancelled) {
@@ -1281,7 +1286,7 @@ export function Editor() {
       FontSize,
       UnderlineColor,
       Placeholder.configure({
-        placeholder: "Start typing or add a lesson plan table...",
+        placeholder: t("editor.placeholder"),
       }),
       Table.configure({
         resizable: true,
@@ -1291,7 +1296,7 @@ export function Editor() {
       TableCell,
       MaterialLink,
     ],
-    content: activeFileContent?.content || `<h2>New Lesson Plan</h2>`,
+    content: activeFileContent?.content || `<h2>${language === "de" ? "Neue Stunde" : "New Lesson Plan"}</h2>`,
   });
 
   useEffect(() => {
@@ -1386,8 +1391,8 @@ export function Editor() {
   const insertLessonTable = () => {
     if (!editor) return;
 
-    // We define the column widths: Time (80px), Phase (120px), LTA (350px), Social (100px), Media (150px)
-    const colWidths = [80, 120, 350, 100, 150];
+    // Column widths: Time (80px), Phase (120px), LTA (350px), Social (140px), Media (150px)
+    const colWidths = [80, 120, 350, 140, 150];
     const bodyRowCount = Math.max(1, Math.min(12, Math.round(defaultLessonTableBodyRows || 4)));
 
     const bodyRows = Array.from({ length: bodyRowCount }, () => ({
@@ -1408,11 +1413,11 @@ export function Editor() {
           {
             type: "tableRow",
             content: [
-              { type: "tableHeader", attrs: { colwidth: [colWidths[0]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Time" }] }] },
-              { type: "tableHeader", attrs: { colwidth: [colWidths[1]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Phase" }] }] },
-              { type: "tableHeader", attrs: { colwidth: [colWidths[2]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Learning- / Teaching Arrangement" }] }] },
-              { type: "tableHeader", attrs: { colwidth: [colWidths[3]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Social Form" }] }] },
-              { type: "tableHeader", attrs: { colwidth: [colWidths[4]] }, content: [{ type: "paragraph", content: [{ type: "text", text: "Media" }] }] },
+              { type: "tableHeader", attrs: { colwidth: [colWidths[0]] }, content: [{ type: "paragraph", content: [{ type: "text", text: t("editor.table.time") }] }] },
+              { type: "tableHeader", attrs: { colwidth: [colWidths[1]] }, content: [{ type: "paragraph", content: [{ type: "text", text: t("editor.table.phase") }] }] },
+              { type: "tableHeader", attrs: { colwidth: [colWidths[2]] }, content: [{ type: "paragraph", content: [{ type: "text", text: t("editor.table.lta") }] }] },
+              { type: "tableHeader", attrs: { colwidth: [colWidths[3]] }, content: [{ type: "paragraph", content: [{ type: "text", text: t("editor.table.socialForm") }] }] },
+              { type: "tableHeader", attrs: { colwidth: [colWidths[4]] }, content: [{ type: "paragraph", content: [{ type: "text", text: t("editor.table.media") }] }] },
             ],
           },
           ...bodyRows,
@@ -1513,7 +1518,7 @@ export function Editor() {
 
     const parsedPlannedFor = parseEuropeanDateToIso(plannedForInput);
     if (parsedPlannedFor === undefined) {
-      alert("Please enter Planned For date as DD/MM/YYYY.");
+      alert(t("editor.errors.invalidDate"));
       return;
     }
 
@@ -1620,13 +1625,13 @@ export function Editor() {
       }
 
       if (!aiEnabled) {
-        setAiStatusMessage("Enable Local AI first in Settings > AI.");
+        setAiStatusMessage(t("editor.aiMenu.enableLocalAiFirst"));
         return;
       }
 
       const selectedRange = explicitSelection || getSelectedTextRange();
       if (!selectedRange) {
-        setAiStatusMessage("Select text first to use AI actions.");
+        setAiStatusMessage(t("editor.aiMenu.selectTextFirst"));
         return;
       }
 
@@ -1640,7 +1645,7 @@ export function Editor() {
         .textBetween(selectedRange.from, selectedRange.to, "\n", " ")
         .trim();
       if (!sourceText) {
-        setAiStatusMessage("Selected text is empty.");
+        setAiStatusMessage(t("editor.aiMenu.selectedTextEmpty"));
         return;
       }
 
@@ -1674,14 +1679,14 @@ export function Editor() {
 
       const rewriteSystemPrompt =
         mode === "rewrite"
-          ? `You rewrite text. Tone: ${tone}. Always change the wording — never repeat the input verbatim. Output ONLY the rewritten text.`
-          : `You translate text into ${targetLang}. Output ONLY the translation.`;
+          ? t("aiPrompts.rewriteSystem")
+          : t("aiPrompts.translateSystem", { language: targetLang });
 
       const statusLabel = mode === "translate"
-        ? `AI translating to ${targetLang} with ${aiRewriteTranslateModelId}...`
+        ? t("editor.chat.translating", { language: targetLang })
         : tone === "improve"
-          ? `AI rewriting selection with ${aiRewriteTranslateModelId}...`
-          : `AI rewriting (${tone}) with ${aiRewriteTranslateModelId}...`;
+          ? t("editor.chat.rewriting")
+          : t("editor.chat.rewritingWithTone", { tone });
 
       const rewriteRuntimeDefaults = getAiModelRuntimeDefaults(aiRewriteTranslateModelId);
 
@@ -1734,12 +1739,12 @@ export function Editor() {
 
         setAiStatusMessage(
           mode === "rewrite"
-            ? `AI rewrite applied (${aiRewriteTranslateModelId}).`
-            : `AI translation applied (${aiRewriteTranslateModelId}).`,
+            ? t("editor.chat.rewriteApplied", { time: aiRewriteTranslateModelId })
+            : t("editor.chat.translationApplied", { time: aiRewriteTranslateModelId }),
         );
       } catch (error) {
         console.error("AI action failed:", error);
-        setAiStatusMessage(`AI action failed: ${String(error)}`);
+        setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
       } finally {
         setIsAiBusy(false);
       }
@@ -1824,7 +1829,7 @@ export function Editor() {
 
   const handleSubmitChat = useCallback(async (overrideText?: string) => {
     if (!aiEnabled) {
-      setAiStatusMessage("Enable Local AI first in Settings > AI.");
+      setAiStatusMessage(t("editor.aiMenu.enableLocalAiFirst"));
       return;
     }
 
@@ -1843,7 +1848,7 @@ export function Editor() {
     setChatMessages((previous) => [...previous, userMessage]);
     setChatInput("");
     setIsChatBusy(true);
-    setAiStatusMessage(`AI chat is thinking with ${aiDefaultModelId}...`);
+    setAiStatusMessage(t("editor.chat.thinkingWith", { model: aiDefaultModelId }));
 
     try {
       const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
@@ -1878,20 +1883,7 @@ export function Editor() {
         "Assistant:",
       ].join("\n");
 
-      const effectiveSystemPrompt = aiSystemPrompt ||
-        `You are TeacherPro Assistant, an expert educational advisor built into a lesson planning app. The teacher's full lesson plan is always included at the top of every message — you MUST use it to answer. Never ask the teacher to paste or provide their lesson plan.
-
-If the lesson plan is empty or has minimal content, acknowledge that and offer to help build it out.
-
-You can help with:
-- Summarizing the lesson plan or any section of it
-- Identifying key themes, topics, and learning objectives
-- Suggesting improvements to structure, activities, or wording
-- Recommending teaching strategies, differentiation ideas, or resources
-- Discussing pedagogy, timing, or curriculum alignment
-- Answering any questions the teacher has about their lesson
-
-Be concise but thorough. Use bullet points when listing multiple items. Never modify the lesson plan directly — only discuss and advise.`;
+      const effectiveSystemPrompt = aiSystemPrompt || t("aiPrompts.chatSystem");
 
       logDebug(
         "ai",
@@ -1910,7 +1902,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       });
 
       const { thinking: thinkingContent, response: cleanResponse } = parseThinkingFromResponse(response);
-      const assistantText = cleanResponse || "(No response)";
+      const assistantText = cleanResponse || t("editor.chat.noResponse");
 
       setChatMessages((previous) => [
         ...previous,
@@ -1922,16 +1914,16 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           timestamp: Date.now(),
         },
       ]);
-      setAiStatusMessage(`AI chat response ready (${aiDefaultModelId}).`);
+      setAiStatusMessage(t("editor.chat.responseReady", { time: aiDefaultModelId }));
     } catch (error) {
       console.error("AI chat failed:", error);
-      setAiStatusMessage(`AI chat failed: ${String(error)}`);
+      setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
       setChatMessages((previous) => [
         ...previous,
         {
           id: `assistant-error-${Date.now()}`,
           role: "assistant",
-          text: `I hit an error: ${String(error)}`,
+          text: t("editor.errors.aiRewriteFailed", { error: String(error) }),
           timestamp: Date.now(),
         },
       ]);
@@ -1983,7 +1975,26 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     : null;
 
   const getSlashSuggestions = useCallback(
-    (requiredType: MethodBankType, query: string): MethodBankItem[] => {
+    (requiredType: string, query: string): MethodBankItem[] => {
+      if (requiredType === "time") {
+        const allTimes = [
+          "5 min", "10 min", "15 min", "20 min", "25 min", "30 min",
+          "35 min", "40 min", "45 min", "50 min", "55 min", "60 min",
+        ];
+        const normalizedQuery = query.trim().toLowerCase();
+        const filtered = normalizedQuery
+          ? allTimes.filter((t) => t.includes(normalizedQuery))
+          : allTimes;
+        return filtered.slice(0, 12).map((time) => ({
+          id: `time-${time.replace(/\s/g, "")}`,
+          type: "method" as MethodBankType,
+          title: time,
+          summary: "",
+          description: "",
+          duration: time,
+          tags: [],
+        }));
+      }
       const normalizedQuery = query.trim().toLowerCase();
       return methodBankItems
         .filter((entry) => {
@@ -1999,7 +2010,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             entry.tags.some((tag) => tag.toLowerCase().includes(normalizedQuery))
           );
         })
-        .slice(0, 7);
+        .slice(0, 30);
     },
     [methodBankItems],
   );
@@ -2037,7 +2048,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     return rowIndex > 0;
   }, [editor]);
 
-  const getSelectionMethodType = useCallback((): MethodBankType | null => {
+  const getSelectionMethodType = useCallback((): MethodBankType | "time" | null => {
     if (!editor) {
       return null;
     }
@@ -2074,6 +2085,9 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
     }
 
     const cellIndex = $from.index(rowDepth);
+    if (cellIndex === 0) {
+      return "time";
+    }
     if (cellIndex === 1) {
       return "phase";
     }
@@ -2985,9 +2999,9 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
     const subjectName = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-name-print");
     if (subjectName) {
-      subjectName.textContent = subject.trim() || "Not set";
+      subjectName.textContent = subject.trim() || t("editor.meta.notSet");
     } else if (subjectText) {
-      subjectText.textContent = subject.trim() || "Not set";
+      subjectText.textContent = subject.trim() || t("editor.meta.notSet");
     }
 
     const exportSubjectDot = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-dot-print");
@@ -3002,13 +3016,13 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
     const teacherText = clonedElement.querySelector<HTMLElement>(".lesson-export-teacher-text");
     if (teacherText) {
-      teacherText.textContent = teacher.trim() || "Not set";
+      teacherText.textContent = teacher.trim() || t("editor.meta.notSet");
       teacherText.style.display = "inline";
     }
 
     const plannedText = clonedElement.querySelector<HTMLElement>(".lesson-export-planned-text");
     if (plannedText) {
-      plannedText.textContent = plannedForInput.trim() || "Not set";
+      plannedText.textContent = plannedForInput.trim() || t("editor.meta.notSet");
       plannedText.style.display = "inline";
     }
 
@@ -3041,7 +3055,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
   const handleExportPDF = async () => {
     if (!vaultPath) {
-      alert("Please open a vault before exporting.");
+      alert(t("editor.pdf.pleaseOpenVault"));
       return;
     }
 
@@ -3058,11 +3072,11 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       });
 
       if (savedPath) {
-        alert("Lesson plan exported successfully.");
+        alert(t("editor.pdf.exportedSuccessfully"));
       }
     } catch (error) {
       console.error("Lesson PDF export failed:", error);
-      alert(`Export failed: ${String(error)}`);
+      alert(t("editor.pdf.exportFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -3080,7 +3094,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       });
     } catch (error) {
       console.error("Lesson PDF preview failed:", error);
-      alert(`Preview failed: ${String(error)}`);
+      alert(t("editor.pdf.previewFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -3097,7 +3111,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
   const handlePrintPDF = async () => {
     if (!vaultPath) {
-      alert("Please open a vault before printing.");
+      alert(t("editor.pdf.pleaseOpenVault"));
       return;
     }
 
@@ -3138,14 +3152,14 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
-      alert(`Print failed: ${String(error)}`);
+      alert(t("editor.pdf.printFailed", { error: String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
   };
 
   const formatDate = (isoString?: string | null) => {
-    if (!isoString) return "Not set";
+    if (!isoString) return t("editor.meta.notSet");
     return new Date(isoString).toLocaleDateString("en-GB", {
       weekday: "short", year: "numeric", month: "short", day: "numeric"
     });
@@ -3280,29 +3294,29 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           <div className="px-6 pt-4 pb-5 lesson-export-meta" style={{ borderBottom: "1px solid var(--tp-paper-line)", marginBottom: "24px" }}>
               <div className="flex justify-around gap-x-4 gap-y-4 items-start [&_input]:text-center [&_select]:text-center [&>div]:flex [&>div]:flex-col [&>div]:items-center [&>div]:text-center [&>div]:w-[200px] [&>div]:max-w-[200px]">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Teacher</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.teacher")}</span>
                   <input
                     type="text"
                     value={teacher}
                     onChange={(e) => setTeacher(e.target.value)}
-                    placeholder="Your Name"
+                    placeholder={t("editor.meta.yourName")}
                     className="tp-meta-input lesson-export-input w-full"
                   />
-                  <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || "Not set"}</span>
+                  <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || t("editor.meta.notSet")}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Created</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.created")}</span>
                   <span className="text-[13px] lesson-export-value" style={{ color: "var(--tp-paper-ink)" }}>{formatDate(activeFileContent?.metadata?.createdAt)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Planned For</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.plannedFor")}</span>
                   <div className="flex items-center justify-center gap-1.5 w-full">
                   <input
                     type="text"
                     inputMode="numeric"
                     value={plannedForInput}
                     onChange={(event) => setPlannedForInput(event.target.value)}
-                    placeholder="DD/MM/YYYY"
+                    placeholder={t("editor.meta.dateFormat")}
                     className="tp-meta-input lesson-export-input lesson-export-planned-input flex-1 min-w-0 text-center"
                   />
                   <div className="relative lesson-export-calendar-trigger print:hidden" ref={plannedCalendarRef}>
@@ -3325,7 +3339,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       <div className="absolute top-12 left-0 z-[72] w-[250px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3 shadow-2xl print:hidden lesson-export-calendar-popover">
                         <div className="mb-2 flex items-center justify-between">
                           <span className="text-sm font-semibold text-gray-200">
-                            {formatDateFn(plannedCalendarMonth, "MMM yyyy")}
+                            {formatDateFn(plannedCalendarMonth, "MMM yyyy", { locale: language === "de" ? deLocale : undefined })}
                           </span>
                           <div className="flex items-center gap-1">
                             <button
@@ -3346,7 +3360,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                         </div>
 
                         <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] text-gray-500">
-                          {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((day) => (
+                          {Array.from({ length: 7 }, (_, i) => t(`calendar.dayHeader${i}`)).map((day) => (
                             <span key={day}>{day}</span>
                           ))}
                         </div>
@@ -3380,12 +3394,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                     )}
                   </div>
                   <span className="hidden lesson-export-value lesson-export-planned-text">
-                    {plannedForInput.trim() || "Not set"}
+                    {plannedForInput.trim() || t("editor.meta.notSet")}
                   </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>Subject</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.subject")}</span>
                   {subjects.length > 0 ? (
                     <div className="flex items-center gap-1.5 lesson-export-subject-picker w-full">
                       {selectedSubjectColor && (
@@ -3399,7 +3413,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                         onChange={(e) => setSubject(e.target.value)}
                         className="tp-meta-input lesson-export-input flex-1 min-w-0"
                       >
-                        <option value="">— None —</option>
+                        <option value="">{t("editor.meta.none")}</option>
                         {subjects.map((s) => (
                           <option key={s.name} value={s.name}>{s.name}</option>
                         ))}
@@ -3410,13 +3424,13 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       type="text"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      placeholder="e.g. Mathematics"
+                      placeholder={t("editor.meta.egMathematics")}
                       className="tp-meta-input lesson-export-input w-full"
                     />
                   )}
                   <span className="hidden lesson-export-value lesson-export-subject-text">
                     <span className="lesson-export-subject-dot-print h-2.5 w-2.5 rounded-full border border-black/10" />
-                    <span className="lesson-export-subject-name-print">{subject.trim() || "Not set"}</span>
+                    <span className="lesson-export-subject-name-print">{subject.trim() || t("editor.meta.notSet")}</span>
                   </span>
                 </div>
               </div>
@@ -3450,28 +3464,28 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                     disabled={!tableActionsEnabled.addRowBefore}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Insert Row Above
+                    {t("editor.tableContextMenu.insertRowAbove")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addRowAfter().run())}
                     disabled={!tableActionsEnabled.addRowAfter}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Insert Row Below
+                    {t("editor.tableContextMenu.insertRowBelow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addColumnBefore().run())}
                     disabled={!tableActionsEnabled.addColumnBefore}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Insert Column Left
+                    {t("editor.tableContextMenu.insertColumnLeft")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addColumnAfter().run())}
                     disabled={!tableActionsEnabled.addColumnAfter}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Insert Column Right
+                    {t("editor.tableContextMenu.insertColumnRight")}
                   </button>
 
                   <div className="h-px bg-[#333] my-1" />
@@ -3492,7 +3506,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                   >
                     <span className="inline-flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
-                      AI Rewrite
+                      {t("editor.aiMenu.aiRewrite")}
                     </span>
                     <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${rewriteSubmenuOpen ? "rotate-90" : ""}`} />
                   </button>
@@ -3500,12 +3514,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                     <div className="ml-5 flex flex-col">
                       {(
                         [
-                          { tone: "improve",  label: "Improve" },
-                          { tone: "formal",   label: "More Formal" },
-                          { tone: "casual",   label: "More Casual" },
-                          { tone: "simple",   label: "Simpler" },
-                          { tone: "engaging", label: "More Engaging" },
-                          { tone: "concise",  label: "More Concise" },
+                          { tone: "improve",  label: t("editor.aiMenu.improve") },
+                          { tone: "formal",   label: t("editor.aiMenu.moreFormal") },
+                          { tone: "casual",   label: t("editor.aiMenu.moreCasual") },
+                          { tone: "simple",   label: t("editor.aiMenu.simpler") },
+                          { tone: "engaging", label: t("editor.aiMenu.moreEngaging") },
+                          { tone: "concise",  label: t("editor.aiMenu.moreConcise") },
                         ] as const
                       ).map(({ tone, label }) => (
                         <button
@@ -3536,7 +3550,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                   >
                     <span className="inline-flex items-center gap-2">
                       <Languages className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
-                      AI Translate
+                      {t("editor.aiMenu.aiTranslate")}
                     </span>
                     <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${translateSubmenuOpen ? "rotate-90" : ""}`} />
                   </button>
@@ -3558,24 +3572,33 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       )}
                       {(
                         [
-                          "English", "French", "Spanish", "German", "Greek",
-                          "Italian", "Portuguese", "Dutch", "Russian",
-                          "Arabic", "Japanese", "Chinese (Simplified)",
+                          { code: "en", name: "English" },
+                          { code: "fr", name: "French" },
+                          { code: "es", name: "Spanish" },
+                          { code: "de", name: "German" },
+                          { code: "el", name: "Greek" },
+                          { code: "it", name: "Italian" },
+                          { code: "pt", name: "Portuguese" },
+                          { code: "nl", name: "Dutch" },
+                          { code: "ru", name: "Russian" },
+                          { code: "ar", name: "Arabic" },
+                          { code: "ja", name: "Japanese" },
+                          { code: "zh", name: "Chinese (Simplified)" },
                         ] as const
                       )
-                        .filter((lang) => lang !== aiTranslateTargetLanguage)
-                        .map((lang) => (
+                        .filter(({ name }) => name !== aiTranslateTargetLanguage)
+                        .map(({ code, name }) => (
                           <button
-                            key={lang}
+                            key={code}
                             onClick={() => {
                               setTableContextMenu(null);
                               setTranslateSubmenuOpen(false);
-                              void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: lang });
+                              void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: name });
                             }}
                             disabled={!canRunAiContextActions}
                             className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                           >
-                            {lang}
+                            {t(`languages.${code}`)}
                           </button>
                         ))}
                     </div>
@@ -3592,21 +3615,21 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                     disabled={!tableActionsEnabled.deleteRow}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Delete Row
+                    {t("editor.tableContextMenu.deleteRow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().deleteColumn().run())}
                     disabled={!tableActionsEnabled.deleteColumn}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Delete Column
+                    {t("editor.tableContextMenu.deleteColumn")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().deleteTable().run())}
                     disabled={!tableActionsEnabled.deleteTable}
                     className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Delete Table
+                    {t("editor.tableContextMenu.deleteTable")}
                   </button>
 
                   <div className="h-px bg-[#333] my-1" />
@@ -3616,28 +3639,28 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                     disabled={!tableActionsEnabled.mergeCells}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Merge Selected Cells
+                    {t("editor.tableContextMenu.mergeCells")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
                     disabled={!tableActionsEnabled.splitCell}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Split Cell
+                    {t("editor.tableContextMenu.splitCell")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
                     disabled={!tableActionsEnabled.toggleHeaderRow}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Toggle Header Row
+                    {t("editor.tableContextMenu.toggleHeaderRow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
                     disabled={!tableActionsEnabled.toggleHeaderColumn}
                     className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Toggle Header Column
+                    {t("editor.tableContextMenu.toggleHeaderColumn")}
                   </button>
                 </>
               )}
@@ -3663,10 +3686,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         <div className="flex flex-col h-full border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
           <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
             <FileText className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
-            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">Lesson Notes</span>
+            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">{t("editor.panels.lessonNotes")}</span>
             <button
               onClick={() => setLessonNotes("")}
-              title="Clear notes"
+              title={t("editor.panels.clearNotes")}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 lessonNotes.trim()
                   ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
@@ -3678,7 +3701,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             <button
               onClick={() => setNotesOpen(false)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
-              title="Close Notes"
+              title={t("editor.panels.closeNotes")}
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -3703,11 +3726,11 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
         <div className="flex h-full flex-col border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
           <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
             <BookOpen className="h-3.5 w-3.5 shrink-0 text-[var(--tp-accent)]" />
-            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">Method Bank</span>
+            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">{t("editor.panels.methodBank")}</span>
             <button
               onClick={() => setMethodBankOpen(false)}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
-              title="Close Method Bank"
+              title={t("editor.panels.closeMethodBank")}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -3718,14 +3741,14 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
               type="text"
               value={methodBankSearch}
               onChange={(event) => setMethodBankSearch(event.target.value)}
-              placeholder="Search methods..."
+              placeholder={t("editor.methodBank.searchMethods")}
               className="h-9 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-sm text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
             />
             <div className="flex flex-wrap gap-1.5">
               {([
-                { key: "phase", label: "Phase" },
-                { key: "socialForm", label: "Social" },
-                { key: "method", label: "Method" },
+                { key: "phase", label: t("editor.methodBank.phase") },
+                { key: "socialForm", label: t("editor.methodBank.social") },
+                { key: "method", label: t("editor.methodBank.method") },
               ] as const).map(({ key, label }) => (
                 <button
                   key={key}
@@ -3744,7 +3767,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--tp-app-bg)] py-3 pl-3 pr-2 [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
             {methodBankLoading && (
-              <p className="text-xs text-[var(--tp-text-muted)]">Loading Method Bank...</p>
+              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.loading")}</p>
             )}
 
             {!methodBankLoading && methodBankError && (
@@ -3754,7 +3777,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             )}
 
             {!methodBankLoading && !methodBankError && filteredMethodBankItems.length === 0 && (
-              <p className="text-xs text-[var(--tp-text-muted)]">No methods match your current filters.</p>
+              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.noMethodsMatch")}</p>
             )}
 
             {!methodBankLoading && !methodBankError && filteredMethodBankItems.length > 0 && (
@@ -3781,7 +3804,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                             {entry.title}
                           </p>
                           <span className={`shrink-0 text-[11px] font-medium ${METHOD_TYPE_ACCENT[entry.type]}`}>
-                            {METHOD_TYPE_LABELS[entry.type]}
+                            {getMethodTypeLabel(entry.type)}
                           </span>
                         </div>
                         <p className="mt-0.5 line-clamp-2 text-[12px] text-[var(--tp-text-muted)]">
@@ -3802,7 +3825,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold text-[var(--tp-text-primary)]">{selectedMethod.title}</p>
                   <span className={`text-[12px] font-medium ${METHOD_TYPE_ACCENT[selectedMethod.type]}`}>
-                    {METHOD_TYPE_LABELS[selectedMethod.type]}
+                    {getMethodTypeLabel(selectedMethod.type)}
                   </span>
                 </div>
                 <p className="text-[12px] leading-relaxed text-[var(--tp-text-muted)]">{selectedMethod.description}</p>
@@ -3833,7 +3856,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
               <MessageSquare className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
               <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">
-                AI Chat
+                {t("editor.panels.aiChat")}
               </span>
               <span className="inline-flex max-w-[112px] shrink items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--tp-text-muted)]">
                 {aiDefaultModelId}
@@ -3841,7 +3864,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => setChatMessages([])}
-                  title="Clear chat history"
+                  title={t("editor.panels.clearChatHistory")}
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     chatMessages.length > 0
                       ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
@@ -3858,10 +3881,10 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                   }}
                   title={
                     !modelSupportsThinking
-                      ? "This model does not expose thinking traces in TeacherPro."
+                      ? t("editor.chat.thinkingUnsupported")
                       : aiThinkingEnabled
-                        ? "Thinking mode requested (supported models only) — click to disable"
-                        : "Enable thinking mode request (supported models only)"
+                        ? t("editor.chat.thinkingEnabled")
+                        : t("editor.chat.thinkingDisabled")
                   }
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     modelSupportsThinking && aiThinkingEnabled
@@ -3877,7 +3900,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 <button
                   onClick={() => setChatOpen(false)}
                   className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
-                  title="Close AI Chat"
+                  title={t("editor.panels.closeAiChat")}
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -3893,15 +3916,15 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
               {chatMessages.length === 0 && (
                 <div className="flex h-full flex-col items-center justify-center gap-4">
                   <p className="text-xs text-[var(--tp-text-muted)] text-center max-w-xs leading-relaxed">
-                    Ask anything about your lesson plan — summarize it, discuss themes, get recommendations.
+                    {t("editor.panels.messageAi")}
                   </p>
                   <div className="flex flex-col gap-1.5 w-full">
                     {([
-                      { label: "Summarize this lesson", prompt: "Please summarize this lesson plan in a few sentences." },
-                      { label: "Key themes & topics", prompt: "What are the key themes and topics covered in this lesson plan?" },
-                      { label: "Check learning objectives", prompt: "Are the learning objectives clear and well-structured? How could they be improved?" },
-                      { label: "Suggest improvements", prompt: "What improvements would you suggest to make this lesson plan more effective?" },
-                      { label: "Activity ideas", prompt: "Can you suggest some additional activity ideas that would complement this lesson?" },
+                      { label: t("editor.chat.summarize"), prompt: "Please summarize this lesson plan in a few sentences." },
+                      { label: t("editor.chat.keyThemes"), prompt: "What are the key themes and topics covered in this lesson plan?" },
+                      { label: t("editor.chat.checkObjectives"), prompt: "Are the learning objectives clear and well-structured? How could they be improved?" },
+                      { label: t("editor.chat.suggestImprovements"), prompt: "What improvements would you suggest to make this lesson plan more effective?" },
+                      { label: t("editor.chat.activityIdeas"), prompt: "Can you suggest some additional activity ideas that would complement this lesson?" },
                     ] as const).map(({ label, prompt }) => (
                       <button
                         key={label}
@@ -3947,7 +3970,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                             className="flex items-center gap-1.5 text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] transition-colors"
                           >
                             <Brain className="w-3 h-3" />
-                            {expandedThinking.has(message.id) ? "Hide thinking" : "Show thinking"}
+                            {expandedThinking.has(message.id) ? t("editor.chat.hideThinking") : t("editor.chat.showThinking")}
                           </button>
                           {expandedThinking.has(message.id) && (
                             <div className="mt-1.5 rounded-md bg-[var(--tp-panel-muted)] px-3 py-2 text-[11px] text-[var(--tp-text-muted)] leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto">
@@ -3988,7 +4011,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                       void handleSubmitChat();
                     }
                   }}
-                  placeholder="Message AI..."
+                  placeholder={t("editor.panels.messageAi")}
                   rows={1}
                   className="flex-1 min-h-[24px] max-h-32 resize-none bg-transparent text-sm text-[var(--tp-text-primary)] placeholder:text-[var(--tp-text-muted)] outline-none leading-6"
                   style={{ fieldSizing: "content" } as React.CSSProperties}
@@ -3997,12 +4020,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                   onClick={() => { void handleSubmitChat(); }}
                   disabled={isChatBusy || !chatInput.trim()}
                   className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
-                  title={isChatBusy ? "AI is responding..." : "Send (Enter)"}
+                  title={isChatBusy ? t("editor.panels.aiIsResponding") : t("editor.panels.send")}
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="mt-1.5 text-center text-[10px] text-[var(--tp-text-muted)]">Enter to send · Shift+Enter for new line</p>
+              <p className="mt-1.5 text-center text-[10px] text-[var(--tp-text-muted)]">{t("editor.panels.enterToSend")}</p>
             </div>
           </div>
       </div>
@@ -4013,12 +4036,12 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
           style={{ left: slashMenu.x, top: slashMenu.y }}
         >
           <div className="border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-2 text-[11px] text-[var(--tp-text-muted)]">
-            {METHOD_TYPE_LABELS[slashMenu.requiredType]} suggestions
+            {t(`editor.slashMenu.${slashMenu.requiredType}Suggestions`)}
           </div>
           <div className="max-h-[250px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
             {slashSuggestions.length === 0 ? (
               <div className="px-3 py-2 text-[11px] text-[var(--tp-text-muted)]">
-                No Method Bank matches for "{slashMenu.query}".
+                {t("editor.slashMenu.noMatches", { query: slashMenu.query })}
               </div>
             ) : (
               slashSuggestions.map((entry, index) => (
@@ -4065,11 +4088,11 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
               style={{ borderBottom: "1px solid var(--tp-b-1)", color: "var(--tp-t-1)" }}
             >
               <TableIcon className="w-4 h-4" style={{ color: "var(--tp-accent)" }} />
-              Insert Table
+              {t("editor.insertTableDialog.title")}
             </div>
             <div className="px-4 py-4 flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Rows</label>
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>{t("editor.insertTableDialog.rows")}</label>
                 <input
                   type="number"
                   min={1}
@@ -4081,7 +4104,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Columns</label>
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>{t("editor.insertTableDialog.columns")}</label>
                 <input
                   type="number"
                   min={1}
@@ -4093,7 +4116,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>Header row</label>
+                <label className="text-[12px] font-medium" style={{ color: "var(--tp-t-2)" }}>{t("editor.insertTableDialog.headerRow")}</label>
                 <button
                   type="button"
                   onClick={() => setCustomTableDialog({ ...customTableDialog, withHeaderRow: !customTableDialog.withHeaderRow })}
@@ -4142,14 +4165,14 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 className="h-8 px-3 rounded-md text-[12px] font-medium transition-colors"
                 style={{ background: "var(--tp-bg-3)", color: "var(--tp-t-2)", border: "1px solid var(--tp-b-2)" }}
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={confirmInsertCustomTable}
                 className="h-8 px-4 rounded-md text-[12px] font-medium text-white transition-colors"
                 style={{ background: "var(--tp-accent)" }}
               >
-                Insert Table
+                {t("editor.insertTableDialog.title")}
               </button>
             </div>
           </div>
@@ -4168,13 +4191,13 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
             onMouseDown={(event) => event.stopPropagation()}
           >
             <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
-              <div className="text-sm text-gray-200 font-medium">Lesson Plan PDF Preview</div>
+              <div className="text-sm text-gray-200 font-medium">{t("editor.pdf.lessonPlanPreview")}</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintPDF}
                   className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
                 >
-                  Print / Save PDF
+                  {t("editor.pdf.printSavePDF")}
                 </button>
                 <button
                   onClick={() => setPdfPreviewUrl(null)}
@@ -4184,7 +4207,7 @@ Be concise but thorough. Use bullet points when listing multiple items. Never mo
                 </button>
               </div>
             </div>
-            <iframe src={pdfPreviewUrl} title="Lesson Plan PDF Preview" className="w-full h-[calc(88vh-48px)] bg-white" />
+            <iframe src={pdfPreviewUrl} title={t("editor.pdf.lessonPlanPreview")} className="w-full h-[calc(88vh-48px)] bg-white" />
           </div>
         </div>
       )}

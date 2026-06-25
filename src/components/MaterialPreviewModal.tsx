@@ -4,6 +4,7 @@ import { join } from "@tauri-apps/api/path";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 
 type PreviewKind = "pdf" | "image" | "text" | null;
 
@@ -15,6 +16,7 @@ interface Props {
 
 export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
   const { vaultPath } = useAppStore();
+  const { t } = useTranslation();
   const [src, setSrc] = useState<string | null>(null);
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -22,9 +24,9 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   const fileName = useMemo(() => {
-    if (!relativePath) return "Material";
+    if (!relativePath) return t("materialPreview.title");
     return relativePath.split("/").pop() || relativePath;
-  }, [relativePath]);
+  }, [relativePath, t]);
 
   const extension = useMemo(() => {
     return (fileName.split(".").pop() || "").toLowerCase();
@@ -66,7 +68,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
       try {
         const present = await exists(fullPath);
         if (!present) {
-          if (!cancelled) setError("File not found in vault.");
+          if (!cancelled) setError(t("materialPreview.fileNotFound"));
           return;
         }
 
@@ -86,11 +88,11 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
           const content = await readTextFile(fullPath);
           if (!cancelled) setText(content);
         } else {
-          if (!cancelled) setError("This file type can't be previewed in the app. Use Open in Default App.");
+          if (!cancelled) setError(t("materialPreview.cantPreview"));
         }
       } catch (err) {
         console.error("Failed to load preview", err);
-        if (!cancelled) setError("Could not load file: " + String(err));
+        if (!cancelled) setError(t("materialPreview.couldNotLoad", { error: String(err) }));
       }
     })();
 
@@ -98,7 +100,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, relativePath, vaultPath, previewKind]);
+  }, [open, relativePath, vaultPath, previewKind, t]);
 
   // Esc to close + reclaim focus from PDF iframe
   useEffect(() => {
@@ -146,7 +148,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
           <button
             onClick={onClose}
             className="p-1 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded"
-            title="Close (Esc)"
+            title={t("materialPreview.close")}
           >
             <X className="w-4 h-4" />
           </button>
@@ -168,13 +170,12 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
           )}
           {!error && previewKind === "text" && (
             <pre className="whitespace-pre-wrap break-words text-sm text-gray-200 leading-relaxed bg-[#101010] border border-[#2d2d2d] rounded-md p-4">
-              {text || "(Empty file)"}
+              {text || t("materialPreview.emptyFile")}
             </pre>
           )}
           {!error && previewKind === null && (
             <div className="text-sm" style={{ color: "var(--tp-t-3)" }}>
-              No in-app preview available for <code style={{ color: "var(--tp-t-1)" }}>{`.${extension}`}</code> files. Use{" "}
-              <strong>Open in Default App</strong> from the right-click menu.
+              {t("materialPreview.noPreviewAvailable", { ext: extension })}
             </div>
           )}
         </div>

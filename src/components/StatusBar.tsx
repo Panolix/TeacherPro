@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useAppStore } from "../store";
+import { useTranslation } from "../i18n/useTranslation";
 
 const ZOOM_PRESETS: ReadonlyArray<number> = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
@@ -20,6 +21,8 @@ export function StatusBar() {
     setLessonZoomMode,
     setLessonZoomFixed,
   } = useAppStore();
+
+  const { t } = useTranslation();
 
   const count =
     currentView === "editor"
@@ -47,7 +50,7 @@ export function StatusBar() {
 
   const zoomLabel =
     lessonZoomMode === "fit"
-      ? "Fit"
+      ? t('statusBar.fit')
       : `${Math.round(lessonZoomFixed * 100)}%`;
 
   const bumpZoom = (delta: number) => {
@@ -72,16 +75,16 @@ export function StatusBar() {
             className="inline-block h-[5px] w-[5px] rounded-full"
             style={{ background: "var(--tp-green)" }}
           />
-          Vault synced
+          {t('statusBar.vaultSynced')}
         </span>
       ) : (
-        <span>No vault</span>
+        <span>{t('statusBar.noVault')}</span>
       )}
 
       {count && <span>{count}</span>}
 
       {activeFilePath && currentView === "editor" && (
-        <span className="truncate">Editing</span>
+        <span className="truncate">{t('statusBar.editing')}</span>
       )}
 
       <div className="flex-1" />
@@ -94,7 +97,7 @@ export function StatusBar() {
           <button
             type="button"
             onClick={() => bumpZoom(-0.1)}
-            title="Zoom out (Cmd/Ctrl -)"
+            title={t('statusBar.zoomOut')}
             className="h-[18px] w-[18px] inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors"
           >
             <Minus className="w-3 h-3" />
@@ -102,7 +105,7 @@ export function StatusBar() {
           <button
             type="button"
             onClick={() => setZoomMenuOpen((v) => !v)}
-            title="Zoom presets"
+            title={t('statusBar.zoomPresets')}
             className="min-w-[44px] h-[18px] px-1.5 inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors font-medium tabular-nums"
           >
             {zoomLabel}
@@ -110,7 +113,7 @@ export function StatusBar() {
           <button
             type="button"
             onClick={() => bumpZoom(0.1)}
-            title="Zoom in (Cmd/Ctrl +)"
+            title={t('statusBar.zoomIn')}
             className="h-[18px] w-[18px] inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors"
           >
             <Plus className="w-3 h-3" />
@@ -136,7 +139,7 @@ export function StatusBar() {
                     : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)]"
                 }`}
               >
-                Fit to width
+                {t('statusBar.fitToWidth')}
               </button>
               <div className="my-1 h-px mx-2" style={{ background: "var(--tp-b-1)" }} />
               {ZOOM_PRESETS.map((preset) => {
