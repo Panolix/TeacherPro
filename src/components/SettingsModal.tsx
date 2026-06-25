@@ -680,17 +680,6 @@ export function SettingsModal({ open, onClose }: Props) {
                   </FormRow>
                 </Section>
 
-                <Section title={t("knowledge.embedder")}>
-                  <div className="flex flex-col gap-1">
-                    {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((model) => (
-                      <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
-                    ))}
-                  </div>
-                  <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
-                    {t("knowledge.embedderHint")}
-                  </p>
-                </Section>
-
                 <Section title={t("settings.ai.modelCatalog")}>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[12px]" style={{ color: "var(--tp-t-3)" }}>
@@ -757,6 +746,8 @@ export function SettingsModal({ open, onClose }: Props) {
                         installProgress?.status === "installing";
                       const isInstalled = installState === "installed";
                       const isDefault = aiDefaultModelId === model.id;
+                      const isEmbedding = model.capabilities?.includes("embedding");
+                      const isActiveEmbedder = isEmbedding && embedderModelId === model.id;
                       const isCanceling = aiActionBusy === `cancel:${model.id}`;
                       const isRemoving = aiActionBusy === `remove:${model.id}`;
                       const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
@@ -853,17 +844,29 @@ export function SettingsModal({ open, onClose }: Props) {
                               </>
                             ) : (
                               <>
-                                <button
-                                  onClick={() => {
-                                    setAiDefaultModelId(model.id);
-                                    setAiRewriteTranslateModelId(model.id);
-                                  }}
-                                  className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  title={t("settings.ai.setDefaultTooltip")}
-                                >
-                                  {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
-                                </button>
+                                {isEmbedding ? (
+                                  <button
+                                    onClick={() => setEmbedderModelId(model.id)}
+                                    className={`tp-btn ${isActiveEmbedder ? "tp-btn-primary" : ""}`}
+                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                  >
+                                    {isActiveEmbedder
+                                      ? (language === "de" ? "Embedder ✓" : "Embedder ✓")
+                                      : (language === "de" ? "Als Embedder" : "Set as Embedder")}
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setAiDefaultModelId(model.id);
+                                      setAiRewriteTranslateModelId(model.id);
+                                    }}
+                                    className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
+                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                    title={t("settings.ai.setDefaultTooltip")}
+                                  >
+                                    {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => void handleRemoveModel(model.id)}
                                   disabled={isRemoving || isInstalling}
@@ -1036,34 +1039,6 @@ function NumberInput({ value, min, max, onChange }: { value: number; min: number
       </button>
       <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>{t("common.range", { min, max })}</span>
     </div>
-  );
-}
-
-function EmbedderOption({ model, isActive, installState, onSelect }: { model: typeof AI_MODEL_CATALOG[0]; isActive: boolean; installState: string; onSelect: (id: string) => void }) {
-  return (
-    <button
-      onClick={() => onSelect(model.id)}
-      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${isActive ? "ring-2 ring-[var(--tp-accent)]" : "hover:bg-[var(--tp-bg-3)]"}`}
-      style={{ background: isActive ? "rgba(45,134,165,0.1)" : "var(--tp-bg-2)" }}
-    >
-      <span className="flex-1 min-w-0">
-        <div className="text-[12px] font-medium truncate" style={{ color: "var(--tp-t-1)" }}>
-          {model.label}
-        </div>
-        <div className="text-[10px] mt-0.5" style={{ color: "var(--tp-t-4)" }}>
-          {model.estimatedDisk} · {model.recommendedRam}
-        </div>
-      </span>
-      <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${
-        installState === "installed"
-          ? "text-emerald-400 bg-emerald-400/10"
-          : installState === "installing"
-            ? "text-amber-400 bg-amber-400/10"
-            : "text-[var(--tp-t-4)] bg-[var(--tp-bg-3)]"
-      }`}>
-        {installState === "installed" ? "✓ Installiert" : installState === "installing" ? "⋯" : "—"}
-      </span>
-    </button>
   );
 }
 
