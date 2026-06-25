@@ -25,7 +25,7 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
+import { AI_MODEL_CATALOG, DEFAULT_AI_MODEL_ID, doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { useKnowledgeStore } from "../knowledge/knowledgeStore";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -981,6 +981,10 @@ export function Editor() {
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
   const lessonEditorDragDropEnabled = false;
+  // Ensure the chat model is not an embedding model (fallback to default if misconfigured)
+  const effectiveChatModelId = AI_MODEL_CATALOG.find(
+    (m) => m.id === aiDefaultModelId && !m.capabilities?.includes("embedding")
+  ) ? aiDefaultModelId : DEFAULT_AI_MODEL_ID;
   const knowledgeEnabledChat = useKnowledgeStore((s) => s.enabledInChat);
   const setKnowledgeEnabledChat = useKnowledgeStore((s) => s.setEnabledInChat);
   const knowledgeCatList = useKnowledgeStore((s) => s.categories);
@@ -1854,10 +1858,10 @@ export function Editor() {
     setChatMessages((previous) => [...previous, userMessage]);
     setChatInput("");
     setIsChatBusy(true);
-    setAiStatusMessage(t("editor.chat.thinkingWith", { model: aiDefaultModelId }));
+    setAiStatusMessage(t("editor.chat.thinkingWith", { model: effectiveChatModelId }));
 
     try {
-      const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
+      const chatRuntimeDefaults = getAiModelRuntimeDefaults(effectiveChatModelId);
       const chatContextCharLimit = Math.min(
         20000,
         Math.max(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 0.6)),
@@ -1905,11 +1909,11 @@ export function Editor() {
       logDebug(
         "ai",
         "chat-invoke",
-        `model=${aiDefaultModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
+        `model=${effectiveChatModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
       );
 
       const response = await tauriInvoke<string>("ai_generate_text", {
-        modelId: aiDefaultModelId,
+        modelId: effectiveChatModelId,
         prompt,
         temperature: aiTemperature,
         systemPrompt: effectiveSystemPrompt,
@@ -1931,7 +1935,7 @@ export function Editor() {
           timestamp: Date.now(),
         },
       ]);
-      setAiStatusMessage(t("editor.chat.responseReady", { time: aiDefaultModelId }));
+      setAiStatusMessage(t("editor.chat.responseReady", { time: effectiveChatModelId }));
     } catch (error) {
       console.error("AI chat failed:", error);
       setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
@@ -1947,7 +1951,7 @@ export function Editor() {
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
+  }, [aiEnabled, effectiveChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
 
   useEffect(() => {
     if (!chatOpen) {
@@ -3876,7 +3880,7 @@ export function Editor() {
                 {t("editor.panels.aiChat")}
               </span>
               <span className="inline-flex max-w-[112px] shrink items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--tp-text-muted)]">
-                {aiDefaultModelId}
+                {effectiveChatModelId}
               </span>
               <div className="flex items-center gap-0.5">
                 <button
