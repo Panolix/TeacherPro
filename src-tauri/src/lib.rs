@@ -1425,11 +1425,22 @@ pub fn run() {
             ai_import_local_model,
             ai_generate_text
         ])
+        .setup(|_app| {
+            // Start Ollama at app launch so AI features work immediately
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                ensure_ollama_server_started();
+            });
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, event| {
-            if let tauri::RunEvent::Exit = event {
-                stop_ollama_server();
+            match event {
+                tauri::RunEvent::Exit | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
+                    stop_ollama_server();
+                }
+                _ => {}
             }
         });
 }
