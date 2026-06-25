@@ -1349,20 +1349,20 @@ async fn ai_generate_text(
             .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
         let base_url = base_url.trim_end_matches('/');
 
-        #[derive(serde::Deserialize)]
-        struct OllamaGenerateResponse {
-            response: String,
-            #[serde(default)]
-            thinking: String,
-        }
-
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(300))
             .build();
 
+        // Build messages array for /api/chat (supports all models, including Qwen 3.6)
+        let mut messages: Vec<serde_json::Value> = Vec::new();
+        if !task_system.is_empty() {
+            messages.push(serde_json::json!({"role": "system", "content": task_system}));
+        }
+        messages.push(serde_json::json!({"role": "user", "content": task_prompt}));
+
         let mut body = serde_json::json!({
             "model": task_model_id,
-            "prompt": task_prompt,
+            "messages": messages,
             "stream": false,
             "options": {
                 "temperature": task_temperature,
@@ -1374,12 +1374,20 @@ async fn ai_generate_text(
         if task_thinking {
             body["think"] = serde_json::Value::Bool(true);
         }
-        if !task_system.is_empty() {
-            body["system"] = serde_json::Value::String(task_system);
+
+        #[derive(serde::Deserialize)]
+        struct OllamaChatResponse {
+            message: OllamaChatMessage,
+        }
+        #[derive(serde::Deserialize)]
+        struct OllamaChatMessage {
+            content: String,
+            #[serde(default)]
+            thinking: String,
         }
 
         let response = agent
-            .post(&format!("{base_url}/api/generate"))
+            .post(&format!("{base_url}/api/chat"))
             .send_json(body);
         let response = match response {
             Ok(r) => r,
@@ -1390,14 +1398,12 @@ async fn ai_generate_text(
             Err(e) => return Err(format!("Ollama API request failed: {e}")),
         };
         let result = response
-            .into_json::<OllamaGenerateResponse>()
+            .into_json::<OllamaChatResponse>()
             .map_err(|e| format!("Failed to parse Ollama response: {e}"))?;
 
-        // Strip any residual think blocks in case an older Ollama version ignores think:false.
-        let clean = strip_think_blocks(&result.response);
-        // If thinking was requested, prepend the thinking block so the frontend can parse it.
-        if task_thinking && !result.thinking.is_empty() {
-            Ok(format!("<think>{}</think>\n{}", result.thinking.trim(), clean))
+        let clean = strip_think_blocks(&result.message.content);
+        if task_thinking && !result.message.thinking.is_empty() {
+            Ok(format!("<think>{}</think>\n{}", result.message.thinking.trim(), clean))
         } else {
             Ok(clean)
         }
