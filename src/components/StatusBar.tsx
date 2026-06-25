@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Minus, Plus } from "lucide-react";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
@@ -24,17 +23,6 @@ export function StatusBar() {
   } = useAppStore();
 
   const { t } = useTranslation();
-  const [ollamaReady, setOllamaReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const check = () => invoke("ai_runtime_status").then((r: any) => {
-      if (!cancelled) setOllamaReady(r?.available ?? false);
-    }).catch(() => {});
-    check();
-    const iv = setInterval(check, 5000);
-    return () => { cancelled = true; clearInterval(iv); };
-  }, []);
 
   const count =
     currentView === "editor"
@@ -94,14 +82,6 @@ export function StatusBar() {
       )}
 
       {count && <span>{count}</span>}
-
-      <span className="inline-flex items-center gap-1">
-        <span
-          className={`inline-block h-[5px] w-[5px] rounded-full ${ollamaReady ? "" : "opacity-40"}`}
-          style={{ background: ollamaReady ? "var(--tp-accent)" : "var(--tp-t-4)" }}
-        />
-        <span style={{ color: "var(--tp-t-4)", fontSize: 10 }}>AI</span>
-      </span>
 
       {activeFilePath && currentView === "editor" && (
         <span className="truncate">{t('statusBar.editing')}</span>

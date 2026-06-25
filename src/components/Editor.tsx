@@ -25,9 +25,8 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AI_MODEL_CATALOG, DEFAULT_AI_MODEL_ID, doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
+import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { MaterialLink } from "./extensions/MaterialLink";
-import { useKnowledgeStore } from "../knowledge/knowledgeStore";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
@@ -981,19 +980,6 @@ export function Editor() {
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
   const lessonEditorDragDropEnabled = false;
-  // Ensure the chat model is not an embedding model and is not empty
-  const safeChatId = aiDefaultModelId || DEFAULT_AI_MODEL_ID;
-  const isAiDefaultEmbedder = AI_MODEL_CATALOG.some(
-    (m) => m.id === safeChatId && m.capabilities?.includes("embedding")
-  );
-  const effectiveChatModelId = isAiDefaultEmbedder ? DEFAULT_AI_MODEL_ID : safeChatId;
-  const knowledgeEnabledChat = useKnowledgeStore((s) => s.enabledInChat);
-  const setKnowledgeEnabledChat = useKnowledgeStore((s) => s.setEnabledInChat);
-  const knowledgeCatList = useKnowledgeStore((s) => s.categories);
-  const chatFilter = useKnowledgeStore((s) => s.chatCategoryFilter);
-  const setChatFilter = useKnowledgeStore((s) => s.setChatCategoryFilter);
-  const loadKnowledgeIndex = useKnowledgeStore((s) => s.loadIndex);
-  useEffect(() => { void loadKnowledgeIndex(); }, [loadKnowledgeIndex]);
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
@@ -1862,10 +1848,10 @@ export function Editor() {
     setChatMessages((previous) => [...previous, userMessage]);
     setChatInput("");
     setIsChatBusy(true);
-    setAiStatusMessage(t("editor.chat.thinkingWith", { model: effectiveChatModelId }));
+    setAiStatusMessage(t("editor.chat.thinkingWith", { model: aiDefaultModelId }));
 
     try {
-      const chatRuntimeDefaults = getAiModelRuntimeDefaults(effectiveChatModelId);
+      const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
       const chatContextCharLimit = Math.min(
         20000,
         Math.max(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 0.6)),
@@ -1888,21 +1874,8 @@ export function Editor() {
 
       const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
 
-      // Inject knowledge base context if enabled
-      let knowledgeBlock = "";
-      try {
-        const { useKnowledgeStore } = await import("../knowledge/knowledgeStore");
-        const ks = useKnowledgeStore.getState();
-        if (ks.enabledInChat && ks.index && ks.index.chunks.length > 0) {
-          // Search with user query + lesson context + subject for better matches
-          const searchQuery = `${userText} ${contextText.slice(0, 2000)} ${subject || ""}`;
-          knowledgeBlock = await ks.buildKnowledgeContext(searchQuery, 8);
-        }
-      } catch (e) { console.warn("Knowledge search failed:", e); }
-
       const prompt = [
         `The teacher's current lesson plan is shown below. Read it carefully before responding.\n\n---\n${lessonBlock}\n---`,
-        ...(knowledgeBlock ? ["", knowledgeBlock] : []),
         "",
         ...(historyLines.length > 0 ? ["Conversation so far:", ...historyLines, ""] : []),
         `User: ${userText}`,
@@ -1915,11 +1888,11 @@ export function Editor() {
       logDebug(
         "ai",
         "chat-invoke",
-        `model=${effectiveChatModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
+        `model=${aiDefaultModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
       );
 
       const response = await tauriInvoke<string>("ai_generate_text", {
-        modelId: effectiveChatModelId,
+        modelId: aiDefaultModelId,
         prompt,
         temperature: aiTemperature,
         systemPrompt: effectiveSystemPrompt,
@@ -1941,7 +1914,7 @@ export function Editor() {
           timestamp: Date.now(),
         },
       ]);
-      setAiStatusMessage(t("editor.chat.responseReady", { time: effectiveChatModelId }));
+      setAiStatusMessage(t("editor.chat.responseReady", { time: aiDefaultModelId }));
     } catch (error) {
       console.error("AI chat failed:", error);
       setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
@@ -1957,7 +1930,7 @@ export function Editor() {
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, effectiveChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
+  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
 
   useEffect(() => {
     if (!chatOpen) {
@@ -3886,7 +3859,7 @@ export function Editor() {
                 {t("editor.panels.aiChat")}
               </span>
               <span className="inline-flex max-w-[112px] shrink items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] font-medium text-[var(--tp-text-muted)]">
-                {effectiveChatModelId}
+                {aiDefaultModelId}
               </span>
               <div className="flex items-center gap-0.5">
                 <button
@@ -3934,49 +3907,6 @@ export function Editor() {
               </div>
             </div>
 
-            {/* Knowledge Toggle + Categories */}
-            <div className="shrink-0 border-b border-[var(--tp-border-strong)]">
-              <div className="flex items-center gap-2 px-3 py-1.5">
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]">
-                  <input
-                    type="checkbox"
-                    checked={knowledgeEnabledChat}
-                    onChange={(e) => setKnowledgeEnabledChat(e.target.checked)}
-                    className="w-3 h-3 rounded"
-                  />
-                  {t("knowledge.useInChat")}
-                </label>
-              </div>
-              {knowledgeEnabledChat && knowledgeCatList.length > 0 && (
-                <div className="flex flex-wrap gap-1 px-3 pb-2">
-                  <button
-                    onClick={() => setChatFilter(null)}
-                    className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                      chatFilter === null ? "text-white" : "text-[var(--tp-text-muted)]"
-                    }`}
-                    style={{
-                      background: chatFilter === null ? "var(--tp-accent)" : "var(--tp-panel-muted)",
-                    }}
-                  >
-                    {t("common.all")}
-                  </button>
-                  {knowledgeCatList.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setChatFilter(chatFilter === cat.id ? null : cat.id)}
-                      className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
-                        chatFilter === cat.id ? "text-white" : "text-[var(--tp-text-muted)]"
-                      }`}
-                      style={{
-                        background: chatFilter === cat.id ? "var(--tp-accent)" : "var(--tp-panel-muted)",
-                      }}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Messages */}
             <div

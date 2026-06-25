@@ -32,11 +32,9 @@ import { SettingsModal } from "./SettingsModal";
 import { ContextMenu, useContextMenu, type ContextMenuEntry } from "./ContextMenu";
 import { MaterialPreviewModal } from "./MaterialPreviewModal";
 import { VaultItemPreviewModal } from "./VaultItemPreviewModal";
-import { BrainCircuit } from "lucide-react";
-import { KnowledgePanel } from "../knowledge/KnowledgePanel";
 
 // Types for panel switching
-type PanelType = "explorer" | "search" | "recent" | "calendar" | "knowledge" | "trash";
+type PanelType = "explorer" | "search" | "recent" | "calendar" | "trash";
 
 // Icons for file types
 const LessonIcon = () => (
@@ -1133,19 +1131,6 @@ export function SidebarMinimal() {
           <Calendar className="w-5 h-5" />
         </button>
 
-        {/* Knowledge */}
-        <button
-          onClick={() => handlePanelSwitch("knowledge")}
-          title={t('sidebar.rail.knowledge')}
-          className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
-            activePanel === "knowledge" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
-          }`}
-        >
-          <BrainCircuit className="w-5 h-5" />
-        </button>
-
         <div className="flex-1" />
 
         {/* Trash */}
@@ -1207,7 +1192,6 @@ export function SidebarMinimal() {
               {activePanel === "recent" && t('sidebar.rail.recent')}
               {activePanel === "calendar" && t('sidebar.rail.calendar')}
               {activePanel === "trash" && t('sidebar.rail.trash')}
-              {activePanel === "knowledge" && t('sidebar.rail.knowledge')}
             </span>
             <button
               onClick={() => setPushPanelOpen(false)}
@@ -1443,13 +1427,6 @@ export function SidebarMinimal() {
           {activePanel === "calendar" && (
             <div className="flex-1 overflow-y-auto py-2 px-3">
               <MiniCalendar />
-            </div>
-          )}
-
-          {/* KNOWLEDGE PANEL */}
-          {activePanel === "knowledge" && (
-            <div className="flex-1 overflow-y-auto">
-              <KnowledgePanel />
             </div>
           )}
 

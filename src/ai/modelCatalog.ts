@@ -4,8 +4,7 @@ export type AiModelCapability =
   | "reasoning"
   | "low-latency"
   | "long-context"
-  | "english-focused"
-  | "embedding";
+  | "english-focused";
 
 export interface AiModelCatalogItem {
   id: string;
@@ -149,58 +148,11 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     estimatedDisk: "~17 GB",
     recommendedRam: "VRAM: 20-24 GB · CPU: 32+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
-    defaultNumCtx: 8192,
-    defaultNumPredict: 4096,
+    defaultNumCtx: 32768,
+    defaultNumPredict: 2048,
     description: "Neueste Qwen-Generation (3 Wochen alt) mit MoE-Architektur und optimiertem agentischen Coding – beste Wahl für anspruchsvolle Analyse und lange Kontexte auf Highend-Systemen.",
     recommended: false,
     capabilities: ["multilingual", "reasoning", "long-context"],
-  },
-  // ═══════════════════════════════════════════════════════
-  // Embedding-Modelle – für die Wissensdatenbank
-  // Laufen auf allen GPUs via Ollama (Apple Metal, NVIDIA CUDA, AMD ROCm, Intel via Vulkan/CPU)
-  // Jede Stufe bietet: eine multilinguale Option (DE+EN) + eine Extra-Option
-  // ═══════════════════════════════════════════════════════
-  {
-    id: "bge-m3",
-    label: "BGE M3",
-    tier: "medium",
-    source: "ollama-registry",
-    estimatedDisk: "~2,2 GB",
-    recommendedRam: "VRAM: 6+ GB · CPU: 16+ GB RAM",
-    recommendedContext: "Max context: 8192 tokens",
-    defaultNumCtx: 2048,
-    defaultNumPredict: 128,
-    description: "🇩🇪 BESTES DEUTSCH + Multilingual (1024 Dim · 2,2 GB) – Spitzenreiter für deutsche Texte und 100+ Sprachen. Exzellent für Fachtexte, Lehrproben.",
-    recommended: false,
-    capabilities: ["embedding", "multilingual"],
-  },
-  {
-    id: "bge-large:en",
-    label: "BGE Large EN v1.5",
-    tier: "medium",
-    source: "ollama-registry",
-    estimatedDisk: "~1,3 GB",
-    recommendedRam: "VRAM: 6+ GB · CPU: 12+ GB RAM",
-    recommendedContext: "Max context: 512 tokens",
-    defaultNumCtx: 2048,
-    defaultNumPredict: 128,
-    description: "🇬🇧 BESTES ENGLISCH (1024 Dim · 1,3 GB) – State-of-the-Art für englische Texte, beste Retrieval-Qualität für Fachtexte.",
-    recommended: false,
-    capabilities: ["embedding", "english-focused"],
-  },
-  {
-    id: "nomic-embed-text",
-    label: "Nomic Embed Text",
-    tier: "small",
-    source: "ollama-registry",
-    estimatedDisk: "~274 MB",
-    recommendedRam: "VRAM: 2+ GB · CPU: 8+ GB RAM",
-    recommendedContext: "Max context: 8192 tokens",
-    defaultNumCtx: 2048,
-    defaultNumPredict: 128,
-    description: "🇩🇪🇬🇧 LEICHT & SCHNELL (768 Dim · 274 MB) – Multilingualer Allrounder für Deutsch und Englisch. Läuft auf jedem Rechner, empfohlen für die meisten.",
-    recommended: true,
-    capabilities: ["embedding", "low-latency", "multilingual"],
   },
 ];
 

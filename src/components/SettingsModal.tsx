@@ -19,7 +19,6 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type AccentColor } from "../store";
-import { useKnowledgeStore } from "../knowledge/knowledgeStore";
 import { useTranslation } from "../i18n/useTranslation";
 import {
   AI_MODEL_CATALOG,
@@ -42,7 +41,6 @@ const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
   "low-latency": "settings.aiCapabilities.lowLatency",
   "long-context": "settings.aiCapabilities.longContext",
   "english-focused": "settings.aiCapabilities.englishFocused",
-  embedding: "knowledge.embedder",
 };
 
 interface AiModelInstallProgress {
@@ -124,7 +122,6 @@ export function SettingsModal({ open, onClose }: Props) {
     language,
     setLanguage,
   } = useAppStore();
-  const { embedderModelId, setEmbedderModelId } = useKnowledgeStore();
 
   const { t } = useTranslation();
 
@@ -207,53 +204,29 @@ export function SettingsModal({ open, onClose }: Props) {
     [clearInstallPoller, pollModelInstallProgress],
   );
 
-  // Normalize Ollama model IDs: strip :latest and quantization suffixes like -q4_K_M, -q8_0, -bf16, -it-
-  const normalizeOllamaId = useCallback((rawId: string): string => {
-    return rawId
-      .replace(/:latest$/i, "")
-      .replace(/-(?:q[0-9]_[A-Z0-9]+|bf16|fp16|it-[a-z0-9_]+|mlx|nvfp4|mxfp8|coding|mtp)$/i, "")
-      .trim();
-  }, []);
-
-  const isModelInstalled = useCallback((modelId: string, installedSet: Set<string>): boolean => {
-    if (installedSet.has(modelId)) return true;
-    // Also check if any installed model starts with our catalog ID (handles quantized tags)
-    for (const raw of installedSet) {
-      if (raw === modelId || raw.startsWith(modelId + "-") || raw.startsWith(modelId + ".")) return true;
-    }
-    return false;
-  }, []);
-
-  const syncInstalledModels = useCallback(async () => {
+  const syncInstalledModels = async () => {
     setAiInfoMessage(null);
     setAiErrorMessage(null);
     setAiActionBusy("refresh-models");
     try {
       const installedModels = await invoke<string[]>("ai_list_models");
-      const installedRaw = new Set(installedModels || []);
-      // Store normalized IDs for display
-      const normalized = new Set(Array.from(installedRaw).map(normalizeOllamaId));
-      setAiInstalledModelIds(Array.from(normalized));
+      const installed = new Set(installedModels || []);
+      setAiInstalledModelIds(Array.from(installed));
       for (const model of AI_MODEL_CATALOG) {
-        setAiModelInstallState(model.id, isModelInstalled(model.id, installedRaw) ? "installed" : "not-installed");
+        setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
       }
       const currentState = useAppStore.getState();
-      const chatModels = AI_MODEL_CATALOG.filter((m) => !m.capabilities?.includes("embedding"));
-      const embeddingModels = AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding"));
-      const firstChatMatch = chatModels.find((m) => isModelInstalled(m.id, installedRaw))?.id || "";
-      const firstEmbedMatch = embeddingModels.find((m) => isModelInstalled(m.id, installedRaw))?.id || "";
-      if (firstChatMatch && !isModelInstalled(currentState.aiDefaultModelId, installedRaw))
-        setAiDefaultModelId(firstChatMatch);
-      if (firstChatMatch && !isModelInstalled(currentState.aiRewriteTranslateModelId, installedRaw))
-        setAiRewriteTranslateModelId(firstChatMatch);
-      if (firstEmbedMatch && !isModelInstalled(useKnowledgeStore.getState().embedderModelId, installedRaw))
-        useKnowledgeStore.getState().setEmbedderModelId(firstEmbedMatch);
+      const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
+      const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
+      if (corrected && !installed.has(currentState.aiDefaultModelId)) setAiDefaultModelId(corrected);
+      if (corrected && !installed.has(currentState.aiRewriteTranslateModelId))
+        setAiRewriteTranslateModelId(corrected);
     } catch (error) {
       setAiErrorMessage(`Could not refresh models: ${String(error)}`);
     } finally {
       setAiActionBusy(null);
     }
-  }, [normalizeOllamaId, isModelInstalled]);
+  };
 
   const handleInstallModel = async (modelId: string) => {
     setAiInfoMessage(null);
@@ -362,12 +335,9 @@ export function SettingsModal({ open, onClose }: Props) {
   }, []);
 
   const availableRoutingModels = useMemo(() => {
-    const embeddingIds = new Set(
-      AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((m) => m.id)
-    );
-    const ids = new Set<string>(aiInstalledModelIds.filter((id) => !embeddingIds.has(id)));
-    if (aiDefaultModelId && !embeddingIds.has(aiDefaultModelId)) ids.add(aiDefaultModelId);
-    if (aiRewriteTranslateModelId && !embeddingIds.has(aiRewriteTranslateModelId)) ids.add(aiRewriteTranslateModelId);
+    const ids = new Set<string>(aiInstalledModelIds);
+    if (aiDefaultModelId) ids.add(aiDefaultModelId);
+    if (aiRewriteTranslateModelId) ids.add(aiRewriteTranslateModelId);
     if (ids.size === 0) ids.add(DEFAULT_AI_MODEL_ID);
     return Array.from(ids).sort((a, b) => {
       const ai = AI_MODEL_CATALOG.findIndex((m) => m.id === a);
@@ -379,29 +349,12 @@ export function SettingsModal({ open, onClose }: Props) {
     });
   }, [aiInstalledModelIds, aiDefaultModelId, aiRewriteTranslateModelId]);
 
-  const availableEmbeddingModels = useMemo(() => {
-    const embeddingModelIds = new Set(
-      AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((m) => m.id)
-    );
-    const ids = new Set<string>(aiInstalledModelIds.filter((id) => embeddingModelIds.has(id)));
-    if (embedderModelId) ids.add(embedderModelId);
-    if (ids.size === 0) ids.add("nomic-embed-text");
-    return Array.from(ids).sort((a, b) => {
-      const ai = AI_MODEL_CATALOG.findIndex((m) => m.id === a);
-      const bi = AI_MODEL_CATALOG.findIndex((m) => m.id === b);
-      if (ai !== -1 && bi !== -1) return ai - bi;
-      if (ai !== -1) return -1;
-      if (bi !== -1) return 1;
-      return a.localeCompare(b);
-    });
-  }, [aiInstalledModelIds, embedderModelId]);
-
-  // Sync installed models when AI tab opens (delayed to not block UI)
+  // Sync diagnostics + installed list whenever the AI tab opens
   useEffect(() => {
     if (!open || tab !== "ai") return;
-    const timer = setTimeout(() => { void syncInstalledModels(); }, 300);
-    return () => clearTimeout(timer);
-  }, [open, tab, aiProvider, syncInstalledModels]);
+    // Don't auto-sync on tab switch — the Refresh buttons handle this.
+    // Auto-syncing triggers Ollama detection which freezes the UI.
+  }, [open, tab, aiProvider]);
 
   // Cleanup pollers on unmount
   useEffect(() => {
@@ -430,155 +383,6 @@ export function SettingsModal({ open, onClose }: Props) {
     { key: "backup", label: t("settings.tabs.backup"), icon: HardDrive },
     { key: "advanced", label: t("settings.tabs.advanced"), icon: SlidersHorizontal },
   ];
-
-  const renderModelList = (embeddingOnly: boolean) => (
-    <div className="flex flex-col gap-2">
-      {AI_MODEL_CATALOG.filter((m) => embeddingOnly === (m.capabilities?.includes("embedding") ?? false)).map((model) => {
-        const installState = getModelInstallState(model.id);
-        const installProgress = aiInstallProgress[model.id];
-        const isInstalling =
-          installState === "installing" ||
-          installProgress?.status === "preparing" ||
-          installProgress?.status === "installing";
-        const isInstalled = installState === "installed";
-        const isDefault = aiDefaultModelId === model.id;
-        const isEmbedding = model.capabilities?.includes("embedding");
-        const isActiveEmbedder = isEmbedding && embedderModelId === model.id;
-        const isCanceling = aiActionBusy === `cancel:${model.id}`;
-        const isRemoving = aiActionBusy === `remove:${model.id}`;
-        const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
-        const progressText =
-          installProgress?.detail ||
-          (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
-
-        return (
-          <div
-            key={model.id}
-            className="rounded-lg px-3 py-3"
-            style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[14px] font-medium" style={{ color: "var(--tp-t-1)" }}>
-                    {model.label}
-                  </span>
-                  <Badge>{model.tier}</Badge>
-                  {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
-                  {model.capabilities?.map((cap) => (
-                    <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
-                  ))}
-                </div>
-                <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                  {model.description}
-                </div>
-                <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
-                  <span className="inline-flex items-center gap-1">
-                    <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
-                  </span>
-                  <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
-                  <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
-                  <span>{t("settings.ai.sourceOllama")}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
-                {!isInstalling && installState === "error" && (
-                  <AlertCircle className="w-4 h-4 text-amber-400" />
-                )}
-                {!isInstalling && isInstalled && (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                )}
-              </div>
-            </div>
-
-            {isInstalling && (
-              <div className="mt-2">
-                <div className="h-1.5 w-full rounded overflow-hidden" style={{ background: "var(--tp-bg-3)" }}>
-                  <div
-                    className="h-full transition-all duration-300"
-                    style={{ width: `${Math.max(progressValue, 3)}%`, background: "var(--tp-accent)" }}
-                  />
-                </div>
-                {progressText && (
-                  <div className="mt-1 text-[11px] truncate" style={{ color: "var(--tp-t-4)" }}>
-                    {progressText}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {!isInstalled ? (
-                <>
-                  <button
-                    onClick={() => void handleInstallModel(model.id)}
-                    disabled={isInstalling || isRemoving || aiActionBusy === "refresh-models"}
-                    className="tp-btn tp-btn-primary"
-                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                  >
-                    {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
-                  </button>
-                  <button
-                    onClick={() => void handleImportGguf(model.id)}
-                    disabled={isInstalling || isRemoving}
-                    className="tp-btn"
-                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                  >
-                    {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
-                  </button>
-                  {isInstalling && (
-                    <button
-                      onClick={() => void handleCancelInstallModel(model.id)}
-                      disabled={isCanceling}
-                      className="tp-btn"
-                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                    >
-                      {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
-                    </button>
-                  )}
-                </>
-              ) : (
-                <>
-                  {isEmbedding ? (
-                    <button
-                      onClick={() => setEmbedderModelId(model.id)}
-                      className={`tp-btn ${isActiveEmbedder ? "tp-btn-primary" : ""}`}
-                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                    >
-                      {isActiveEmbedder
-                        ? (language === "de" ? "Embedder ✓" : "Embedder ✓")
-                        : (language === "de" ? "Als Embedder" : "Set as Embedder")}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        setAiDefaultModelId(model.id);
-                        setAiRewriteTranslateModelId(model.id);
-                      }}
-                      className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
-                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                      title={t("settings.ai.setDefaultTooltip")}
-                    >
-                      {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => void handleRemoveModel(model.id)}
-                    disabled={isRemoving || isInstalling}
-                    className="tp-btn"
-                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                  >
-                    {t("settings.ai.remove")}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 
   return (
     <div
@@ -818,23 +622,6 @@ export function SettingsModal({ open, onClose }: Props) {
                         })}
                       </select>
                     </FormRow>
-                    <FormRow label={t("knowledge.embedder")}>
-                      <select
-                        className="tp-input"
-                        value={embedderModelId}
-                        onChange={(e) => setEmbedderModelId(e.target.value)}
-                      >
-                        {availableEmbeddingModels.map((id) => {
-                          const installed = aiInstalledModelIds.includes(id);
-                          const label = modelLabelById.get(id) || id;
-                          return (
-                            <option key={`emb-${id}`} value={id}>
-                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </FormRow>
                   </div>
                 </Section>
 
@@ -943,15 +730,138 @@ export function SettingsModal({ open, onClose }: Props) {
                     </div>
                   )}
 
-                  {renderModelList(false)}
-                  <div className="mt-4 mb-2 flex items-center gap-3">
-                    <div className="flex-1 h-px" style={{ background: "var(--tp-b-1)" }} />
-                    <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--tp-t-4)" }}>
-                      {t("knowledge.embedder")}
-                    </span>
-                    <div className="flex-1 h-px" style={{ background: "var(--tp-b-1)" }} />
+                  <div className="flex flex-col gap-2">
+                    {AI_MODEL_CATALOG.map((model) => {
+                      const installState = getModelInstallState(model.id);
+                      const installProgress = aiInstallProgress[model.id];
+                      const isInstalling =
+                        installState === "installing" ||
+                        installProgress?.status === "preparing" ||
+                        installProgress?.status === "installing";
+                      const isInstalled = installState === "installed";
+                      const isDefault = aiDefaultModelId === model.id;
+                      const isCanceling = aiActionBusy === `cancel:${model.id}`;
+                      const isRemoving = aiActionBusy === `remove:${model.id}`;
+                      const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
+                      const progressText =
+                        installProgress?.detail ||
+                        (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
+
+                      return (
+                        <div
+                          key={model.id}
+                          className="rounded-lg px-3 py-3"
+                          style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[14px] font-medium" style={{ color: "var(--tp-t-1)" }}>
+                                  {model.label}
+                                </span>
+                                <Badge>{model.tier}</Badge>
+                                {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
+                                {model.capabilities?.map((cap) => (
+                                  <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
+                                ))}
+                              </div>
+                              <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
+                                {model.description}
+                              </div>
+                              <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
+                                <span className="inline-flex items-center gap-1">
+                                  <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
+                                </span>
+                                <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
+                                <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
+                                <span>{t("settings.ai.sourceOllama")}</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
+                              {!isInstalling && installState === "error" && (
+                                <AlertCircle className="w-4 h-4 text-amber-400" />
+                              )}
+                              {!isInstalling && isInstalled && (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                              )}
+                            </div>
+                          </div>
+
+                          {isInstalling && (
+                            <div className="mt-2">
+                              <div className="h-1.5 w-full rounded overflow-hidden" style={{ background: "var(--tp-bg-3)" }}>
+                                <div
+                                  className="h-full transition-all duration-300"
+                                  style={{ width: `${Math.max(progressValue, 3)}%`, background: "var(--tp-accent)" }}
+                                />
+                              </div>
+                              {progressText && (
+                                <div className="mt-1 text-[11px] truncate" style={{ color: "var(--tp-t-4)" }}>
+                                  {progressText}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            {!isInstalled ? (
+                              <>
+                                <button
+                                  onClick={() => void handleInstallModel(model.id)}
+                                  disabled={isInstalling || isRemoving || aiActionBusy === "refresh-models"}
+                                  className="tp-btn tp-btn-primary"
+                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                >
+                                  {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
+                                </button>
+                                <button
+                                  onClick={() => void handleImportGguf(model.id)}
+                                  disabled={isInstalling || isRemoving}
+                                  className="tp-btn"
+                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                >
+                                  {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
+                                </button>
+                                {isInstalling && (
+                                  <button
+                                    onClick={() => void handleCancelInstallModel(model.id)}
+                                    disabled={isCanceling}
+                                    className="tp-btn"
+                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                  >
+                                    {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setAiDefaultModelId(model.id);
+                                    setAiRewriteTranslateModelId(model.id);
+                                  }}
+                                  className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
+                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                  title={t("settings.ai.setDefaultTooltip")}
+                                >
+                                  {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
+                                </button>
+                                <button
+                                  onClick={() => void handleRemoveModel(model.id)}
+                                  disabled={isRemoving || isInstalling}
+                                  className="tp-btn"
+                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                                >
+                                  {t("settings.ai.remove")}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {renderModelList(true)}
 
                   <p className="text-[11px] mt-3" style={{ color: "var(--tp-t-4)" }}>
                     {t("settings.ai.installHelp")}

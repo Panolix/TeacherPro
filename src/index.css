@@ -46,8 +46,8 @@
   /* Text scale */
   --tp-t-1:       #ffffff;  /* primary */
   --tp-t-2:       #b8b8b8;  /* secondary */
-  --tp-t-3:       #9a9a9a;  /* tertiary */
-  --tp-t-4:       #777777;  /* quaternary (labels, captions) */
+  --tp-t-3:       #888888;  /* tertiary */
+  --tp-t-4:       #555555;  /* quaternary (labels, captions) */
 
   /* Accent (unchanged) + soft variants */
   --tp-accent-hover:  #3497b8;

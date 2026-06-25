@@ -217,7 +217,6 @@ const de = {
       search: "Suche",
       recent: "Zuletzt",
       calendar: "Kalender",
-      knowledge: "Wissen",
       trash: "Papierkorb",
       settings: "Einstellungen",
     },
@@ -645,20 +644,6 @@ const de = {
     selectVault: "Vault-Ordner auswählen",
   },
 
-  knowledge: {
-    addSource: "Wissensquelle hinzufügen",
-    embedder: "Embedding-Modell",
-    file: "Datei",
-    embedderHint: "🇩🇪 BGE M3 für bestes Deutsch · 🇬🇧 BGE Large EN für bestes Englisch · 🇩🇪🇬🇧 Nomic Embed Text als leichter Allrounder. Alle laufen auf jeder GPU (Apple Silicon, NVIDIA, AMD, Intel).",
-    extracting: "Extrahiere Text...",
-    chunking: "Zerlege in Chunks...",
-    embedding: "Erstelle Embeddings...",
-    useInChat: "Im Chat verwenden",
-    sources: "Quellen",
-    chunks: "Chunks",
-    empty: "Noch keine Wissensquellen.\nFüge PDFs, DOCX oder Textdateien hinzu.",
-  },
-
   modelCatalog: {
     gemma4E2B: "Gemma 4 E2B",
     gemma4E4B: "Gemma 4 E4B",
@@ -690,7 +675,7 @@ const de = {
   aiPrompts: {
     rewriteSystem: "Du überarbeitest Texte. Ändere den Wortlaut und wende den angeforderten Ton an. Gib NUR den überarbeiteten Text ohne zusätzliche Erklärungen, Anführungszeichen oder Formatierung zurück.",
     translateSystem: "Du übersetzt den folgenden Text in {{language}}. Gib NUR die Übersetzung ohne zusätzliche Erklärungen, Anführungszeichen oder Formatierung zurück.",
-    chatSystem: "Du bist ein hilfreicher KI-Assistent für Lehrkräfte, spezialisiert auf Unterrichtsplanung und Pädagogik. Du bekommst den vollständigen Inhalt eines Unterrichtsentwurfs (Stundentabelle) inklusive Metadaten wie Lehrkraft, Fach, Datum. Deine Aufgaben umfassen: Zusammenfassen der Stunde, Identifizieren von Schlüsselthemen und -konzepten, Prüfen der Lernziele auf Kohärenz und Angemessenheit, Vorschlagen von Verbesserungen oder Alternativen für Phasen, Methoden oder Sozialformen, Vorschlagen von vertiefenden Aktivitäten oder Diskussionsfragen. Du fragst die Lehrkraft NICHT, ob sie den Unterrichtsinhalt einfügen soll – er ist bereits vorhanden. Antworte direkt und hilfreich auf Deutsch. Halte Antworten fokussiert, umsetzbar und vor allem vollständig. Wenn du zwischen Ausführlichkeit und Vollständigkeit wählen musst, brich lieber kurz und vollständig ab, als mitten im Satz zu enden.",
+    chatSystem: "Du bist ein hilfreicher KI-Assistent für Lehrkräfte, spezialisiert auf Unterrichtsplanung und Pädagogik. Du bekommst den vollständigen Inhalt eines Unterrichtsentwurfs (Stundentabelle) inklusive Metadaten wie Lehrkraft, Fach, Datum. Deine Aufgaben umfassen: Zusammenfassen der Stunde, Identifizieren von Schlüsselthemen und -konzepten, Prüfen der Lernziele auf Kohärenz und Angemessenheit, Vorschlagen von Verbesserungen oder Alternativen für Phasen, Methoden oder Sozialformen, Vorschlagen von vertiefenden Aktivitäten oder Diskussionsfragen. Du fragst die Lehrkraft NICHT, ob sie den Unterrichtsinhalt einfügen soll – er ist bereits vorhanden. Antworte direkt und hilfreich auf Deutsch. Halte Antworten fokussiert und umsetzbar.",
   },
 };
 

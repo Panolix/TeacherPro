@@ -315,17 +315,19 @@ export function CalendarView() {
         <button
           onClick={handleDeleteSelected}
           disabled={selectedLessons.size === 0 || isDeletingLessons}
-          className="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-          title={isDeletingLessons ? t('calendar.actions.moving') : t('calendar.tooltips.moveToTrash')}
+          className="h-9 inline-flex items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40"
           style={{
-            background: selectedLessons.size > 0 ? "rgba(239, 68, 68, 0.12)" : "transparent",
+            background: selectedLessons.size > 0 ? "rgba(239, 68, 68, 0.12)" : "var(--tp-bg-1)",
             border: selectedLessons.size > 0
               ? "1px solid rgba(239, 68, 68, 0.4)"
-              : "1px solid transparent",
+              : "1px solid var(--tp-b-1)",
             color: selectedLessons.size > 0 ? "#fca5a5" : "var(--tp-t-3)",
           }}
         >
           <Trash2 className="h-4 w-4" />
+          {isDeletingLessons
+            ? t('calendar.actions.moving')
+            : t('calendar.actions.moveSelectedToTrash', { count: selectedLessons.size })}
         </button>
       </div>
 
@@ -507,31 +509,28 @@ export function CalendarView() {
                 className="shrink-0 p-2 flex gap-1.5"
                 style={{ borderTop: "1px solid var(--tp-b-1)" }}
               >
-                <div className="flex gap-1 justify-center">
-                  <button
-                    onClick={() => void createNewLesson(day)}
-                    className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
-                    style={{ color: "var(--tp-t-3)" }}
-                    title={t('calendar.actions.add')}
-                  >
-                    <Plus className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => void handleDeleteAllForDate(day)}
-                    disabled={isDeletingLessons || lessons.length === 0}
-                    className={`h-7 w-7 inline-flex items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-                      lessons.length > 0 && !isDeletingLessons ? "hover:[filter:brightness(1.15)]" : ""
-                    }`}
-                    title={isDeletingLessons ? t('calendar.actions.deleting') : t('calendar.tooltips.moveAllForDate', { count: lessons.length })}
-                    style={{
-                      color: isDeletingLessons ? "var(--tp-t-3)" : lessons.length > 0 ? "#ef4444" : "var(--tp-t-4)",
-                      background: isDeletingLessons ? "transparent" : lessons.length > 0 ? "rgba(239,68,68,0.12)" : "transparent",
-                      border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
-                    }}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => void createNewLesson(day)}
+                  className="flex-1 h-7 inline-flex items-center justify-center gap-1 rounded text-[11.5px] font-medium transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
+                  style={{ color: "var(--tp-t-3)" }}
+                >
+                                   <Plus className="w-3 h-3" /> {t('calendar.actions.add')}
+                </button>
+                <button
+                  onClick={() => void handleDeleteAllForDate(day)}
+                  disabled={isDeletingLessons || lessons.length === 0}
+                  className={`h-7 px-2.5 inline-flex items-center gap-1 rounded text-[11.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                    lessons.length > 0 && !isDeletingLessons ? "hover:[filter:brightness(1.15)]" : ""
+                  }`}
+                  style={{
+                    color: isDeletingLessons ? "var(--tp-t-3)" : lessons.length > 0 ? "#ef4444" : "var(--tp-t-4)",
+                    background: isDeletingLessons ? "transparent" : lessons.length > 0 ? "rgba(239,68,68,0.12)" : "transparent",
+                    border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
+                  }}
+                  title={isDeletingLessons ? t('calendar.actions.deleting') : lessons.length > 0 ? t('calendar.tooltips.moveAllForDate', { count: lessons.length }) : t('calendar.tooltips.noLessons')}
+                >
+                                  <Trash2 className="w-3 h-3" /> {t('calendar.actions.all')}
+                </button>
               </div>
             </div>
           );

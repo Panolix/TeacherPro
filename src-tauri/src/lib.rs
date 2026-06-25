@@ -204,69 +204,35 @@ fn is_ollama_server_running() -> bool {
 
 /// Start `ollama serve` as a background process if not already running.
 /// Stores the child process so we can kill it when the app exits.
-/// On systems with a dedicated GPU (NVIDIA/AMD/Apple Silicon), sets the
-/// OLLAMA_LLM_LIBRARY env var so Ollama uses the GPU backend automatically.
 fn ensure_ollama_server_started() {
-    let is_running = is_ollama_server_running();
-    let probe = &*AI_HARDWARE_PROBE;
+    if is_ollama_server_running() {
+        return;
+    }
+    let binary = resolve_ollama_binary();
+    let mut command = command_for(&binary);
+    apply_preferred_backend_env(&mut command);
 
-    // If the server is NOT running OR is running but without our GPU backend, restart it.
-    let needs_restart = if is_running {
-        // Check if OLLAMA_LLM_LIBRARY is set correctly — if not, kill and restart
-        if probe.preferred_backend != "cpu" {
-            let current_backend = std::env::var("OLLAMA_LLM_LIBRARY").ok();
-            !current_backend.as_deref().map(|v| v == probe.preferred_backend).unwrap_or(false)
-        } else {
-            false
-        }
-    } else {
-        true
-    };
-
-    if needs_restart {
-        if is_running {
-            // Kill the running server so we can restart with correct backend
-            stop_ollama_server();
-            // Wait for it to fully stop
-            for _ in 0..10 {
-                if !is_ollama_server_running() { break; }
-                std::thread::sleep(std::time::Duration::from_millis(500));
+    match command
+        .arg("serve")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => {
+            if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
+                *guard = Some(child);
             }
+            OLLAMA_WE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
         }
-
-        // Set env for the entire process so Ollama child inherits it
-        if probe.preferred_backend != "cpu" {
-            std::env::set_var("OLLAMA_LLM_LIBRARY", &probe.preferred_backend);
-        }
+        Err(_) => return,
     }
 
-    if needs_restart || !is_running {
-        let binary = resolve_ollama_binary();
-        let mut command = command_for(&binary);
-        apply_preferred_backend_env(&mut command);
-
-        match command
-            .arg("serve")
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-        {
-            Ok(child) => {
-                if let Ok(mut guard) = OLLAMA_SERVER_CHILD.lock() {
-                    *guard = Some(child);
-                }
-                OLLAMA_WE_STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
-            }
-            Err(_) => return,
-        }
-
-        // Wait for the server to be ready (up to 10 seconds).
-        for _ in 0..40 {
-            std::thread::sleep(std::time::Duration::from_millis(250));
-            if is_ollama_server_running() {
-                break;
-            }
+    // Wait for the server to be ready (up to 5 seconds).
+    for _ in 0..20 {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        if is_ollama_server_running() {
+            break;
         }
     }
 }
@@ -1027,13 +993,8 @@ fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
 }
 
 #[tauri::command]
-async fn ai_ensure_runtime() -> Result<String, String> {
-    // Run in blocking thread to not block the UI
-    tauri::async_runtime::spawn_blocking(move || {
-        ensure_ollama_runtime()
-    })
-    .await
-    .map_err(|e| format!("Runtime task failed: {e}"))?
+fn ai_ensure_runtime() -> Result<String, String> {
+    ensure_ollama_runtime()
 }
 
 #[tauri::command]
@@ -1378,7 +1339,7 @@ async fn ai_generate_text(
     let task_system = system_prompt.unwrap_or_default();
     let task_thinking = enable_thinking.unwrap_or(false);
     let task_num_ctx = num_ctx.unwrap_or(8_192).clamp(1_024, 131_072);
-    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 12_000);
+    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 4_096);
 
     tauri::async_runtime::spawn_blocking(move || {
         let _ = ensure_ollama_runtime()?;
@@ -1388,355 +1349,51 @@ async fn ai_generate_text(
             .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
         let base_url = base_url.trim_end_matches('/');
 
+        #[derive(serde::Deserialize)]
+        struct OllamaGenerateResponse {
+            response: String,
+            #[serde(default)]
+            thinking: String,
+        }
+
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(300))
             .build();
 
-        // Build common request body
-        let mut chat_body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": task_model_id,
+            "prompt": task_prompt,
             "stream": false,
+            "think": task_thinking,
             "options": {
                 "temperature": task_temperature,
                 "num_ctx": task_num_ctx,
                 "num_predict": task_num_predict,
             }
         });
-        if task_thinking {
-            chat_body["think"] = serde_json::Value::Bool(true);
+
+        if !task_system.is_empty() {
+            body["system"] = serde_json::Value::String(task_system);
         }
 
-        // Helper to call an Ollama endpoint
-        let call_api = |endpoint: &str, req_body: serde_json::Value| -> Result<serde_json::Value, String> {
-            let resp = agent
-                .post(&format!("{base_url}{endpoint}"))
-                .send_json(req_body);
-            match resp {
-                Ok(r) => r.into_json::<serde_json::Value>().map_err(|e| format!("Bad JSON: {e}")),
-                Err(ureq::Error::Status(code, resp)) => {
-                    let text = resp.into_string().unwrap_or_default();
-                    Err(format!("Ollama API (status {code}): {text}"))
-                }
-                Err(e) => Err(format!("Ollama API request failed: {e}")),
-            }
-        };
+        let result = agent
+            .post(&format!("{base_url}/api/generate"))
+            .send_json(body)
+            .map_err(|e| format!("Ollama API request failed: {e}"))?
+            .into_json::<OllamaGenerateResponse>()
+            .map_err(|e| format!("Failed to parse Ollama response: {e}"))?;
 
-        // Try endpoints: /api/chat → /api/generate → /api/chat?raw=true
-        fn build_opts(t: f64, ctx: u32, pred: i32) -> serde_json::Value {
-            serde_json::json!({
-                "temperature": t, "num_ctx": ctx, "num_predict": pred
-            })
-        }
-
-        // Helper: extract content+thinking from chat or generate response
-        let extract = |json: &serde_json::Value, is_chat: bool| -> Result<(String, String), String> {
-            let content = if is_chat {
-                json.get("message")
-                    .and_then(|m| m.get("content"))
-                    .and_then(|c| c.as_str())
-                    .unwrap_or("")
-                    .to_string()
-            } else {
-                json.get("response").and_then(|r| r.as_str()).unwrap_or("").to_string()
-            };
-            let thinking = json.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
-            Ok((content, thinking))
-        };
-
-        // Try 1: /api/chat (messages format)
-        {
-            let mut body = serde_json::json!({
-                "model": task_model_id.clone(),
-                "stream": false,
-                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
-            });
-            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
-            let mut msgs: Vec<serde_json::Value> = Vec::new();
-            if !task_system.is_empty() {
-                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
-            }
-            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
-            body["messages"] = serde_json::Value::Array(msgs);
-
-            match call_api("/api/chat", body) {
-                Ok(json) => {
-                    let (text, thinking) = extract(&json, true)?;
-                    let clean = strip_think_blocks(&text);
-                    return if task_thinking && !thinking.trim().is_empty() {
-                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
-                    } else { Ok(clean) };
-                }
-                Err(e) => {
-                    if !e.contains("does not support chat") {
-                        return Err(e);
-                    }
-                }
-            }
-        }
-
-        // Try 2: /api/generate (legacy format)
-        {
-            let mut body = serde_json::json!({
-                "model": task_model_id.clone(),
-                "prompt": &task_prompt,
-                "stream": false,
-                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
-            });
-            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
-            if !task_system.is_empty() {
-                body["system"] = serde_json::Value::String(task_system.clone());
-            }
-
-            match call_api("/api/generate", body) {
-                Ok(json) => {
-                    let (text, thinking) = extract(&json, false)?;
-                    let clean = strip_think_blocks(&text);
-                    return if task_thinking && !thinking.trim().is_empty() {
-                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
-                    } else { Ok(clean) };
-                }
-                Err(e) => {
-                    if !e.contains("does not support generate") {
-                        return Err(e);
-                    }
-                }
-            }
-        }
-
-        // Try 3: /api/chat?raw=true (bypasses template validation)
-        {
-            let mut body = serde_json::json!({
-                "model": task_model_id.clone(),
-                "raw": true,
-                "stream": false,
-                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
-            });
-            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
-            let mut msgs: Vec<serde_json::Value> = Vec::new();
-            if !task_system.is_empty() {
-                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
-            }
-            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
-            body["messages"] = serde_json::Value::Array(msgs);
-
-            match call_api("/api/chat", body) {
-                Ok(json) => {
-                    let (text, thinking) = extract(&json, true)?;
-                    let clean = strip_think_blocks(&text);
-                    if task_thinking && !thinking.trim().is_empty() {
-                        return Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean));
-                    } else { return Ok(clean); }
-                }
-                Err(_) => {}
-            }
-        }
-
-        // Try 4: /api/generate?raw=true (pure text in/out, no template – works with ANY model)
-        {
-            let raw_prompt = if !task_system.is_empty() {
-                format!("{}\n\n{}", task_system, task_prompt)
-            } else {
-                task_prompt.clone()
-            };
-            let body = serde_json::json!({
-                "model": task_model_id,
-                "prompt": raw_prompt,
-                "raw": true,
-                "stream": false,
-                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
-            });
-            match call_api("/api/generate", body) {
-                Ok(json) => {
-                    let (text, thinking) = extract(&json, false)?;
-                    let clean = strip_think_blocks(&text);
-                    return if task_thinking && !thinking.trim().is_empty() {
-                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
-                    } else { Ok(clean) };
-                }
-                Err(_) => {}
-            }
-        }
-
-        // Try 5: /v1/chat/completions (OpenAI-compatible endpoint)
-        {
-            let mut msgs: Vec<serde_json::Value> = Vec::new();
-            if !task_system.is_empty() {
-                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
-            }
-            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
-            let body = serde_json::json!({
-                "model": task_model_id,
-                "messages": msgs,
-                "stream": false,
-                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
-            });
-
-            let json = call_api("/v1/chat/completions", body)?;
-            let choice = json.get("choices")
-                .and_then(|c| c.as_array())
-                .and_then(|c| c.first())
-                .ok_or("No choices in response")?;
-            let content = choice.get("message")
-                .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_str())
-                .unwrap_or("")
-                .to_string();
-            let thinking = choice.get("message")
-                .and_then(|m| m.get("thinking"))
-                .and_then(|t| t.as_str())
-                .unwrap_or("")
-                .to_string();
-            let clean = strip_think_blocks(&content);
-            if task_thinking && !thinking.trim().is_empty() {
-                Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
-            } else { Ok(clean) }
+        // Strip any residual think blocks in case an older Ollama version ignores think:false.
+        let clean = strip_think_blocks(&result.response);
+        // If thinking was requested, prepend the thinking block so the frontend can parse it.
+        if task_thinking && !result.thinking.is_empty() {
+            Ok(format!("<think>{}</think>\n{}", result.thinking.trim(), clean))
+        } else {
+            Ok(clean)
         }
     })
     .await
     .map_err(|error| format!("AI generation task failed: {error}"))?
-}
-
-#[tauri::command]
-fn extract_text(file_path: String) -> Result<String, String> {
-    // Read text files directly, skip binary formats for now
-    let path = std::path::Path::new(&file_path);
-    let ext = path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase();
-
-    match ext.as_str() {
-        "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "yaml" | "yml" | "log" => {
-            std::fs::read_to_string(&file_path)
-                .map_err(|e| format!("Failed to read file: {e}"))
-        }
-        "docx" => {
-            // Basic DOCX extraction: read the XML inside
-            extract_docx_text(&file_path)
-        }
-        "pdf" => {
-            // Basic PDF text extraction using a simple approach
-            extract_pdf_text_simple(&file_path)
-        }
-        _ => Err(format!("Unsupported file type: .{ext}")),
-    }
-}
-
-fn extract_docx_text(path: &str) -> Result<String, String> {
-    use std::io::Read;
-    let file = std::fs::File::open(path).map_err(|e| format!("Cannot open DOCX: {e}"))?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Cannot read DOCX archive: {e}"))?;
-    let mut xml_file = archive.by_name("word/document.xml")
-        .map_err(|_| "Cannot find word/document.xml in DOCX".to_string())?;
-    let mut xml_content = String::new();
-    xml_file.read_to_string(&mut xml_content)
-        .map_err(|e| format!("Cannot read DOCX XML: {e}"))?;
-
-    // Strip XML tags to get plain text
-    let text = xml_content
-        .replace("<w:p>", "\n")
-        .replace("<w:br/>", "\n")
-        .replace("</w:p>", "\n")
-        .replace("<w:tab/>", "  ");
-    
-    // Extract text between XML tags
-    let mut result = String::new();
-    let mut in_tag = false;
-    for c in text.chars() {
-        match c {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ => if !in_tag { result.push(c); },
-        }
-    }
-    Ok(result)
-}
-
-fn extract_pdf_text_simple(path: &str) -> Result<String, String> {
-    // Use a simple approach: search for text between parentheses in PDF stream
-    let content = std::fs::read(path)
-        .map_err(|e| format!("Cannot read PDF: {e}"))?;
-    
-    let mut text = String::new();
-    let bytes = &content;
-    let mut i = 0;
-    
-    // Extract text from PDF content streams
-    while i < bytes.len() {
-        // Look for BT...ET (Begin Text / End Text) markers
-        if bytes[i..].starts_with(b"BT") || bytes[i..].starts_with(b"bt") {
-            i += 2;
-            while i < bytes.len() {
-                if bytes[i..].starts_with(b"ET") || bytes[i..].starts_with(b"et") {
-                    break;
-                }
-                // Extract parenthesized strings
-                if bytes[i] == b'(' {
-                    i += 1;
-                    let mut paren_depth = 1;
-                    let mut seg = String::new();
-                    while i < bytes.len() && paren_depth > 0 {
-                        if bytes[i] == b'(' { paren_depth += 1; if paren_depth > 1 { seg.push('('); } }
-                        else if bytes[i] == b')' { paren_depth -= 1; if paren_depth > 0 { seg.push(')'); } }
-                        else if bytes[i] == b'\\' { i += 1; if i < bytes.len() { seg.push(bytes[i] as char); } }
-                        else { seg.push(bytes[i] as char); }
-                        i += 1;
-                    }
-                    if !seg.trim().is_empty() {
-                        text.push_str(&seg);
-                        text.push(' ');
-                    }
-                } else {
-                    i += 1;
-                }
-            }
-            text.push('\n');
-        }
-        i += 1;
-        if text.len() > 500_000 { break; } // Safety limit
-    }
-
-    if text.trim().is_empty() {
-        // Fallback: extract printable ASCII characters from raw bytes
-        text = content.iter()
-            .filter(|&&b| b.is_ascii_graphic() || b.is_ascii_whitespace())
-            .map(|&b| b as char)
-            .collect();
-    }
-
-    Ok(text.trim().to_string())
-}
-
-#[tauri::command]
-async fn ai_generate_embedding(model: String, text: String) -> Result<Vec<f32>, String> {
-    let _ = ensure_ollama_runtime()?;
-
-    let base_url = std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
-    let base_url = base_url.trim_end_matches('/');
-
-    let body = serde_json::json!({
-        "model": model,
-        "prompt": text,
-    });
-
-    let agent = ureq::AgentBuilder::new()
-        .timeout(std::time::Duration::from_secs(30))
-        .build();
-
-    #[derive(serde::Deserialize)]
-    struct EmbeddingResponse {
-        embedding: Vec<f32>,
-    }
-
-    let response = agent
-        .post(&format!("{base_url}/api/embeddings"))
-        .send_json(body)
-        .map_err(|e| format!("Embedding API request failed: {e}"))?
-        .into_json::<EmbeddingResponse>()
-        .map_err(|e| format!("Failed to parse embedding response: {e}"))?;
-
-    Ok(response.embedding)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1761,32 +1418,13 @@ pub fn run() {
             ai_install_model,
             ai_remove_model,
             ai_import_local_model,
-            ai_generate_text,
-            extract_text,
-            ai_generate_embedding
+            ai_generate_text
         ])
-        .setup(|_app| {
-            eprintln!("[TeacherPro] App started, starting Ollama in background...");
-            std::thread::spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-                eprintln!("[TeacherPro] Calling ensure_ollama_server_started...");
-                ensure_ollama_server_started();
-                if is_ollama_server_running() {
-                    eprintln!("[TeacherPro] Ollama server is now running.");
-                } else {
-                    eprintln!("[TeacherPro] WARNING: Ollama server did NOT start!");
-                }
-            });
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, event| {
-            match event {
-                tauri::RunEvent::Exit | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
-                    stop_ollama_server();
-                }
-                _ => {}
+            if let tauri::RunEvent::Exit = event {
+                stop_ollama_server();
             }
         });
 }
