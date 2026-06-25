@@ -207,37 +207,53 @@ export function SettingsModal({ open, onClose }: Props) {
     [clearInstallPoller, pollModelInstallProgress],
   );
 
-  const syncInstalledModels = async () => {
+  // Normalize Ollama model IDs: strip :latest and quantization suffixes like -q4_K_M, -q8_0, -bf16, -it-
+  const normalizeOllamaId = useCallback((rawId: string): string => {
+    return rawId
+      .replace(/:latest$/i, "")
+      .replace(/-(?:q[0-9]_[A-Z0-9]+|bf16|fp16|it-[a-z0-9_]+|mlx|nvfp4|mxfp8|coding|mtp)$/i, "")
+      .trim();
+  }, []);
+
+  const isModelInstalled = useCallback((modelId: string, installedSet: Set<string>): boolean => {
+    if (installedSet.has(modelId)) return true;
+    // Also check if any installed model starts with our catalog ID (handles quantized tags)
+    for (const raw of installedSet) {
+      if (raw === modelId || raw.startsWith(modelId + "-") || raw.startsWith(modelId + ".")) return true;
+    }
+    return false;
+  }, []);
+
+  const syncInstalledModels = useCallback(async () => {
     setAiInfoMessage(null);
     setAiErrorMessage(null);
     setAiActionBusy("refresh-models");
     try {
       const installedModels = await invoke<string[]>("ai_list_models");
-      // Normalize model IDs: strip ":latest" suffix so bge-m3:latest matches catalog id "bge-m3"
-      const normalizeId = (rawId: string) => rawId.replace(/:latest$/i, "");
       const installedRaw = new Set(installedModels || []);
-      const installed = new Set(Array.from(installedRaw).map(normalizeId));
-      setAiInstalledModelIds(Array.from(installed));
+      // Store normalized IDs for display
+      const normalized = new Set(Array.from(installedRaw).map(normalizeOllamaId));
+      setAiInstalledModelIds(Array.from(normalized));
       for (const model of AI_MODEL_CATALOG) {
-        setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
+        setAiModelInstallState(model.id, isModelInstalled(model.id, installedRaw) ? "installed" : "not-installed");
       }
       const currentState = useAppStore.getState();
       const chatModels = AI_MODEL_CATALOG.filter((m) => !m.capabilities?.includes("embedding"));
       const embeddingModels = AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding"));
-      const firstChatMatch = chatModels.find((m) => installed.has(m.id))?.id || "";
-      const firstEmbedMatch = embeddingModels.find((m) => installed.has(m.id))?.id || "";
-      if (firstChatMatch && !installed.has(normalizeId(currentState.aiDefaultModelId)))
+      const firstChatMatch = chatModels.find((m) => isModelInstalled(m.id, installedRaw))?.id || "";
+      const firstEmbedMatch = embeddingModels.find((m) => isModelInstalled(m.id, installedRaw))?.id || "";
+      if (firstChatMatch && !isModelInstalled(currentState.aiDefaultModelId, installedRaw))
         setAiDefaultModelId(firstChatMatch);
-      if (firstChatMatch && !installed.has(normalizeId(currentState.aiRewriteTranslateModelId)))
+      if (firstChatMatch && !isModelInstalled(currentState.aiRewriteTranslateModelId, installedRaw))
         setAiRewriteTranslateModelId(firstChatMatch);
-      if (firstEmbedMatch && !installed.has(normalizeId(useKnowledgeStore.getState().embedderModelId)))
+      if (firstEmbedMatch && !isModelInstalled(useKnowledgeStore.getState().embedderModelId, installedRaw))
         useKnowledgeStore.getState().setEmbedderModelId(firstEmbedMatch);
     } catch (error) {
       setAiErrorMessage(`Could not refresh models: ${String(error)}`);
     } finally {
       setAiActionBusy(null);
     }
-  };
+  }, [normalizeOllamaId, isModelInstalled]);
 
   const handleInstallModel = async (modelId: string) => {
     setAiInfoMessage(null);
@@ -380,12 +396,12 @@ export function SettingsModal({ open, onClose }: Props) {
     });
   }, [aiInstalledModelIds, embedderModelId]);
 
-  // Sync diagnostics + installed list whenever the AI tab opens
+  // Sync installed models when AI tab opens (delayed to not block UI)
   useEffect(() => {
     if (!open || tab !== "ai") return;
-    // Don't auto-sync on tab switch — the Refresh buttons handle this.
-    // Auto-syncing triggers Ollama detection which freezes the UI.
-  }, [open, tab, aiProvider]);
+    const timer = setTimeout(() => { void syncInstalledModels(); }, 300);
+    return () => clearTimeout(timer);
+  }, [open, tab, aiProvider, syncInstalledModels]);
 
   // Cleanup pollers on unmount
   useEffect(() => {
