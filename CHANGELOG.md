@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-06-25
+### Fixed
+- **UI freeze on Refresh** — `ai_list_models` made async so clicking Refresh in AI Settings no longer blocks the UI when Ollama isn't running.
+- **Right-click context menu** — Browser default menu (Inspect/Refresh) is now globally suppressed; only app context menus appear.
+- **Font readability** — Tertiary/quaternary text colors brightened (`#888→#9a9a9a`, `#555→#777`) for better contrast on dark theme.
+
+### Changed
+- **Calendar buttons** — Day footer Add/Delete buttons are now icon-only with equal size (w-7 h-7), centered layout, no text labels.
+- **Header delete button** — Icon-only with tooltip, matching the balanced design.
+
 ## [2.1.0] - 2026-06-25
 ### Added
 - **German localization (i18n)** — Complete UI translation, language switcher in Settings, persistent language selection
