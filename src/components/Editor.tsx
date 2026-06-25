@@ -981,10 +981,11 @@ export function Editor() {
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
   const lessonEditorDragDropEnabled = false;
-  // Ensure the chat model is not an embedding model (fallback to default if misconfigured)
-  const effectiveChatModelId = AI_MODEL_CATALOG.find(
-    (m) => m.id === aiDefaultModelId && !m.capabilities?.includes("embedding")
-  ) ? aiDefaultModelId : DEFAULT_AI_MODEL_ID;
+  // Ensure the chat model is not an embedding model
+  const isAiDefaultEmbedder = AI_MODEL_CATALOG.some(
+    (m) => m.id === aiDefaultModelId && m.capabilities?.includes("embedding")
+  );
+  const effectiveChatModelId = isAiDefaultEmbedder ? DEFAULT_AI_MODEL_ID : aiDefaultModelId;
   const knowledgeEnabledChat = useKnowledgeStore((s) => s.enabledInChat);
   const setKnowledgeEnabledChat = useKnowledgeStore((s) => s.setEnabledInChat);
   const knowledgeCatList = useKnowledgeStore((s) => s.categories);
