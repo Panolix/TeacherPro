@@ -1760,11 +1760,22 @@ pub fn run() {
             extract_text,
             ai_generate_embedding
         ])
+        .setup(|_app| {
+            // Start Ollama at app launch so it's ready when the user opens the AI chat
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                ensure_ollama_server_started();
+            });
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, event| {
-            if let tauri::RunEvent::Exit = event {
-                stop_ollama_server();
+            match event {
+                tauri::RunEvent::Exit | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
+                    stop_ollama_server();
+                }
+                _ => {}
             }
         });
 }
