@@ -1364,7 +1364,6 @@ async fn ai_generate_text(
             "model": task_model_id,
             "prompt": task_prompt,
             "stream": false,
-            "think": task_thinking,
             "options": {
                 "temperature": task_temperature,
                 "num_ctx": task_num_ctx,
@@ -1372,6 +1371,9 @@ async fn ai_generate_text(
             }
         });
 
+        if task_thinking {
+            body["think"] = serde_json::Value::Bool(true);
+        }
         if !task_system.is_empty() {
             body["system"] = serde_json::Value::String(task_system);
         }
