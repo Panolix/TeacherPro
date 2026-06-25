@@ -412,6 +412,155 @@ export function SettingsModal({ open, onClose }: Props) {
     { key: "advanced", label: t("settings.tabs.advanced"), icon: SlidersHorizontal },
   ];
 
+  const renderModelList = (embeddingOnly: boolean) => (
+    <div className="flex flex-col gap-2">
+      {AI_MODEL_CATALOG.filter((m) => embeddingOnly === (m.capabilities?.includes("embedding") ?? false)).map((model) => {
+        const installState = getModelInstallState(model.id);
+        const installProgress = aiInstallProgress[model.id];
+        const isInstalling =
+          installState === "installing" ||
+          installProgress?.status === "preparing" ||
+          installProgress?.status === "installing";
+        const isInstalled = installState === "installed";
+        const isDefault = aiDefaultModelId === model.id;
+        const isEmbedding = model.capabilities?.includes("embedding");
+        const isActiveEmbedder = isEmbedding && embedderModelId === model.id;
+        const isCanceling = aiActionBusy === `cancel:${model.id}`;
+        const isRemoving = aiActionBusy === `remove:${model.id}`;
+        const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
+        const progressText =
+          installProgress?.detail ||
+          (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
+
+        return (
+          <div
+            key={model.id}
+            className="rounded-lg px-3 py-3"
+            style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[14px] font-medium" style={{ color: "var(--tp-t-1)" }}>
+                    {model.label}
+                  </span>
+                  <Badge>{model.tier}</Badge>
+                  {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
+                  {model.capabilities?.map((cap) => (
+                    <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
+                  ))}
+                </div>
+                <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
+                  {model.description}
+                </div>
+                <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
+                  <span className="inline-flex items-center gap-1">
+                    <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
+                  </span>
+                  <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
+                  <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
+                  <span>{t("settings.ai.sourceOllama")}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
+                {!isInstalling && installState === "error" && (
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                )}
+                {!isInstalling && isInstalled && (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                )}
+              </div>
+            </div>
+
+            {isInstalling && (
+              <div className="mt-2">
+                <div className="h-1.5 w-full rounded overflow-hidden" style={{ background: "var(--tp-bg-3)" }}>
+                  <div
+                    className="h-full transition-all duration-300"
+                    style={{ width: `${Math.max(progressValue, 3)}%`, background: "var(--tp-accent)" }}
+                  />
+                </div>
+                {progressText && (
+                  <div className="mt-1 text-[11px] truncate" style={{ color: "var(--tp-t-4)" }}>
+                    {progressText}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {!isInstalled ? (
+                <>
+                  <button
+                    onClick={() => void handleInstallModel(model.id)}
+                    disabled={isInstalling || isRemoving || aiActionBusy === "refresh-models"}
+                    className="tp-btn tp-btn-primary"
+                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                  >
+                    {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
+                  </button>
+                  <button
+                    onClick={() => void handleImportGguf(model.id)}
+                    disabled={isInstalling || isRemoving}
+                    className="tp-btn"
+                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                  >
+                    {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
+                  </button>
+                  {isInstalling && (
+                    <button
+                      onClick={() => void handleCancelInstallModel(model.id)}
+                      disabled={isCanceling}
+                      className="tp-btn"
+                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                    >
+                      {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {isEmbedding ? (
+                    <button
+                      onClick={() => setEmbedderModelId(model.id)}
+                      className={`tp-btn ${isActiveEmbedder ? "tp-btn-primary" : ""}`}
+                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                    >
+                      {isActiveEmbedder
+                        ? (language === "de" ? "Embedder ✓" : "Embedder ✓")
+                        : (language === "de" ? "Als Embedder" : "Set as Embedder")}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setAiDefaultModelId(model.id);
+                        setAiRewriteTranslateModelId(model.id);
+                      }}
+                      className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
+                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                      title={t("settings.ai.setDefaultTooltip")}
+                    >
+                      {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => void handleRemoveModel(model.id)}
+                    disabled={isRemoving || isInstalling}
+                    className="tp-btn"
+                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
+                  >
+                    {t("settings.ai.remove")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div
       className="fixed inset-0 z-[75] flex items-center justify-center p-6"
@@ -775,152 +924,15 @@ export function SettingsModal({ open, onClose }: Props) {
                     </div>
                   )}
 
-                  <div className="flex flex-col gap-2">
-                    {AI_MODEL_CATALOG.map((model) => {
-                      const installState = getModelInstallState(model.id);
-                      const installProgress = aiInstallProgress[model.id];
-                      const isInstalling =
-                        installState === "installing" ||
-                        installProgress?.status === "preparing" ||
-                        installProgress?.status === "installing";
-                      const isInstalled = installState === "installed";
-                      const isDefault = aiDefaultModelId === model.id;
-                      const isEmbedding = model.capabilities?.includes("embedding");
-                      const isActiveEmbedder = isEmbedding && embedderModelId === model.id;
-                      const isCanceling = aiActionBusy === `cancel:${model.id}`;
-                      const isRemoving = aiActionBusy === `remove:${model.id}`;
-                      const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
-                      const progressText =
-                        installProgress?.detail ||
-                        (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
-
-                      return (
-                        <div
-                          key={model.id}
-                          className="rounded-lg px-3 py-3"
-                          style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[14px] font-medium" style={{ color: "var(--tp-t-1)" }}>
-                                  {model.label}
-                                </span>
-                                <Badge>{model.tier}</Badge>
-                                {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
-                                {model.capabilities?.map((cap) => (
-                                  <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
-                                ))}
-                              </div>
-                              <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                                {model.description}
-                              </div>
-                              <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
-                                <span className="inline-flex items-center gap-1">
-                                  <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
-                                </span>
-                                <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
-                                <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
-                                <span>{t("settings.ai.sourceOllama")}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
-                              {!isInstalling && installState === "error" && (
-                                <AlertCircle className="w-4 h-4 text-amber-400" />
-                              )}
-                              {!isInstalling && isInstalled && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                              )}
-                            </div>
-                          </div>
-
-                          {isInstalling && (
-                            <div className="mt-2">
-                              <div className="h-1.5 w-full rounded overflow-hidden" style={{ background: "var(--tp-bg-3)" }}>
-                                <div
-                                  className="h-full transition-all duration-300"
-                                  style={{ width: `${Math.max(progressValue, 3)}%`, background: "var(--tp-accent)" }}
-                                />
-                              </div>
-                              {progressText && (
-                                <div className="mt-1 text-[11px] truncate" style={{ color: "var(--tp-t-4)" }}>
-                                  {progressText}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {!isInstalled ? (
-                              <>
-                                <button
-                                  onClick={() => void handleInstallModel(model.id)}
-                                  disabled={isInstalling || isRemoving || aiActionBusy === "refresh-models"}
-                                  className="tp-btn tp-btn-primary"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
-                                </button>
-                                <button
-                                  onClick={() => void handleImportGguf(model.id)}
-                                  disabled={isInstalling || isRemoving}
-                                  className="tp-btn"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
-                                </button>
-                                {isInstalling && (
-                                  <button
-                                    onClick={() => void handleCancelInstallModel(model.id)}
-                                    disabled={isCanceling}
-                                    className="tp-btn"
-                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  >
-                                    {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                {isEmbedding ? (
-                                  <button
-                                    onClick={() => setEmbedderModelId(model.id)}
-                                    className={`tp-btn ${isActiveEmbedder ? "tp-btn-primary" : ""}`}
-                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  >
-                                    {isActiveEmbedder
-                                      ? (language === "de" ? "Embedder ✓" : "Embedder ✓")
-                                      : (language === "de" ? "Als Embedder" : "Set as Embedder")}
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => {
-                                      setAiDefaultModelId(model.id);
-                                      setAiRewriteTranslateModelId(model.id);
-                                    }}
-                                    className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
-                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                    title={t("settings.ai.setDefaultTooltip")}
-                                  >
-                                    {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => void handleRemoveModel(model.id)}
-                                  disabled={isRemoving || isInstalling}
-                                  className="tp-btn"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {t("settings.ai.remove")}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  {renderModelList(false)}
+                  <div className="mt-4 mb-2 flex items-center gap-3">
+                    <div className="flex-1 h-px" style={{ background: "var(--tp-b-1)" }} />
+                    <span className="text-[11px] font-medium uppercase tracking-wider" style={{ color: "var(--tp-t-4)" }}>
+                      {t("knowledge.embedder")}
+                    </span>
+                    <div className="flex-1 h-px" style={{ background: "var(--tp-b-1)" }} />
                   </div>
+                  {renderModelList(true)}
 
                   <p className="text-[11px] mt-3" style={{ color: "var(--tp-t-4)" }}>
                     {t("settings.ai.installHelp")}
