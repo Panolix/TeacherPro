@@ -647,9 +647,12 @@ const de = {
 
   knowledge: {
     addSource: "Wissensquelle hinzufügen",
-    embedder: "Embedding-Modell (für Wissensdatenbank)",
+    embedder: "Embedding-Modell",
+    embedderTier1: "⚡ Extrem schnell (4+ GB RAM, CPU reicht)",
+    embedderTier2: "🔶 Ausgewogen (16+ GB RAM, beliebige GPU)",
+    embedderTier3: "⭐ Premium Mehrsprachig (16+ GB, GPU empfohlen)",
     file: "Datei",
-    embedderHint: "nomic-embed-text (274 MB) ist schneller und kleiner. bge-m3 (2,2 GB) liefert bessere Ergebnisse für Deutsch.",
+    embedderHint: "Alle Modelle laufen auf Apple Silicon (Metal), NVIDIA (CUDA), AMD (ROCm) und Intel (Vulkan/CPU). Wähle nach Hardware und Sprachen.",
     extracting: "Extrahiere Text...",
     chunking: "Zerlege in Chunks...",
     embedding: "Erstelle Embeddings...",

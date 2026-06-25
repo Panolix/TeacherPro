@@ -681,41 +681,36 @@ export function SettingsModal({ open, onClose }: Props) {
                 </Section>
 
                 <Section title={t("knowledge.embedder")}>
-                  <div className="flex flex-col gap-1.5">
-                    {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((model) => {
-                      const isActive = embedderModelId === model.id;
-                      const installState = getModelInstallState(model.id);
-                      return (
-                        <button
-                          key={model.id}
-                          onClick={() => setEmbedderModelId(model.id)}
-                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-                            isActive ? "ring-2 ring-[var(--tp-accent)]" : "hover:bg-[var(--tp-bg-3)]"
-                          }`}
-                          style={{ background: isActive ? "rgba(45,134,165,0.1)" : "var(--tp-bg-2)" }}
-                        >
-                          <span className="flex-1 min-w-0">
-                            <div className="text-[12px] font-medium truncate" style={{ color: "var(--tp-t-1)" }}>
-                              {model.label}
-                            </div>
-                            <div className="text-[10px] mt-0.5" style={{ color: "var(--tp-t-4)" }}>
-                              {model.estimatedDisk} · {model.description.split("–")[0]?.trim() || model.description.slice(0, 60) + "…"}
-                            </div>
-                          </span>
-                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${
-                            installState === "installed"
-                              ? "text-emerald-400 bg-emerald-400/10"
-                              : installState === "installing" || installState === "not-installed"
-                                ? "text-amber-400 bg-amber-400/10"
-                                : "text-red-400 bg-red-400/10"
-                          }`}>
-                            {installState === "installed" ? "✓" : installState === "installing" ? "⋯" : ""}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-col gap-3">
+                    {/* Tier 1 */}
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier1")}</div>
+                      <div className="flex flex-col gap-1">
+                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["all-minilm:l6-v2", "nomic-embed-text"].includes(m.id)).map((model) => (
+                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
+                        ))}
+                      </div>
+                    </div>
+                    {/* Tier 2 */}
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier2")}</div>
+                      <div className="flex flex-col gap-1">
+                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["mxbai-embed-large", "bge-large:en"].includes(m.id)).map((model) => (
+                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
+                        ))}
+                      </div>
+                    </div>
+                    {/* Tier 3 */}
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier3")}</div>
+                      <div className="flex flex-col gap-1">
+                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["bge-m3"].includes(m.id)).map((model) => (
+                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <p className="text-[11px] mt-1.5" style={{ color: "var(--tp-t-4)" }}>
+                  <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
                     {t("knowledge.embedderHint")}
                   </p>
                 </Section>
@@ -1065,6 +1060,34 @@ function NumberInput({ value, min, max, onChange }: { value: number; min: number
       </button>
       <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>{t("common.range", { min, max })}</span>
     </div>
+  );
+}
+
+function EmbedderOption({ model, isActive, installState, onSelect }: { model: typeof AI_MODEL_CATALOG[0]; isActive: boolean; installState: string; onSelect: (id: string) => void }) {
+  return (
+    <button
+      onClick={() => onSelect(model.id)}
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${isActive ? "ring-2 ring-[var(--tp-accent)]" : "hover:bg-[var(--tp-bg-3)]"}`}
+      style={{ background: isActive ? "rgba(45,134,165,0.1)" : "var(--tp-bg-2)" }}
+    >
+      <span className="flex-1 min-w-0">
+        <div className="text-[12px] font-medium truncate" style={{ color: "var(--tp-t-1)" }}>
+          {model.label}
+        </div>
+        <div className="text-[10px] mt-0.5" style={{ color: "var(--tp-t-4)" }}>
+          {model.estimatedDisk} · {model.recommendedRam}
+        </div>
+      </span>
+      <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded ${
+        installState === "installed"
+          ? "text-emerald-400 bg-emerald-400/10"
+          : installState === "installing"
+            ? "text-amber-400 bg-amber-400/10"
+            : "text-[var(--tp-t-4)] bg-[var(--tp-bg-3)]"
+      }`}>
+        {installState === "installed" ? "✓ Installiert" : installState === "installing" ? "⋯" : "—"}
+      </span>
+    </button>
   );
 }
 
