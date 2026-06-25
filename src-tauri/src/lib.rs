@@ -1027,8 +1027,13 @@ fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
 }
 
 #[tauri::command]
-fn ai_ensure_runtime() -> Result<String, String> {
-    ensure_ollama_runtime()
+async fn ai_ensure_runtime() -> Result<String, String> {
+    // Run in blocking thread to not block the UI
+    tauri::async_runtime::spawn_blocking(move || {
+        ensure_ollama_runtime()
+    })
+    .await
+    .map_err(|e| format!("Runtime task failed: {e}"))?
 }
 
 #[tauri::command]
