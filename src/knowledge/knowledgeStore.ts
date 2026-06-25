@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
-import { readTextFile, writeTextFile, exists, mkdir, copyFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, exists, mkdir } from "@tauri-apps/plugin-fs";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
 import type { KnowledgeSource, KnowledgeChunk, KnowledgeCategory, KnowledgeIndex, SearchResult, ImportProgress } from "./types";
@@ -33,6 +33,8 @@ interface KnowledgeState {
   index: KnowledgeIndex | null;
   isIndexing: boolean;
   importProgress: ImportProgress | null;
+  importError: string | null;
+  clearImportError: () => void;
   selectedSourceId: string | null;
   searchResults: SearchResult[];
   enabledInChat: boolean;
@@ -65,6 +67,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   index: null,
   isIndexing: false,
   importProgress: null,
+  importError: null,
+  clearImportError: () => set({ importError: null }),
   selectedSourceId: null,
   searchResults: [],
   enabledInChat: false,
@@ -106,6 +110,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     const vault = useAppStore.getState().vaultPath;
     if (!vault) return;
 
+    set({ importError: null });
+
     const files = await open({
       multiple: true,
       filters: [
@@ -117,6 +123,27 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     const targetCategory = category || "allgemein";
     const targetPriority = get().categories.find((c) => c.id === targetCategory)?.priority ?? 10;
 
+    // Check if embedding model is installed before starting
+    try {
+      const installedModels = await invoke<string[]>("ai_list_models");
+      const normalizeId = (rawId: string) => rawId.replace(/:latest$/i, "");
+      const installed = new Set(installedModels.map(normalizeId));
+      const embedderId = get().embedderModelId;
+      if (!installed.has(embedderId)) {
+        set({
+          importError: `Embedding-Modell "${embedderId}" ist nicht installiert. Installiere es zuerst im Modellkatalog.`,
+          isIndexing: false,
+        });
+        return;
+      }
+    } catch (e) {
+      set({
+        importError: `Ollama läuft nicht oder kann keine Modelle auflisten: ${String(e)}`,
+        isIndexing: false,
+      });
+      return;
+    }
+
     const knowledgeDir = await join(vault, KNOWLEDGE_SUBDIR);
     await mkdir(knowledgeDir, { recursive: true });
 
@@ -124,6 +151,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
     const state = get();
     const index = state.index || { chunks: [], embedder: state.embedderModelId, updatedAt: "" };
+    let hadErrors = false;
+    let totalChunksImported = 0;
 
     for (let i = 0; i < files.length; i++) {
       const filePath = files[i];
@@ -140,12 +169,13 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       });
 
       try {
-        // Copy file to knowledge dir
-        const destPath = await join(knowledgeDir, fileName);
-        await copyFile(filePath, destPath);
-
         // Extract text
         const textContent = await invoke<string>("extract_text", { filePath });
+        if (!textContent || textContent.trim().length < 10) {
+          set({ importError: `"${fileName}" enthält kaum lesbaren Text. Nicht alle Dateitypen werden unterstützt.` });
+          hadErrors = true;
+          continue;
+        }
 
         set({
           importProgress: {
@@ -155,6 +185,10 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
         // Chunk text
         const chunks = chunkText(textContent, fileName);
+        if (chunks.length === 0) {
+          hadErrors = true;
+          continue;
+        }
 
         // Embed each chunk
         const newChunks: KnowledgeChunk[] = [];
@@ -191,10 +225,17 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             });
           } catch (e) {
             console.warn(`Failed to embed chunk ${j} of ${fileName}:`, e);
+            hadErrors = true;
           }
         }
 
+        if (newChunks.length === 0) {
+          hadErrors = true;
+          continue;
+        }
+
         index.chunks.push(...newChunks);
+        totalChunksImported += newChunks.length;
 
         set((s) => ({
           sources: [
@@ -204,7 +245,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
               name: fileName,
               relativePath: fileName,
               category: targetCategory,
-              priority: 10,
+              priority: targetPriority,
               tags: [],
               status: "indexed",
               chunkCount: newChunks.length,
@@ -213,17 +254,24 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
           ],
         }));
       } catch (e) {
-        console.warn(`Failed to import ${fileName}:`, e);
+        set({ importError: `Fehler beim Import von "${fileName}": ${String(e)}` });
+        hadErrors = true;
       }
     }
 
-    // Save index
-    index.updatedAt = new Date().toISOString();
-    try {
-      const indexPath = await join(vault, INDEX_FILE);
-      await writeTextFile(indexPath, JSON.stringify(index, null, 2));
-    } catch (e) {
-      console.warn("Failed to save knowledge index:", e);
+    if (totalChunksImported === 0 && !hadErrors) {
+      set({ importError: "Es wurden keine Chunks erstellt. Die Datei könnte leer oder nicht lesbar sein." });
+    }
+
+    // Save index (only if we have data)
+    if (totalChunksImported > 0) {
+      index.updatedAt = new Date().toISOString();
+      try {
+        const indexPath = await join(vault, INDEX_FILE);
+        await writeTextFile(indexPath, JSON.stringify(index, null, 2));
+      } catch (e) {
+        console.warn("Failed to save knowledge index:", e);
+      }
     }
 
     set({ index, isIndexing: false, importProgress: null });

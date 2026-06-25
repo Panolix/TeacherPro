@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { BrainCircuit, Plus, Trash2, RefreshCw, FileText, Loader2, CheckCircle2, AlertCircle, FolderPlus } from "lucide-react";
+import { BrainCircuit, Plus, Trash2, RefreshCw, FileText, Loader2, CheckCircle2, AlertCircle, FolderPlus, X } from "lucide-react";
 import { useKnowledgeStore } from "./knowledgeStore";
 import { useTranslation } from "../i18n/useTranslation";
 
 export function KnowledgePanel() {
   const { t } = useTranslation();
   const {
-    sources, categories, isIndexing, importProgress, loadIndex,
-    addSource, removeSource, reindexAll, addCategory,
+    sources, categories, isIndexing, importProgress, importError, clearImportError,
+    loadIndex, addSource, removeSource, reindexAll, addCategory,
     selectedSourceId, setSelectedSource,
     enabledInChat, chatCategoryFilter, setChatCategoryFilter,
   } = useKnowledgeStore();
@@ -128,6 +128,19 @@ export function KnowledgePanel() {
                 background: "var(--tp-accent)",
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Error Display */}
+      {importError && (
+        <div className="mx-3 mb-2 p-2 rounded-md text-[11px]" style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", color: "#fca5a5" }}>
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span className="flex-1">{importError}</span>
+            <button onClick={clearImportError} className="shrink-0 p-0.5 rounded hover:bg-red-400/20">
+              <X className="w-3 h-3" />
+            </button>
           </div>
         </div>
       )}
