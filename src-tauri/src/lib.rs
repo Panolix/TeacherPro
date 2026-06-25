@@ -1353,23 +1353,6 @@ async fn ai_generate_text(
             .timeout(std::time::Duration::from_secs(300))
             .build();
 
-        #[derive(serde::Deserialize)]
-        struct OllamaChatResponse {
-            message: OllamaChatMessage,
-        }
-        #[derive(serde::Deserialize)]
-        struct OllamaChatMessage {
-            content: String,
-            #[serde(default)]
-            thinking: String,
-        }
-        #[derive(serde::Deserialize)]
-        struct OllamaGenerateResponse {
-            response: String,
-            #[serde(default)]
-            thinking: String,
-        }
-
         // Build common request body
         let mut chat_body = serde_json::json!({
             "model": task_model_id,
@@ -1500,6 +1483,41 @@ async fn ai_generate_text(
             let json = call_api("/api/chat", body)?;
             let (text, thinking) = extract(&json, true)?;
             let clean = strip_think_blocks(&text);
+            if task_thinking && !thinking.trim().is_empty() {
+                return Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean));
+            } else { return Ok(clean); }
+        }
+
+        // Try 4: /v1/chat/completions (OpenAI-compatible endpoint – used by AnythingLLM)
+        {
+            let mut msgs: Vec<serde_json::Value> = Vec::new();
+            if !task_system.is_empty() {
+                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
+            }
+            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
+            let body = serde_json::json!({
+                "model": task_model_id,
+                "messages": msgs,
+                "stream": false,
+                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
+            });
+
+            let json = call_api("/v1/chat/completions", body)?;
+            let choice = json.get("choices")
+                .and_then(|c| c.as_array())
+                .and_then(|c| c.first())
+                .ok_or("No choices in response")?;
+            let content = choice.get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_str())
+                .unwrap_or("")
+                .to_string();
+            let thinking = choice.get("message")
+                .and_then(|m| m.get("thinking"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+            let clean = strip_think_blocks(&content);
             if task_thinking && !thinking.trim().is_empty() {
                 Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
             } else { Ok(clean) }
