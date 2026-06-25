@@ -47,13 +47,14 @@ interface KnowledgeState {
   reindexSource: (id: string) => Promise<void>;
   reindexAll: () => Promise<void>;
   searchSimilar: (text: string, limit?: number) => SearchResult[];
+  searchSimilarAsync: (text: string, limit?: number) => Promise<SearchResult[]>;
   setSelectedSource: (id: string | null) => void;
   setEnabledInChat: (enabled: boolean) => void;
   setChatCategoryFilter: (category: string | null) => void;
   setEmbedderModelId: (modelId: string) => void;
   addCategory: (name: string, subject?: string) => void;
   removeCategory: (id: string) => void;
-  buildKnowledgeContext: (query: string, maxChunks?: number) => string;
+  buildKnowledgeContext: (query: string, maxChunks?: number) => Promise<string>;
 }
 
 export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
@@ -307,10 +308,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     const index = get().index;
     if (!index || index.chunks.length === 0) return [];
 
-    // Use a simple scoring approach: keyword matching since we can't embed on the fly in render
+    // Keyword-based fallback (fast, sync, works offline)
     const query = text.toLowerCase();
     const queryWords = query.split(/\s+/).filter((w) => w.length > 2);
-
     const scored = index.chunks.map((chunk) => {
       const chunkText = (chunk.title + " " + chunk.text + " " + chunk.tags.join(" ")).toLowerCase();
       let matchScore = 0;
@@ -321,11 +321,51 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       const priorityBoost = chunk.priority / 100;
       return { chunk, score: textSimilarity * (1 + priorityBoost) };
     });
-
     return scored
-      .filter((s) => s.score > 0)
+      .filter((s) => s.score > 0.01)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+  },
+  searchSimilarAsync: async (text: string, limit = 8): Promise<SearchResult[]> => {
+    const index = get().index;
+    if (!index || index.chunks.length === 0) return [];
+
+    // Try embedding-based search first (cross-language capable)
+    try {
+      const modelId = get().embedderModelId;
+      const embedding = await invoke<number[]>("ai_generate_embedding", {
+        model: modelId,
+        text,
+      });
+
+      const scored = index.chunks.map((chunk) => {
+        let cosSim = 0;
+        if (chunk.embedding && chunk.embedding.length > 0) {
+          let dot = 0, na = 0, nb = 0;
+          const len = Math.min(embedding.length, chunk.embedding.length);
+          for (let k = 0; k < len; k++) {
+            dot += embedding[k] * chunk.embedding[k];
+            na += embedding[k] * embedding[k];
+            nb += chunk.embedding[k] * chunk.embedding[k];
+          }
+          cosSim = na === 0 || nb === 0 ? 0 : dot / (Math.sqrt(na) * Math.sqrt(nb));
+        }
+        const priorityBoost = chunk.priority / 100;
+        return { chunk, score: cosSim * (0.5 + priorityBoost) };
+      });
+
+      const results = scored
+        .filter((s) => s.score > 0.1)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+
+      if (results.length > 0) return results;
+    } catch (_) {
+      // Silent fallback to keyword search
+    }
+
+    // Fallback: keyword search
+    return get().searchSimilar(text, limit);
   },
 
   setSelectedSource: (id) => set({ selectedSourceId: id }),
@@ -349,8 +389,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     set((s) => ({ categories: s.categories.filter((c) => c.id !== id) }));
   },
 
-  buildKnowledgeContext: (query, maxChunks = 8) => {
-    const results = get().searchSimilar(query, maxChunks);
+  buildKnowledgeContext: async (query, maxChunks = 8) => {
+    const results = await get().searchSimilarAsync(query, maxChunks);
     const categoryFilter = get().chatCategoryFilter;
     const filtered = categoryFilter
       ? results.filter((r) => r.chunk.category === categoryFilter)

@@ -1896,7 +1896,7 @@ export function Editor() {
         if (ks.enabledInChat && ks.index && ks.index.chunks.length > 0) {
           // Search with user query + lesson context + subject for better matches
           const searchQuery = `${userText} ${contextText.slice(0, 2000)} ${subject || ""}`;
-          knowledgeBlock = ks.buildKnowledgeContext(searchQuery, 8);
+          knowledgeBlock = await ks.buildKnowledgeContext(searchQuery, 8);
         }
       } catch (e) { console.warn("Knowledge search failed:", e); }
 
