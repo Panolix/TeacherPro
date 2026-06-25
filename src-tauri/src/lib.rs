@@ -1467,7 +1467,7 @@ async fn ai_generate_text(
         // Try 3: /api/chat?raw=true (bypasses template validation)
         {
             let mut body = serde_json::json!({
-                "model": task_model_id,
+                "model": task_model_id.clone(),
                 "raw": true,
                 "stream": false,
                 "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
@@ -1480,12 +1480,16 @@ async fn ai_generate_text(
             msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
             body["messages"] = serde_json::Value::Array(msgs);
 
-            let json = call_api("/api/chat", body)?;
-            let (text, thinking) = extract(&json, true)?;
-            let clean = strip_think_blocks(&text);
-            if task_thinking && !thinking.trim().is_empty() {
-                return Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean));
-            } else { return Ok(clean); }
+            match call_api("/api/chat", body) {
+                Ok(json) => {
+                    let (text, thinking) = extract(&json, true)?;
+                    let clean = strip_think_blocks(&text);
+                    if task_thinking && !thinking.trim().is_empty() {
+                        return Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean));
+                    } else { return Ok(clean); }
+                }
+                Err(_) => {}
+            }
         }
 
         // Try 4: /v1/chat/completions (OpenAI-compatible endpoint – used by AnythingLLM)
