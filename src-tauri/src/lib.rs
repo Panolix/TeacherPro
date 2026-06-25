@@ -1353,28 +1353,6 @@ async fn ai_generate_text(
             .timeout(std::time::Duration::from_secs(300))
             .build();
 
-        // Build messages array for /api/chat (supports all models, including Qwen 3.6)
-        let mut messages: Vec<serde_json::Value> = Vec::new();
-        if !task_system.is_empty() {
-            messages.push(serde_json::json!({"role": "system", "content": task_system}));
-        }
-        messages.push(serde_json::json!({"role": "user", "content": task_prompt}));
-
-        let mut body = serde_json::json!({
-            "model": task_model_id,
-            "messages": messages,
-            "stream": false,
-            "options": {
-                "temperature": task_temperature,
-                "num_ctx": task_num_ctx,
-                "num_predict": task_num_predict,
-            }
-        });
-
-        if task_thinking {
-            body["think"] = serde_json::Value::Bool(true);
-        }
-
         #[derive(serde::Deserialize)]
         struct OllamaChatResponse {
             message: OllamaChatMessage,
@@ -1385,27 +1363,146 @@ async fn ai_generate_text(
             #[serde(default)]
             thinking: String,
         }
+        #[derive(serde::Deserialize)]
+        struct OllamaGenerateResponse {
+            response: String,
+            #[serde(default)]
+            thinking: String,
+        }
 
-        let response = agent
-            .post(&format!("{base_url}/api/chat"))
-            .send_json(body);
-        let response = match response {
-            Ok(r) => r,
-            Err(ureq::Error::Status(code, resp)) => {
-                let status_text = resp.into_string().unwrap_or_default();
-                return Err(format!("Ollama API (status {code}): {status_text}"));
+        // Build common request body
+        let mut chat_body = serde_json::json!({
+            "model": task_model_id,
+            "stream": false,
+            "options": {
+                "temperature": task_temperature,
+                "num_ctx": task_num_ctx,
+                "num_predict": task_num_predict,
             }
-            Err(e) => return Err(format!("Ollama API request failed: {e}")),
-        };
-        let result = response
-            .into_json::<OllamaChatResponse>()
-            .map_err(|e| format!("Failed to parse Ollama response: {e}"))?;
+        });
+        if task_thinking {
+            chat_body["think"] = serde_json::Value::Bool(true);
+        }
 
-        let clean = strip_think_blocks(&result.message.content);
-        if task_thinking && !result.message.thinking.is_empty() {
-            Ok(format!("<think>{}</think>\n{}", result.message.thinking.trim(), clean))
-        } else {
-            Ok(clean)
+        // Helper to call an Ollama endpoint
+        let call_api = |endpoint: &str, req_body: serde_json::Value| -> Result<serde_json::Value, String> {
+            let resp = agent
+                .post(&format!("{base_url}{endpoint}"))
+                .send_json(req_body);
+            match resp {
+                Ok(r) => r.into_json::<serde_json::Value>().map_err(|e| format!("Bad JSON: {e}")),
+                Err(ureq::Error::Status(code, resp)) => {
+                    let text = resp.into_string().unwrap_or_default();
+                    Err(format!("Ollama API (status {code}): {text}"))
+                }
+                Err(e) => Err(format!("Ollama API request failed: {e}")),
+            }
+        };
+
+        // Try endpoints: /api/chat → /api/generate → /api/chat?raw=true
+        fn build_opts(t: f64, ctx: u32, pred: i32) -> serde_json::Value {
+            serde_json::json!({
+                "temperature": t, "num_ctx": ctx, "num_predict": pred
+            })
+        }
+
+        // Helper: extract content+thinking from chat or generate response
+        let extract = |json: &serde_json::Value, is_chat: bool| -> Result<(String, String), String> {
+            let content = if is_chat {
+                json.get("message")
+                    .and_then(|m| m.get("content"))
+                    .and_then(|c| c.as_str())
+                    .unwrap_or("")
+                    .to_string()
+            } else {
+                json.get("response").and_then(|r| r.as_str()).unwrap_or("").to_string()
+            };
+            let thinking = json.get("thinking").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            Ok((content, thinking))
+        };
+
+        // Try 1: /api/chat (messages format)
+        {
+            let mut body = serde_json::json!({
+                "model": task_model_id.clone(),
+                "stream": false,
+                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
+            });
+            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
+            let mut msgs: Vec<serde_json::Value> = Vec::new();
+            if !task_system.is_empty() {
+                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
+            }
+            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
+            body["messages"] = serde_json::Value::Array(msgs);
+
+            match call_api("/api/chat", body) {
+                Ok(json) => {
+                    let (text, thinking) = extract(&json, true)?;
+                    let clean = strip_think_blocks(&text);
+                    return if task_thinking && !thinking.trim().is_empty() {
+                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
+                    } else { Ok(clean) };
+                }
+                Err(e) => {
+                    if !e.contains("does not support chat") {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        // Try 2: /api/generate (legacy format)
+        {
+            let mut body = serde_json::json!({
+                "model": task_model_id.clone(),
+                "prompt": &task_prompt,
+                "stream": false,
+                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
+            });
+            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
+            if !task_system.is_empty() {
+                body["system"] = serde_json::Value::String(task_system.clone());
+            }
+
+            match call_api("/api/generate", body) {
+                Ok(json) => {
+                    let (text, thinking) = extract(&json, false)?;
+                    let clean = strip_think_blocks(&text);
+                    return if task_thinking && !thinking.trim().is_empty() {
+                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
+                    } else { Ok(clean) };
+                }
+                Err(e) => {
+                    if !e.contains("does not support generate") {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        // Try 3: /api/chat?raw=true (bypasses template validation)
+        {
+            let mut body = serde_json::json!({
+                "model": task_model_id,
+                "raw": true,
+                "stream": false,
+                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
+            });
+            if task_thinking { body["think"] = serde_json::Value::Bool(true); }
+            let mut msgs: Vec<serde_json::Value> = Vec::new();
+            if !task_system.is_empty() {
+                msgs.push(serde_json::json!({"role": "system", "content": &task_system}));
+            }
+            msgs.push(serde_json::json!({"role": "user", "content": &task_prompt}));
+            body["messages"] = serde_json::Value::Array(msgs);
+
+            let json = call_api("/api/chat", body)?;
+            let (text, thinking) = extract(&json, true)?;
+            let clean = strip_think_blocks(&text);
+            if task_thinking && !thinking.trim().is_empty() {
+                Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
+            } else { Ok(clean) }
         }
     })
     .await
