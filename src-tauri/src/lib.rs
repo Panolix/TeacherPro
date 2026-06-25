@@ -1492,7 +1492,33 @@ async fn ai_generate_text(
             }
         }
 
-        // Try 4: /v1/chat/completions (OpenAI-compatible endpoint – used by AnythingLLM)
+        // Try 4: /api/generate?raw=true (pure text in/out, no template – works with ANY model)
+        {
+            let raw_prompt = if !task_system.is_empty() {
+                format!("{}\n\n{}", task_system, task_prompt)
+            } else {
+                task_prompt.clone()
+            };
+            let body = serde_json::json!({
+                "model": task_model_id,
+                "prompt": raw_prompt,
+                "raw": true,
+                "stream": false,
+                "options": build_opts(task_temperature, task_num_ctx, task_num_predict),
+            });
+            match call_api("/api/generate", body) {
+                Ok(json) => {
+                    let (text, thinking) = extract(&json, false)?;
+                    let clean = strip_think_blocks(&text);
+                    return if task_thinking && !thinking.trim().is_empty() {
+                        Ok(format!("<think>{}</think>\n{}", thinking.trim(), clean))
+                    } else { Ok(clean) };
+                }
+                Err(_) => {}
+            }
+        }
+
+        // Try 5: /v1/chat/completions (OpenAI-compatible endpoint)
         {
             let mut msgs: Vec<serde_json::Value> = Vec::new();
             if !task_system.is_empty() {
