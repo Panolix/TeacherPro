@@ -682,29 +682,20 @@ export function SettingsModal({ open, onClose }: Props) {
 
                 <Section title={t("knowledge.embedder")}>
                   <div className="flex flex-col gap-3">
-                    {/* Tier 1 */}
+                    {/* Stufe 1 */}
                     <div>
                       <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier1")}</div>
                       <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["all-minilm:l6-v2", "nomic-embed-text"].includes(m.id)).map((model) => (
+                        {AI_MODEL_CATALOG.filter((m) => ["nomic-embed-text", "all-minilm:l6-v2"].includes(m.id)).map((model) => (
                           <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
                         ))}
                       </div>
                     </div>
-                    {/* Tier 2 */}
+                    {/* Stufe 2 */}
                     <div>
                       <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier2")}</div>
                       <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["mxbai-embed-large", "bge-large:en"].includes(m.id)).map((model) => (
-                          <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
-                        ))}
-                      </div>
-                    </div>
-                    {/* Tier 3 */}
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier3")}</div>
-                      <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding") && ["bge-m3"].includes(m.id)).map((model) => (
+                        {AI_MODEL_CATALOG.filter((m) => ["bge-m3", "bge-large:en"].includes(m.id)).map((model) => (
                           <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
                         ))}
                       </div>

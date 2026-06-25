@@ -648,9 +648,8 @@ const en = {
   knowledge: {
     addSource: "Add Knowledge Source",
     embedder: "Embedding Model",
-    embedderTier1: "⚡ Ultra-fast (4+ GB RAM, CPU ok)",
-    embedderTier2: "🔶 Balanced (16+ GB RAM, any GPU)",
-    embedderTier3: "⭐ Premium Multilingual (16+ GB, GPU recommended)",
+    embedderTier1: "⚡ Stufe 1 – Leicht (4+ GB RAM, CPU reicht)",
+    embedderTier2: "⭐ Stufe 2 – Premium (16+ GB RAM, GPU empfohlen)",
     file: "File",
     embedderHint: "All models run on Apple Silicon (Metal), NVIDIA (CUDA), AMD (ROCm) and Intel (Vulkan/CPU). Pick based on your hardware and languages.",
     extracting: "Extracting text...",

@@ -157,23 +157,10 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
   },
   // ═══════════════════════════════════════════════════════
   // Embedding-Modelle – für die Wissensdatenbank
-  // Laufen auf allen GPUs via Ollama (Apple Metal, NVIDIA CUDA, AMD ROCm, Intel iGPU via Vulkan)
+  // Laufen auf allen GPUs via Ollama (Apple Metal, NVIDIA CUDA, AMD ROCm, Intel via Vulkan/CPU)
+  // Jede Stufe bietet: eine multilinguale Option (DE+EN) + eine Extra-Option
   // ═══════════════════════════════════════════════════════
-  // ── Tier 1: Extrem leicht (läuft auf jedem Laptop, 4-8 GB RAM, CPU reicht) ──
-  {
-    id: "all-minilm:l6-v2",
-    label: "All MiniLM L6 v2",
-    tier: "small",
-    source: "ollama-registry",
-    estimatedDisk: "~80 MB",
-    recommendedRam: "VRAM: 1+ GB · CPU: 4+ GB RAM",
-    recommendedContext: "Max context: 512 tokens",
-    defaultNumCtx: 512,
-    defaultNumPredict: 128,
-    description: "SEHR SCHNELL (384 Dim · 80 MB) – Ideal für englische Texte, Echtzeitsuche und Low-End-Hardware. Läuft auf jeder GPU und CPU mit minimalem RAM.",
-    recommended: false,
-    capabilities: ["embedding", "low-latency", "english-focused"],
-  },
+  // ── Stufe 1: Extrem leicht · 4+ GB RAM · CPU reicht völlig ──
   {
     id: "nomic-embed-text",
     label: "Nomic Embed Text",
@@ -184,24 +171,38 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 8192 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "SCHNELL (768 Dim · 274 MB) – Universell einsetzbar, gute Mehrsprachigkeit, solide Ergebnisse für Deutsch und Englisch. Bester Kompromiss aus Geschwindigkeit und Qualität. Empfohlen für die meisten Nutzer.",
+    description: "SCHNELL (768 Dim · 274 MB) – Multilingual (DE+EN+mehr). Bester Kompromiss aus Speed und Qualität. Empfohlen für die meisten – läuft auf jedem Laptop, egal ob CPU oder GPU.",
     recommended: true,
     capabilities: ["embedding", "low-latency", "multilingual"],
   },
-  // ── Tier 2: Mittel (16+ GB RAM, läuft auf jeder GPU) ──
   {
-    id: "mxbai-embed-large",
-    label: "MXBAI Embed Large",
+    id: "all-minilm:l6-v2",
+    label: "All MiniLM L6 v2",
     tier: "small",
     source: "ollama-registry",
-    estimatedDisk: "~334 MB",
-    recommendedRam: "VRAM: 4+ GB · CPU: 8+ GB RAM",
+    estimatedDisk: "~80 MB",
+    recommendedRam: "VRAM: 1+ GB · CPU: 4+ GB RAM",
     recommendedContext: "Max context: 512 tokens",
-    defaultNumCtx: 2048,
+    defaultNumCtx: 512,
     defaultNumPredict: 128,
-    description: "SCHNELL (1024 Dim · 334 MB) – Exzellent für Englisch, starkes Retrieval und Semantik. Besonders gut für wissenschaftliche und fachliche Texte.",
+    description: "EXTREM SCHNELL (384 Dim · 80 MB) – Nur Englisch. Ideal für Echtzeitsuche und Low-End-Hardware (Netbooks, alte Laptops). Kleinste und schnellste Option.",
     recommended: false,
     capabilities: ["embedding", "low-latency", "english-focused"],
+  },
+  // ── Stufe 2: Mittel · 16+ GB RAM · jede GPU ──
+  {
+    id: "bge-m3",
+    label: "BGE M3",
+    tier: "medium",
+    source: "ollama-registry",
+    estimatedDisk: "~2,2 GB",
+    recommendedRam: "VRAM: 6+ GB · CPU: 16+ GB RAM",
+    recommendedContext: "Max context: 8192 tokens",
+    defaultNumCtx: 2048,
+    defaultNumPredict: 128,
+    description: "BESTE MEHRSPRACHIGKEIT (1024 Dim · 2,2 GB) – Exzellent für Deutsch, Englisch und 100+ Sprachen. Beste Qualität für Fachtexte, Lehrproben und gemischte Sprachen. Läuft auf Apple Silicon, NVIDIA, AMD.",
+    recommended: false,
+    capabilities: ["embedding", "multilingual"],
   },
   {
     id: "bge-large:en",
@@ -213,24 +214,9 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 512 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "HOHE QUALITÄT (1024 Dim · 1,3 GB) – State-of-the-Art für Englisch, Top-Werte bei Retrieval-Benchmarks. Läuft auf Apple Silicon (Metal), NVIDIA (CUDA) und AMD (ROCm).",
+    description: "TOP ENGLISCH (1024 Dim · 1,3 GB) – State-of-the-Art für englische Texte. Beste Retrieval-Qualität für englische Fachtexte und wissenschaftliche Arbeiten.",
     recommended: false,
     capabilities: ["embedding", "english-focused"],
-  },
-  // ── Tier 3: Premium Mehrsprachig (16+ GB RAM, empfohlen mit GPU) ──
-  {
-    id: "bge-m3",
-    label: "BGE M3",
-    tier: "medium",
-    source: "ollama-registry",
-    estimatedDisk: "~2,2 GB",
-    recommendedRam: "VRAM: 6+ GB · CPU: 16+ GB RAM",
-    recommendedContext: "Max context: 8192 tokens",
-    defaultNumCtx: 2048,
-    defaultNumPredict: 128,
-    description: "BESTE MEHRSPRACHIGKEIT (1024 Dim · 2,2 GB) – Exzellent für Deutsch, Englisch und 100+ Sprachen. Beste Qualität für Fachtexte und gemischte Sprachen. Läuft auf Apple Silicon, NVIDIA CUDA, AMD ROCm.",
-    recommended: false,
-    capabilities: ["embedding", "multilingual"],
   },
 ];
 
