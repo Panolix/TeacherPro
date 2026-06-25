@@ -222,13 +222,16 @@ export function SettingsModal({ open, onClose }: Props) {
         setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
       }
       const currentState = useAppStore.getState();
-      const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
-      const corrected = firstCatalogMatch?.id ?? normalizeId(Array.from(installedRaw)[0] || "");
-      if (corrected && !installed.has(normalizeId(currentState.aiDefaultModelId))) setAiDefaultModelId(corrected);
-      if (corrected && !installed.has(normalizeId(currentState.aiRewriteTranslateModelId)))
-        setAiRewriteTranslateModelId(corrected);
-      if (corrected && !installed.has(normalizeId(useKnowledgeStore.getState().embedderModelId)))
-        useKnowledgeStore.getState().setEmbedderModelId(corrected);
+      const chatModels = AI_MODEL_CATALOG.filter((m) => !m.capabilities?.includes("embedding"));
+      const embeddingModels = AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding"));
+      const firstChatMatch = chatModels.find((m) => installed.has(m.id))?.id || "";
+      const firstEmbedMatch = embeddingModels.find((m) => installed.has(m.id))?.id || "";
+      if (firstChatMatch && !installed.has(normalizeId(currentState.aiDefaultModelId)))
+        setAiDefaultModelId(firstChatMatch);
+      if (firstChatMatch && !installed.has(normalizeId(currentState.aiRewriteTranslateModelId)))
+        setAiRewriteTranslateModelId(firstChatMatch);
+      if (firstEmbedMatch && !installed.has(normalizeId(useKnowledgeStore.getState().embedderModelId)))
+        useKnowledgeStore.getState().setEmbedderModelId(firstEmbedMatch);
     } catch (error) {
       setAiErrorMessage(`Could not refresh models: ${String(error)}`);
     } finally {
