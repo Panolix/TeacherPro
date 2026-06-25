@@ -1339,7 +1339,7 @@ async fn ai_generate_text(
     let task_system = system_prompt.unwrap_or_default();
     let task_thinking = enable_thinking.unwrap_or(false);
     let task_num_ctx = num_ctx.unwrap_or(8_192).clamp(1_024, 131_072);
-    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 4_096);
+    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 12_000);
 
     tauri::async_runtime::spawn_blocking(move || {
         let _ = ensure_ollama_runtime()?;
