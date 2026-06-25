@@ -1396,6 +1396,148 @@ async fn ai_generate_text(
     .map_err(|error| format!("AI generation task failed: {error}"))?
 }
 
+#[tauri::command]
+fn extract_text(file_path: String) -> Result<String, String> {
+    // Read text files directly, skip binary formats for now
+    let path = std::path::Path::new(&file_path);
+    let ext = path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    match ext.as_str() {
+        "txt" | "md" | "csv" | "json" | "xml" | "html" | "htm" | "yaml" | "yml" | "log" => {
+            std::fs::read_to_string(&file_path)
+                .map_err(|e| format!("Failed to read file: {e}"))
+        }
+        "docx" => {
+            // Basic DOCX extraction: read the XML inside
+            extract_docx_text(&file_path)
+        }
+        "pdf" => {
+            // Basic PDF text extraction using a simple approach
+            extract_pdf_text_simple(&file_path)
+        }
+        _ => Err(format!("Unsupported file type: .{ext}")),
+    }
+}
+
+fn extract_docx_text(path: &str) -> Result<String, String> {
+    use std::io::Read;
+    let file = std::fs::File::open(path).map_err(|e| format!("Cannot open DOCX: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("Cannot read DOCX archive: {e}"))?;
+    let mut xml_file = archive.by_name("word/document.xml")
+        .map_err(|_| "Cannot find word/document.xml in DOCX".to_string())?;
+    let mut xml_content = String::new();
+    xml_file.read_to_string(&mut xml_content)
+        .map_err(|e| format!("Cannot read DOCX XML: {e}"))?;
+
+    // Strip XML tags to get plain text
+    let text = xml_content
+        .replace("<w:p>", "\n")
+        .replace("<w:br/>", "\n")
+        .replace("</w:p>", "\n")
+        .replace("<w:tab/>", "  ");
+    
+    // Extract text between XML tags
+    let mut result = String::new();
+    let mut in_tag = false;
+    for c in text.chars() {
+        match c {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ => if !in_tag { result.push(c); },
+        }
+    }
+    Ok(result)
+}
+
+fn extract_pdf_text_simple(path: &str) -> Result<String, String> {
+    // Use a simple approach: search for text between parentheses in PDF stream
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Cannot read PDF: {e}"))?;
+    
+    let mut text = String::new();
+    let bytes = content.as_bytes();
+    let mut i = 0;
+    
+    // Extract text from PDF content streams
+    while i < bytes.len() {
+        // Look for BT...ET (Begin Text / End Text) markers
+        if bytes[i..].starts_with(b"BT") || bytes[i..].starts_with(b"bt") {
+            i += 2;
+            while i < bytes.len() {
+                if bytes[i..].starts_with(b"ET") || bytes[i..].starts_with(b"et") {
+                    break;
+                }
+                // Extract parenthesized strings
+                if bytes[i] == b'(' {
+                    i += 1;
+                    let mut paren_depth = 1;
+                    let mut seg = String::new();
+                    while i < bytes.len() && paren_depth > 0 {
+                        if bytes[i] == b'(' { paren_depth += 1; if paren_depth > 1 { seg.push('('); } }
+                        else if bytes[i] == b')' { paren_depth -= 1; if paren_depth > 0 { seg.push(')'); } }
+                        else if bytes[i] == b'\\' { i += 1; if i < bytes.len() { seg.push(bytes[i] as char); } }
+                        else { seg.push(bytes[i] as char); }
+                        i += 1;
+                    }
+                    if !seg.trim().is_empty() {
+                        text.push_str(&seg);
+                        text.push(' ');
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            text.push('\n');
+        }
+        i += 1;
+        if text.len() > 500_000 { break; } // Safety limit
+    }
+
+    if text.trim().is_empty() {
+        // Fallback: try reading raw text
+        text = content.chars()
+            .filter(|&c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+            .collect();
+    }
+
+    Ok(text.trim().to_string())
+}
+
+#[tauri::command]
+async fn ai_generate_embedding(model: String, text: String) -> Result<Vec<f32>, String> {
+    let _ = ensure_ollama_runtime()?;
+
+    let base_url = std::env::var("OLLAMA_HOST")
+        .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
+    let base_url = base_url.trim_end_matches('/');
+
+    let body = serde_json::json!({
+        "model": model,
+        "prompt": text,
+    });
+
+    let agent = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(30))
+        .build();
+
+    #[derive(serde::Deserialize)]
+    struct EmbeddingResponse {
+        embedding: Vec<f32>,
+    }
+
+    let response = agent
+        .post(&format!("{base_url}/api/embeddings"))
+        .send_json(body)
+        .map_err(|e| format!("Embedding API request failed: {e}"))?
+        .into_json::<EmbeddingResponse>()
+        .map_err(|e| format!("Failed to parse embedding response: {e}"))?;
+
+    Ok(response.embedding)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1418,7 +1560,9 @@ pub fn run() {
             ai_install_model,
             ai_remove_model,
             ai_import_local_model,
-            ai_generate_text
+            ai_generate_text,
+            extract_text,
+            ai_generate_embedding
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

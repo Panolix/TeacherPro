@@ -1874,8 +1874,19 @@ export function Editor() {
 
       const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
 
+      // Inject knowledge base context if enabled
+      let knowledgeBlock = "";
+      try {
+        const { useKnowledgeStore } = await import("../knowledge/knowledgeStore");
+        const ks = useKnowledgeStore.getState();
+        if (ks.enabledInChat && ks.index && ks.index.chunks.length > 0) {
+          knowledgeBlock = ks.buildKnowledgeContext(userText + " " + (subject || ""), 8);
+        }
+      } catch {}
+
       const prompt = [
         `The teacher's current lesson plan is shown below. Read it carefully before responding.\n\n---\n${lessonBlock}\n---`,
+        ...(knowledgeBlock ? [knowledgeBlock] : []),
         "",
         ...(historyLines.length > 0 ? ["Conversation so far:", ...historyLines, ""] : []),
         `User: ${userText}`,

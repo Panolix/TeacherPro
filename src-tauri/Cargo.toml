@@ -27,4 +27,5 @@ tauri-plugin-fs = "2"
 tauri-plugin-os = "2"
 tauri-plugin-store = "2"
 ureq = { version = "2", features = ["json"] }
+zip = "2"
 

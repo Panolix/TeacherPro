@@ -154,6 +154,35 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommended: false,
     capabilities: ["multilingual", "reasoning", "long-context"],
   },
+  // ── Embedding-Modelle (für die Wissensdatenbank, nicht für Chat) ──
+  {
+    id: "nomic-embed-text",
+    label: "Nomic Embed Text",
+    tier: "small",
+    source: "ollama-registry",
+    estimatedDisk: "~274 MB",
+    recommendedRam: "VRAM: 2+ GB · CPU: 4+ GB RAM",
+    recommendedContext: "Max context: 8192 tokens",
+    defaultNumCtx: 2048,
+    defaultNumPredict: 128,
+    description: "Leichtes Embedding-Modell (768 Dimensionen) für die Wissensdatenbank – wandelt Texte in Vektoren um, damit die KI in deinen Materialien suchen kann.",
+    recommended: false,
+    capabilities: ["low-latency"],
+  },
+  {
+    id: "bge-m3",
+    label: "BGE M3",
+    tier: "small",
+    source: "ollama-registry",
+    estimatedDisk: "~2,2 GB",
+    recommendedRam: "VRAM: 4+ GB · CPU: 8+ GB RAM",
+    recommendedContext: "Max context: 8192 tokens",
+    defaultNumCtx: 2048,
+    defaultNumPredict: 128,
+    description: "Hochwertiges mehrsprachiges Embedding-Modell (1024 Dimensionen) – beste Qualität für deutsche Texte, aber größer und langsamer als nomic-embed-text.",
+    recommended: false,
+    capabilities: ["multilingual", "reasoning"],
+  },
 ];
 
 export const DEFAULT_AI_MODEL_ID = "qwen3.5:9b";

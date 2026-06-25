@@ -217,6 +217,7 @@ const de = {
       search: "Suche",
       recent: "Zuletzt",
       calendar: "Kalender",
+      knowledge: "Wissen",
       trash: "Papierkorb",
       settings: "Einstellungen",
     },
@@ -642,6 +643,18 @@ const de = {
     welcome: "Willkommen bei TeacherPro",
     description: "Öffne zunächst einen Vault auf deinem Computer. Dein Vault ist ein normaler Ordner, in dem alle deine Unterrichtsentwürfe, Mindmaps und Materialien sicher organisiert und lokal gespeichert werden.",
     selectVault: "Vault-Ordner auswählen",
+  },
+
+  knowledge: {
+    addSource: "Wissensquelle hinzufügen",
+    embedder: "Embedding-Modell",
+    extracting: "Extrahiere Text...",
+    chunking: "Zerlege in Chunks...",
+    embedding: "Erstelle Embeddings...",
+    useInChat: "Im Chat verwenden",
+    sources: "Quellen",
+    chunks: "Chunks",
+    empty: "Noch keine Wissensquellen.\nFüge PDFs, DOCX oder Textdateien hinzu.",
   },
 
   modelCatalog: {

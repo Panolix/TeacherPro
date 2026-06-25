@@ -217,6 +217,7 @@ const en = {
       search: "Search",
       recent: "Recent",
       calendar: "Calendar",
+      knowledge: "Knowledge",
       trash: "Trash",
       settings: "Settings",
     },
@@ -642,6 +643,18 @@ const en = {
     welcome: "Welcome to TeacherPro",
     description: "Start by opening a Vault on your computer. Your Vault is a standard folder where all your lesson plans, mindmaps, and materials will be securely organized and stored locally.",
     selectVault: "Select Vault Folder",
+  },
+
+  knowledge: {
+    addSource: "Add Knowledge Source",
+    embedder: "Embedding Model",
+    extracting: "Extracting text...",
+    chunking: "Chunking...",
+    embedding: "Embedding...",
+    useInChat: "Use in Chat",
+    sources: "sources",
+    chunks: "chunks",
+    empty: "No knowledge sources yet.\nAdd PDFs, DOCX, or text files.",
   },
 
   modelCatalog: {
