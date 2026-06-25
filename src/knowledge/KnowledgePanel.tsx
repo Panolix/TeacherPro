@@ -1,5 +1,5 @@
-import { useEffect, useCallback } from "react";
-import { BrainCircuit, Plus, Trash2, RefreshCw, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { BrainCircuit, Plus, Trash2, RefreshCw, FileText, Loader2, CheckCircle2, AlertCircle, FolderPlus } from "lucide-react";
 import { useKnowledgeStore } from "./knowledgeStore";
 import { useTranslation } from "../i18n/useTranslation";
 
@@ -7,17 +7,21 @@ export function KnowledgePanel() {
   const { t } = useTranslation();
   const {
     sources, categories, isIndexing, importProgress, loadIndex,
-    addSource, removeSource, reindexAll,
+    addSource, removeSource, reindexAll, addCategory,
     selectedSourceId, setSelectedSource,
-    enabledInChat, setEnabledInChat, chatCategoryFilter, setChatCategoryFilter,
+    enabledInChat, chatCategoryFilter, setChatCategoryFilter,
   } = useKnowledgeStore();
+
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.id || "allgemein");
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   useEffect(() => {
     void loadIndex();
   }, [loadIndex]);
 
-  const handleAdd = useCallback(() => {
-    void addSource();
+  const handleAdd = useCallback((category?: string) => {
+    void addSource(category);
   }, [addSource]);
 
   const handleRemove = useCallback((id: string) => {
@@ -38,21 +42,67 @@ export function KnowledgePanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="shrink-0 px-3 pt-3 pb-2">
+      <div className="shrink-0 px-3 pt-3 pb-2 flex gap-2">
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="tp-input text-[12px] flex-1 min-w-0"
+          style={{ height: 36, padding: "0 8px" }}
+        >
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
         <button
-          onClick={handleAdd}
+          onClick={() => handleAdd(selectedCategory)}
           disabled={isIndexing}
-          className="tp-action-btn h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+          className="tp-action-btn h-9 w-9 inline-flex items-center justify-center rounded-md shrink-0"
           style={{ background: "var(--tp-accent)", color: "#fff" }}
+          title={t("knowledge.addSource")}
         >
           {isIndexing ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Plus className="w-3.5 h-3.5" />
           )}
-          {t("knowledge.addSource")}
+        </button>
+        <button
+          onClick={() => setNewCategoryMode(true)}
+          className="tp-action-btn h-9 w-9 inline-flex items-center justify-center rounded-md shrink-0"
+          style={{ background: "var(--tp-bg-3)", color: "var(--tp-t-2)" }}
+          title="Neue Kategorie"
+        >
+          <FolderPlus className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* New Category Input */}
+      {newCategoryMode && (
+        <div className="mx-3 mb-2 flex gap-1">
+          <input
+            value={newCategoryName}
+            onChange={(e) => setNewCategoryName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newCategoryName.trim()) {
+                addCategory(newCategoryName.trim());
+                setSelectedCategory(newCategoryName.trim().toLowerCase().replace(/\s+/g, "-"));
+                setNewCategoryName("");
+                setNewCategoryMode(false);
+              }
+            }}
+            className="tp-input flex-1 text-[12px]"
+            placeholder="Neue Kategorie"
+            style={{ height: 28, padding: "0 8px" }}
+            autoFocus
+          />
+          <button
+            onClick={() => { setNewCategoryMode(false); setNewCategoryName(""); }}
+            className="h-7 w-7 flex items-center justify-center rounded text-[var(--tp-t-4)] hover:text-[var(--tp-t-1)]"
+          >
+            X
+          </button>
+        </div>
+      )}
 
       {/* Import Progress */}
       {importProgress && (
@@ -81,19 +131,6 @@ export function KnowledgePanel() {
           </div>
         </div>
       )}
-
-      {/* Chat Toggle */}
-      <div className="mx-3 mb-2">
-        <label className="flex items-center gap-2 cursor-pointer text-[12px]" style={{ color: "var(--tp-t-2)" }}>
-          <input
-            type="checkbox"
-            checked={enabledInChat}
-            onChange={(e) => setEnabledInChat(e.target.checked)}
-            className="rounded"
-          />
-          {t("knowledge.useInChat")}
-        </label>
-      </div>
 
       {/* Category Filter */}
       {enabledInChat && categories.length > 0 && (

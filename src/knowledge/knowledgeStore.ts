@@ -40,7 +40,7 @@ interface KnowledgeState {
   embedderModelId: string;
 
   loadIndex: () => Promise<void>;
-  addSource: () => Promise<void>;
+  addSource: (category?: string) => Promise<void>;
   removeSource: (id: string) => Promise<void>;
   reindexSource: (id: string) => Promise<void>;
   reindexAll: () => Promise<void>;
@@ -102,7 +102,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     }
   },
 
-  addSource: async () => {
+  addSource: async (category?: string) => {
     const vault = useAppStore.getState().vaultPath;
     if (!vault) return;
 
@@ -113,6 +113,9 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
       ],
     });
     if (!files || files.length === 0) return;
+
+    const targetCategory = category || "allgemein";
+    const targetPriority = get().categories.find((c) => c.id === targetCategory)?.priority ?? 10;
 
     const knowledgeDir = await join(vault, KNOWLEDGE_SUBDIR);
     await mkdir(knowledgeDir, { recursive: true });
@@ -176,8 +179,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
               id: generateId(),
               sourceId,
               sourceName: fileName,
-              category: "allgemein",
-              priority: 10,
+              category: targetCategory,
+              priority: targetPriority,
               tags: [],
               title: chunks[j].title,
               text: chunks[j].text,
@@ -200,7 +203,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
               id: sourceId,
               name: fileName,
               relativePath: fileName,
-              category: "allgemein",
+              category: targetCategory,
               priority: 10,
               tags: [],
               status: "indexed",

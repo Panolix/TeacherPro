@@ -27,6 +27,7 @@ import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { MaterialLink } from "./extensions/MaterialLink";
+import { useKnowledgeStore } from "../knowledge/knowledgeStore";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
@@ -980,6 +981,8 @@ export function Editor() {
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
   const lessonEditorDragDropEnabled = false;
+  const knowledgeEnabledChat = useKnowledgeStore((s) => s.enabledInChat);
+  const setKnowledgeEnabledChat = useKnowledgeStore((s) => s.setEnabledInChat);
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
@@ -3918,6 +3921,18 @@ export function Editor() {
               </div>
             </div>
 
+            {/* Knowledge Toggle */}
+            <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-[var(--tp-border-strong)]">
+              <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]">
+                <input
+                  type="checkbox"
+                  checked={knowledgeEnabledChat}
+                  onChange={(e) => setKnowledgeEnabledChat(e.target.checked)}
+                  className="w-3 h-3 rounded"
+                />
+                {t("knowledge.useInChat")}
+              </label>
+            </div>
 
             {/* Messages */}
             <div
