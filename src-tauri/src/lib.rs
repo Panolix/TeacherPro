@@ -1766,10 +1766,16 @@ pub fn run() {
             ai_generate_embedding
         ])
         .setup(|_app| {
-            // Start Ollama at app launch so it's ready when the user opens the AI chat
+            eprintln!("[TeacherPro] App started, starting Ollama in background...");
             std::thread::spawn(|| {
                 std::thread::sleep(std::time::Duration::from_millis(1000));
+                eprintln!("[TeacherPro] Calling ensure_ollama_server_started...");
                 ensure_ollama_server_started();
+                if is_ollama_server_running() {
+                    eprintln!("[TeacherPro] Ollama server is now running.");
+                } else {
+                    eprintln!("[TeacherPro] WARNING: Ollama server did NOT start!");
+                }
             });
             Ok(())
         })
