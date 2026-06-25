@@ -355,6 +355,23 @@ export function SettingsModal({ open, onClose }: Props) {
     });
   }, [aiInstalledModelIds, aiDefaultModelId, aiRewriteTranslateModelId]);
 
+  const availableEmbeddingModels = useMemo(() => {
+    const embeddingModelIds = new Set(
+      AI_MODEL_CATALOG.filter((m) => m.capabilities?.includes("embedding")).map((m) => m.id)
+    );
+    const ids = new Set<string>(aiInstalledModelIds.filter((id) => embeddingModelIds.has(id)));
+    if (embedderModelId) ids.add(embedderModelId);
+    if (ids.size === 0) ids.add("nomic-embed-text");
+    return Array.from(ids).sort((a, b) => {
+      const ai = AI_MODEL_CATALOG.findIndex((m) => m.id === a);
+      const bi = AI_MODEL_CATALOG.findIndex((m) => m.id === b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
+    });
+  }, [aiInstalledModelIds, embedderModelId]);
+
   // Sync diagnostics + installed list whenever the AI tab opens
   useEffect(() => {
     if (!open || tab !== "ai") return;
@@ -622,6 +639,23 @@ export function SettingsModal({ open, onClose }: Props) {
                           const label = modelLabelById.get(id) || id;
                           return (
                             <option key={`rw-${id}`} value={id}>
+                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </FormRow>
+                    <FormRow label={t("knowledge.embedder")}>
+                      <select
+                        className="tp-input"
+                        value={embedderModelId}
+                        onChange={(e) => setEmbedderModelId(e.target.value)}
+                      >
+                        {availableEmbeddingModels.map((id) => {
+                          const installed = aiInstalledModelIds.includes(id);
+                          const label = modelLabelById.get(id) || id;
+                          return (
+                            <option key={`emb-${id}`} value={id}>
                               {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
                             </option>
                           );
