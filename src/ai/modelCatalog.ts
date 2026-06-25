@@ -160,7 +160,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
   // Laufen auf allen GPUs via Ollama (Apple Metal, NVIDIA CUDA, AMD ROCm, Intel via Vulkan/CPU)
   // Jede Stufe bietet: eine multilinguale Option (DE+EN) + eine Extra-Option
   // ═══════════════════════════════════════════════════════
-  // ── Stufe 1: Extrem leicht · 4+ GB RAM · CPU reicht völlig ──
+  // ── Stufe 1: Leicht · 4+ GB RAM · CPU reicht völlig ──
   {
     id: "nomic-embed-text",
     label: "Nomic Embed Text",
@@ -171,8 +171,22 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 8192 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "SCHNELL (768 Dim · 274 MB) – Multilingual (DE+EN+mehr). Bester Kompromiss aus Speed und Qualität. Empfohlen für die meisten – läuft auf jedem Laptop, egal ob CPU oder GPU.",
+    description: "🇩🇪🇬🇧 MULTILINGUAL (768 Dim · 274 MB) – Solide Ergebnisse für Deutsch und Englisch. Läuft auf jedem Laptop, CPU oder GPU. Empfohlen für die meisten.",
     recommended: true,
+    capabilities: ["embedding", "low-latency", "multilingual"],
+  },
+  {
+    id: "paraphrase-multilingual",
+    label: "Paraphrase Multilingual MiniLM",
+    tier: "small",
+    source: "ollama-registry",
+    estimatedDisk: "~475 MB",
+    recommendedRam: "VRAM: 2+ GB · CPU: 4+ GB RAM",
+    recommendedContext: "Max context: 512 tokens",
+    defaultNumCtx: 512,
+    defaultNumPredict: 128,
+    description: "🇩🇪🇬🇧 MULTILINGUAL (384 Dim · 475 MB) – Speziell für Satzähnlichkeit und semantische Suche in 50+ Sprachen. Besonders gute Ergebnisse für Deutsch durch Sentence-Transformer-Architektur.",
+    recommended: false,
     capabilities: ["embedding", "low-latency", "multilingual"],
   },
   {
@@ -185,11 +199,11 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 512 tokens",
     defaultNumCtx: 512,
     defaultNumPredict: 128,
-    description: "EXTREM SCHNELL (384 Dim · 80 MB) – Nur Englisch. Ideal für Echtzeitsuche und Low-End-Hardware (Netbooks, alte Laptops). Kleinste und schnellste Option.",
+    description: "🇬🇧 NUR ENGLISCH (384 Dim · 80 MB) – Extrem schnell, ideal für Low-End-Hardware und Echtzeitsuche.",
     recommended: false,
     capabilities: ["embedding", "low-latency", "english-focused"],
   },
-  // ── Stufe 2: Mittel · 16+ GB RAM · jede GPU ──
+  // ── Stufe 2: Premium · 16+ GB RAM · GPU empfohlen ──
   {
     id: "bge-m3",
     label: "BGE M3",
@@ -200,7 +214,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 8192 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "BESTE MEHRSPRACHIGKEIT (1024 Dim · 2,2 GB) – Exzellent für Deutsch, Englisch und 100+ Sprachen. Beste Qualität für Fachtexte, Lehrproben und gemischte Sprachen. Läuft auf Apple Silicon, NVIDIA, AMD.",
+    description: "🇩🇪🇬🇧 BESTES DEUTSCH (1024 Dim · 2,2 GB) – Spitzenreiter für deutsche Texte und 100+ Sprachen. Exzellent für Fachtexte, Lehrproben und gemischte Sprachen. Läuft auf Apple Silicon, NVIDIA, AMD.",
     recommended: false,
     capabilities: ["embedding", "multilingual"],
   },
@@ -214,7 +228,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedContext: "Max context: 512 tokens",
     defaultNumCtx: 2048,
     defaultNumPredict: 128,
-    description: "TOP ENGLISCH (1024 Dim · 1,3 GB) – State-of-the-Art für englische Texte. Beste Retrieval-Qualität für englische Fachtexte und wissenschaftliche Arbeiten.",
+    description: "🇬🇧 TOP ENGLISCH (1024 Dim · 1,3 GB) – State-of-the-Art für englische Texte, beste Retrieval-Qualität.",
     recommended: false,
     capabilities: ["embedding", "english-focused"],
   },

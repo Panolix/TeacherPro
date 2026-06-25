@@ -686,7 +686,7 @@ export function SettingsModal({ open, onClose }: Props) {
                     <div>
                       <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--tp-t-4)" }}>{t("knowledge.embedderTier1")}</div>
                       <div className="flex flex-col gap-1">
-                        {AI_MODEL_CATALOG.filter((m) => ["nomic-embed-text", "all-minilm:l6-v2"].includes(m.id)).map((model) => (
+                        {AI_MODEL_CATALOG.filter((m) => ["nomic-embed-text", "paraphrase-multilingual", "all-minilm:l6-v2"].includes(m.id)).map((model) => (
                           <EmbedderOption key={model.id} model={model} isActive={embedderModelId === model.id} installState={getModelInstallState(model.id)} onSelect={setEmbedderModelId} />
                         ))}
                       </div>

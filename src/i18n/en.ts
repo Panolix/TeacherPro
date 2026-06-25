@@ -651,7 +651,7 @@ const en = {
     embedderTier1: "⚡ Stufe 1 – Leicht (4+ GB RAM, CPU reicht)",
     embedderTier2: "⭐ Stufe 2 – Premium (16+ GB RAM, GPU empfohlen)",
     file: "File",
-    embedderHint: "All models run on Apple Silicon (Metal), NVIDIA (CUDA), AMD (ROCm) and Intel (Vulkan/CPU). Pick based on your hardware and languages.",
+    embedderHint: "🇩🇪 Beste Deutsch-Embeddings: BGE M3 (Premium) oder Nomic Embed Text / Paraphrase Multilingual (leicht). Alle laufen auf Apple Silicon (Metal), NVIDIA (CUDA), AMD (ROCm), Intel (Vulkan/CPU).",
     extracting: "Extracting text...",
     chunking: "Chunking...",
     embedding: "Embedding...",
