@@ -26,6 +26,8 @@ import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
+import { ChatContextBar } from "./ChatContextBar";
+import type { ScoredChunk, ChatMessage, SubjectDbInfo } from "../store";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
@@ -68,6 +70,8 @@ import {
   BookOpen,
   Minus as MinusIcon,
   Eraser,
+  Database,
+  Folder,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -228,6 +232,39 @@ function AiMarkdown({ text }: { text: string }) {
         i++;
       }
       blocks.push(<ol key={`ol-${i}`} className="my-0.5 space-y-0.5">{items}</ol>);
+      continue;
+    }
+
+    // Table — detect pipe-delimited rows
+    if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|")) {
+        const cells = lines[i].trim().split("|").slice(1, -1).map((c) => c.trim());
+        // Skip separator rows like | :--- | :--- |
+        if (!cells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s/g, "")))) {
+          rows.push(cells);
+        }
+        i++;
+      }
+      if (rows.length > 0) {
+        const tableRows: React.ReactNode[] = [];
+        rows.forEach((row, ri) => {
+          tableRows.push(
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} className={`px-2 py-1 text-[12px] border border-[var(--tp-border-strong)] ${ri === 0 ? "font-semibold bg-[var(--tp-panel-muted)]" : ""}`}>
+                  {renderInline(cell, `${ri}-${ci}`)}
+                </td>
+              ))}
+            </tr>
+          );
+        });
+        blocks.push(
+          <div key={`tbl-${i}`} className="overflow-x-auto my-1">
+            <table className="w-full border-collapse"><tbody>{tableRows}</tbody></table>
+          </div>
+        );
+      }
       continue;
     }
 
@@ -937,6 +974,16 @@ export function Editor() {
     setLessonZoomMode,
     setLessonZoomFixed,
     language,
+
+    subjectDatabases,
+    activeChatDb,
+    activeChatGrade,
+    activeChatTopic,
+    setActiveChatDb,
+    setActiveChatGrade,
+    setActiveChatTopic,
+    setChatContextBudget,
+    setSubjectDatabases,
   } = useAppStore();
   const { t } = useTranslation();
   const getMethodTypeLabel = (type: MethodBankType): string => {
@@ -1086,6 +1133,17 @@ export function Editor() {
   const [chatInput, setChatInput] = useState("");
   const [isChatBusy, setIsChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
+  const ragChunksRef = useRef<ScoredChunk[]>([]);
+  const [dbMenuOpen, setDbMenuOpen] = useState(false);
+  const [dbExpandedSubjects, setDbExpandedSubjects] = useState<Record<string, boolean>>({});
+  const [dbExpandedGrades, setDbExpandedGrades] = useState<Record<string, boolean>>({});
+
+  const selectDb = useCallback((subject: string, grade: string | null, topic: string | null) => {
+    ragChunksRef.current = [];
+    setActiveChatDb(subject || null);
+    setActiveChatGrade(grade);
+    setActiveChatTopic(topic);
+  }, [setActiveChatDb, setActiveChatGrade, setActiveChatTopic]);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
   const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
@@ -1827,6 +1885,11 @@ export function Editor() {
     return body || "(no body content yet)";
   }, [editor]);
 
+  // Token estimation (1 token ≈ 4 chars for German/English)
+  const estimateTokens = useCallback((str: string): number => {
+    return Math.ceil(str.length / 4);
+  }, []);
+
   const handleSubmitChat = useCallback(async (overrideText?: string) => {
     if (!aiEnabled) {
       setAiStatusMessage(t("editor.aiMenu.enableLocalAiFirst"));
@@ -1852,53 +1915,128 @@ export function Editor() {
 
     try {
       const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
-      const chatContextCharLimit = Math.min(
-        20000,
-        Math.max(10000, Math.floor(chatRuntimeDefaults.defaultNumCtx * 0.6)),
-      );
+      let maxNumCtx = chatRuntimeDefaults.defaultNumCtx;
+      const modelMaxCtx = chatRuntimeDefaults.maxNumCtx;
+      const chatContextCharLimit = Math.max(5000, Math.floor(maxNumCtx * 0.6));
       const contextText = buildLessonContextText(chatContextCharLimit);
 
-      // Build metadata header from local state fields.
+      // Build metadata header
       const metaLines: string[] = [];
       if (teacher)         metaLines.push(`Teacher: ${teacher}`);
       if (subject)         metaLines.push(`Subject: ${subject}`);
       if (plannedForInput) metaLines.push(`Planned for: ${plannedForInput}`);
       const metaHeader = metaLines.length > 0 ? metaLines.join("\n") + "\n" : "";
 
-      // Build conversation history (capped at the user-configured limit).
-      const historyLines: string[] = [];
-      const recentMessages = chatMessages.slice(-aiChatHistoryLimit);
-      for (const msg of recentMessages) {
-        historyLines.push(msg.role === "user" ? `User: ${msg.text}` : `Assistant: ${msg.text}`);
+      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
+      const lessonTokens = estimateTokens(lessonBlock);
+
+      // Fetch RAG chunks if a DB is selected
+      let ragContext = "";
+      let ragTokens = 0;
+      let ragStatus = "";
+      if (activeChatDb && vaultPath) {
+        setAiStatusMessage(t("editor.chat.searchingKnowledge"));
+        try {
+          const budgetForRag = Math.floor(maxNumCtx * 0.75) - lessonTokens - estimateTokens(userText) - 500;
+          const maxRagChars = Math.max(0, budgetForRag * 4);
+          const topK = Math.min(10, Math.max(1, Math.floor(maxRagChars / 600)));
+
+          if (topK > 0) {
+            const results = await tauriInvoke<ScoredChunk[]>("subject_db_query", {
+              vaultPath,
+              subject: activeChatDb,
+              grade: activeChatGrade ?? null,
+              topic: activeChatTopic ?? null,
+              query: userText,
+              topK: topK,
+            });
+            ragChunksRef.current = results;
+
+            if (results.length > 0) {
+              const parts: string[] = [];
+              for (const r of results) {
+                const header = `[${r.source}, S.${r.page}] (${r.grade} > ${r.topic})`;
+                parts.push(`${header}\n${r.text}`);
+              }
+              ragContext = `\n\n📚 Wissen aus "${activeChatDb}":\n${parts.join("\n\n---\n\n")}`;
+              ragTokens = estimateTokens(ragContext);
+              ragStatus = `RAG: ${results.length} chunks gefunden in ${activeChatDb}`;
+            } else {
+              ragStatus = `RAG: Keine Chunks gefunden in ${activeChatDb}${activeChatGrade ? ` > ${activeChatGrade}` : ""}${activeChatTopic ? ` > ${activeChatTopic}` : ""}. Datei ist embedded aber Query findet nichts.`;
+            }
+          }
+          logDebug("ai", "rag-results", `db=${activeChatDb} | grade=${activeChatGrade ?? "-"} | topic=${activeChatTopic ?? "-"} | found=${ragChunksRef.current.length > 0} | results=${ragChunksRef.current.length}`);
+        } catch (e) {
+          ragStatus = `RAG: Fehler - ${String(e)}`;
+          console.error("RAG query failed:", e);
+          logDebug("ai", "rag-error", String(e));
+        }
       }
 
-      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
-
-      const prompt = [
-        `The teacher's current lesson plan is shown below. Read it carefully before responding.\n\n---\n${lessonBlock}\n---`,
-        "",
-        ...(historyLines.length > 0 ? ["Conversation so far:", ...historyLines, ""] : []),
-        `User: ${userText}`,
-        "",
-        "Assistant:",
-      ].join("\n");
+      // Build conversation history (capped at history limit).
+      const recentMessages = chatMessages.slice(-aiChatHistoryLimit);
+      const historyTokens = recentMessages.reduce((sum, msg) => sum + estimateTokens(msg.text), 0);
 
       const effectiveSystemPrompt = aiSystemPrompt || t("aiPrompts.chatSystem");
+      const systemTokens = estimateTokens(effectiveSystemPrompt);
+
+      // If RAG is active and we need more context than the default, increase it up to the model's max
+      const totalNeeded = lessonTokens + historyTokens + ragTokens + systemTokens + estimateTokens(userText) + 500;
+      if (ragTokens > 0 && totalNeeded > maxNumCtx && modelMaxCtx > maxNumCtx) {
+        const newCtx = Math.min(totalNeeded + 4096, modelMaxCtx);
+        logDebug("ai", "ctx-increase", `default=${maxNumCtx} needed=${totalNeeded} increased=${newCtx}`);
+        maxNumCtx = newCtx;
+      }
+
+      // Prepare messages array for native chat API
+      const contextIntro = ragContext
+        ? "Below is the current lesson plan and retrieved knowledge from the teacher's database. Read both carefully before responding."
+        : "Below is the current lesson plan. Read it carefully before responding.";
+      const ragDebug = ragStatus ? `\n\n[RAG Debug: ${ragStatus}]` : "";
+      const contextWithRag = ragContext
+        ? `${contextIntro}\n\n---\n${lessonBlock}${ragContext}\n---${ragDebug ? `\n${ragDebug}` : ""}`
+        : `${contextIntro}\n\n---\n${lessonBlock}\n---${ragDebug ? `\n${ragDebug}` : ""}`;
+
+      const messages: ChatMessage[] = [
+        { role: "system", content: effectiveSystemPrompt },
+        { role: "user", content: contextWithRag },
+        { role: "assistant", content: "I have reviewed the context and am ready to help." },
+        ...recentMessages.map((msg) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.text,
+        })),
+        { role: "user", content: userText },
+      ];
+
+      // Update context budget for the visual bar
+      setChatContextBudget({
+        totalTokens: maxNumCtx,
+        usedByLesson: lessonTokens,
+        usedByHistory: historyTokens,
+        usedByRag: ragTokens,
+        usedBySystem: systemTokens,
+        freeTokens: maxNumCtx - lessonTokens - historyTokens - ragTokens - systemTokens - estimateTokens(userText) - 100,
+      });
+
+      // Thinking mode needs more predict tokens (thinking ~1-2K + response)
+      const thinkMode = aiThinkingEnabled && modelSupportsThinking;
+      const effectiveNumPredict = thinkMode
+        ? Math.max(chatRuntimeDefaults.defaultNumPredict, 4096)
+        : chatRuntimeDefaults.defaultNumPredict;
 
       logDebug(
         "ai",
         "chat-invoke",
-        `model=${aiDefaultModelId} | ctx=${chatRuntimeDefaults.defaultNumCtx} | predict=${chatRuntimeDefaults.defaultNumPredict} | historyLimit=${aiChatHistoryLimit} | thinkRequested=${String(aiThinkingEnabled && modelSupportsThinking)}`,
+        `model=${aiDefaultModelId} | ctx=${maxNumCtx} | predict=${effectiveNumPredict} | messages=${messages.length} | rag=${ragTokens > 0 ? `+${ragTokens}` : "off"} | history=${historyTokens} | lesson=${lessonTokens} | think=${String(thinkMode)}`,
       );
 
-      const response = await tauriInvoke<string>("ai_generate_text", {
+      const response = await tauriInvoke<string>("ai_generate_chat", {
         modelId: aiDefaultModelId,
-        prompt,
+        messages,
         temperature: aiTemperature,
-        systemPrompt: effectiveSystemPrompt,
-        enableThinking: aiThinkingEnabled && modelSupportsThinking,
-        numCtx: chatRuntimeDefaults.defaultNumCtx,
-        numPredict: chatRuntimeDefaults.defaultNumPredict,
+        enableThinking: thinkMode,
+        numCtx: maxNumCtx,
+        numPredict: effectiveNumPredict,
       });
 
       const { thinking: thinkingContent, response: cleanResponse } = parseThinkingFromResponse(response);
@@ -1930,7 +2068,7 @@ export function Editor() {
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug]);
+  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, vaultPath, setChatContextBudget, t]);
 
   useEffect(() => {
     if (!chatOpen) {
@@ -1941,6 +2079,14 @@ export function Editor() {
       chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: "smooth" });
     });
   }, [chatOpen, chatMessages, isChatBusy]);
+
+  // Fetch subject DB list when chat opens (so dropdown is populated)
+  useEffect(() => {
+    if (!chatOpen || !vaultPath) return;
+    tauriInvoke<SubjectDbInfo[]>("subject_db_list", { vaultPath })
+      .then((dbs) => setSubjectDatabases(dbs))
+      .catch(() => {});
+  }, [chatOpen, vaultPath]);
 
   const normalizedMethodSearch = methodBankSearch.trim().toLowerCase();
   const filteredMethodBankItems = methodBankItems.filter((entry) => {
@@ -3907,6 +4053,122 @@ export function Editor() {
               </div>
             </div>
 
+            {/* Subject DB Dropdown (custom, dark-mode safe) */}
+            {subjectDatabases.length > 0 && (
+              <div className="shrink-0 border-b border-[var(--tp-border-strong)] px-3 py-1.5">
+                <div className="relative">
+                  <button
+                    onClick={() => setDbMenuOpen(!dbMenuOpen)}
+                    className="flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-[11px] text-left hover:bg-[var(--tp-panel-muted)] transition-colors"
+                    style={{ background: "var(--tp-panel-muted)", color: "var(--tp-text-primary)" }}
+                  >
+                    <Database className="w-3 h-3 shrink-0 text-[var(--tp-accent)]" />
+                    <span className="flex-1 truncate">
+                      {activeChatDb
+                        ? `${activeChatDb}${activeChatGrade ? ` > ${activeChatGrade}` : ""}${activeChatTopic ? ` > ${activeChatTopic}` : ""}`
+                        : `— ${t("subjectDb.noDbSelected")} —`}
+                    </span>
+                    <ChevronDown className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
+                  </button>
+
+                  {dbMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[300]" onClick={() => setDbMenuOpen(false)} />
+                      <div
+                        className="absolute left-0 right-0 top-full mt-1 z-[301] rounded-lg border shadow-2xl overflow-y-auto max-h-72"
+                        style={{
+                          background: "var(--tp-panel-elevated)",
+                          borderColor: "var(--tp-border-strong)",
+                          color: "var(--tp-text-primary)",
+                        }}
+                      >
+                        {/* — Keine — option */}
+                        <button
+                          onClick={() => { selectDb("", "", ""); setDbMenuOpen(false); }}
+                          className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-[var(--tp-panel-muted)] transition-colors border-b"
+                          style={{ borderColor: "var(--tp-border-strong)", color: "var(--tp-text-secondary)" }}
+                        >
+                          — {t("subjectDb.noDbSelected")} —
+                        </button>
+
+                        {/* Tree */}
+                        <div className="py-0.5 text-xs">
+                          {subjectDatabases.map((s) => {
+                            const isExpanded = dbExpandedSubjects[s.subject];
+                            return (
+                              <div key={s.subject}>
+                                {/* Subject row */}
+                                <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-panel-muted)]">
+                                  <button
+                                    onClick={() => setDbExpandedSubjects((p) => ({ ...p, [s.subject]: !p[s.subject] }))}
+                                    className="w-5 h-5 flex items-center justify-center shrink-0"
+                                  >
+                                    {isExpanded
+                                      ? <ChevronDown className="w-3 h-3 text-[var(--tp-text-muted)]" />
+                                      : <ChevronRight className="w-3 h-3 text-[var(--tp-text-muted)]" />}
+                                  </button>
+                                  <button
+                                    onClick={() => { selectDb(s.subject, null, null); setDbMenuOpen(false); }}
+                                    className="flex items-center gap-1.5 flex-1 text-left truncate px-1"
+                                  >
+                                    <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
+                                    <span className="truncate font-medium">{s.subject}</span>
+                                  </button>
+                                </div>
+
+                                {/* Grades */}
+                                {isExpanded && s.grades.map((g) => {
+                                  const gradeKey = `${s.subject}::${g.name}`;
+                                  const gradeExpanded = dbExpandedGrades[gradeKey];
+                                  return (
+                                    <div key={gradeKey} style={{ paddingLeft: "24px" }}>
+                                      <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-panel-muted)]">
+                                        <button
+                                          onClick={() => setDbExpandedGrades((p) => ({ ...p, [gradeKey]: !p[gradeKey] }))}
+                                          className="w-5 h-5 flex items-center justify-center shrink-0"
+                                        >
+                                          {gradeExpanded
+                                            ? <ChevronDown className="w-3 h-3 text-[var(--tp-text-muted)]" />
+                                            : <ChevronRight className="w-3 h-3 text-[var(--tp-text-muted)]" />}
+                                        </button>
+                                        <button
+                                          onClick={() => { selectDb(s.subject, g.name, null); setDbMenuOpen(false); }}
+                                          className="flex items-center gap-1.5 flex-1 text-left truncate px-1"
+                                        >
+                                          <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
+                                          <span className="truncate">{g.name}</span>
+                                        </button>
+                                      </div>
+
+                                      {/* Topics */}
+                                      {gradeExpanded && g.topics.filter((t) => t.chunk_count > 0).map((t) => (
+                                        <div key={t.name} style={{ paddingLeft: "36px" }}>
+                                          <button
+                                            onClick={() => { selectDb(s.subject, g.name, t.name); setDbMenuOpen(false); }}
+                                            className="flex items-center gap-1.5 w-full text-left px-1 py-1 truncate hover:bg-[var(--tp-panel-muted)]"
+                                          >
+                                            <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
+                                            <span className="truncate">{t.name}</span>
+                                            <span className="text-[10px] text-[var(--tp-text-muted)] shrink-0">({t.chunk_count})</span>
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Token Context Bar */}
+            <ChatContextBar />
 
             {/* Messages */}
             <div

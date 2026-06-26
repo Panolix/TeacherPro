@@ -15,6 +15,7 @@ import {
   AlertCircle,
   CheckCircle2,
   RefreshCw,
+  Database,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
@@ -25,6 +26,7 @@ import {
   DEFAULT_AI_MODEL_ID,
   type AiModelCapability,
 } from "../ai/modelCatalog";
+import { SubjectDbManager } from "./SubjectDbManager";
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; labelKey: string; color: string }> = [
   { value: "blue", label: "Blue", labelKey: "settings.accentLabels.blue", color: "#2d86a5" },
@@ -74,7 +76,7 @@ const TRANSLATE_LANGUAGES = [
   { code: "el", name: "Greek" },
 ];
 
-type SettingsTab = "appearance" | "lessons" | "ai" | "backup" | "advanced";
+type SettingsTab = "appearance" | "lessons" | "ai" | "databases" | "backup" | "advanced";
 
 interface Props {
   open: boolean;
@@ -382,6 +384,7 @@ export function SettingsModal({ open, onClose }: Props) {
     { key: "appearance", label: t("settings.tabs.appearance"), icon: SettingsIcon },
     { key: "lessons", label: t("settings.tabs.lessons"), icon: FileText },
     { key: "ai", label: t("settings.tabs.aiFeatures"), icon: Sparkles },
+    { key: "databases", label: t("subjectDb.tabs.databases"), icon: Database },
     { key: "backup", label: t("settings.tabs.backup"), icon: HardDrive },
     { key: "advanced", label: t("settings.tabs.advanced"), icon: SlidersHorizontal },
   ];
@@ -887,6 +890,10 @@ export function SettingsModal({ open, onClose }: Props) {
                   )}
                 </Section>
               </>
+            )}
+
+            {tab === "databases" && (
+              <SubjectDbManager />
             )}
 
             {tab === "backup" && (

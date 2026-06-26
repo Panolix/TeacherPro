@@ -120,6 +120,12 @@ const de = {
       translating: "KI übersetzt nach {{language}}...",
       rewriteApplied: "KI-Überarbeitung angewendet ({{time}}s)",
       translationApplied: "KI-Übersetzung angewendet ({{time}}s)",
+      contextLesson: "Stunde",
+      contextHistory: "Verlauf",
+      contextRag: "Wissen",
+      contextSystem: "System",
+      contextFree: "Frei",
+      searchingKnowledge: "Durchsuche Wissensdatenbank...",
     },
 
     methodBank: {
@@ -675,7 +681,41 @@ const de = {
   aiPrompts: {
     rewriteSystem: "Du überarbeitest Texte. Ändere den Wortlaut und wende den angeforderten Ton an. Gib NUR den überarbeiteten Text ohne zusätzliche Erklärungen, Anführungszeichen oder Formatierung zurück.",
     translateSystem: "Du übersetzt den folgenden Text in {{language}}. Gib NUR die Übersetzung ohne zusätzliche Erklärungen, Anführungszeichen oder Formatierung zurück.",
-    chatSystem: "Du bist ein hilfreicher KI-Assistent für Lehrkräfte, spezialisiert auf Unterrichtsplanung und Pädagogik. Du bekommst den vollständigen Inhalt eines Unterrichtsentwurfs (Stundentabelle) inklusive Metadaten wie Lehrkraft, Fach, Datum. Deine Aufgaben umfassen: Zusammenfassen der Stunde, Identifizieren von Schlüsselthemen und -konzepten, Prüfen der Lernziele auf Kohärenz und Angemessenheit, Vorschlagen von Verbesserungen oder Alternativen für Phasen, Methoden oder Sozialformen, Vorschlagen von vertiefenden Aktivitäten oder Diskussionsfragen. Du fragst die Lehrkraft NICHT, ob sie den Unterrichtsinhalt einfügen soll – er ist bereits vorhanden. Antworte direkt und hilfreich auf Deutsch. Halte Antworten fokussiert und umsetzbar.",
+    chatSystem: "Du bist ein hilfreicher KI-Assistent für Lehrkräfte, spezialisiert auf Unterrichtsplanung und Pädagogik. Du bekommst den vollständigen Inhalt eines Unterrichtsentwurfs (Stundentabelle) inklusive Metadaten wie Lehrkraft, Fach, Datum. Zusätzlich können Dir Wissensdatenbank-Inhalte (z.B. aus Lehrplänen, Schulbüchern, Arbeitsblättern) im Format 📚 Wissen aus [Fach]: [Quelle, Seite] zur Verfügung gestellt werden. Diese Wissensdatenbank-Inhalte wurden vom Lehrer hochgeladen und stehen Dir zur Beantwortung von Fragen zur Verfügung. Deine Aufgaben umfassen: Zusammenfassen der Stunde, Identifizieren von Schlüsselthemen und -konzepten, Prüfen der Lernziele auf Kohärenz und Angemessenheit, Vorschlagen von Verbesserungen oder Alternativen für Phasen, Methoden oder Sozialformen, Vorschlagen von vertiefenden Aktivitäten oder Diskussionsfragen. Du fragst die Lehrkraft NICHT, ob sie den Unterrichtsinhalt einfügen soll – er ist bereits vorhanden. Antworte direkt und hilfreich auf Deutsch. Halte Antworten fokussiert und umsetzbar.",
+  },
+
+  subjectDb: {
+    title: "Wissensdatenbanken",
+    scanImport: "Scannen & Importieren",
+    importing: "Importiere...",
+    noDatabases: "Noch keine Wissensdatenbanken. Erstelle Ordner unter <Vault>/SubjectDBs/",
+    deleteConfirm: "Diese Wissensdatenbank löschen?",
+    noDbSelected: "Keine",
+    chat: {
+      selectDb: "Wissensdatenbank",
+      usedInContext: "{{count}} Chunks verwendet ({{tokens}} Tokens)",
+      contextBudget: "Kontext: {{used}}/{{total}} Tokens",
+    },
+    result: {
+      imported: "{{chunks}} Chunks aus {{files}} Dateien importiert",
+      errors: "{{count}} Fehler",
+    },
+    tabs: {
+      databases: "Datenbanken",
+    },
+    newSubjectPlaceholder: "Fachname (z.B. Mathematik)",
+    newGradePlaceholder: "Klassenstufe (z.B. Klasse 8)",
+    newTopicPlaceholder: "Thema (z.B. Lineare Gleichungen)",
+    notEmbedded: "(nicht eingebettet)",
+    addSubfolder: "Unterordner anlegen",
+    generalTopic: "Allgemein",
+    generalGrade: "Allgemein",
+    pendingPdfs: "ausstehend",
+    embedded: "eingebettet",
+    pending: "ausstehend",
+    addPdfs: "PDFs hinzufügen",
+    selectPdfs: "PDF-Dateien auswählen",
+    folderHint: "Lege Fächer, Klassenstufen und Themen an. Lege dann PDFs in den Themen-Ordnern ab und klicke auf \"Scannen & Importieren\".",
   },
 };
 

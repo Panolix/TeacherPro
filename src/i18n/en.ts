@@ -120,6 +120,12 @@ const en = {
       translating: "AI translating to {{language}}...",
       rewriteApplied: "AI rewrite applied ({{time}}s)",
       translationApplied: "AI translation applied ({{time}}s)",
+      contextLesson: "Lesson",
+      contextHistory: "History",
+      contextRag: "Knowledge",
+      contextSystem: "System",
+      contextFree: "Free",
+      searchingKnowledge: "Searching knowledge database...",
     },
 
     methodBank: {
@@ -675,7 +681,41 @@ const en = {
   aiPrompts: {
     rewriteSystem: "You rewrite text. Change the wording and apply the requested tone. Return ONLY the rewritten text without extra explanations, quotation marks, or formatting.",
     translateSystem: "You translate the following text into {{language}}. Return ONLY the translation without extra explanations, quotation marks, or formatting.",
-    chatSystem: "You are a helpful AI assistant for teachers, specialized in lesson planning and pedagogy. You receive the complete content of a lesson plan (lesson table) including metadata such as teacher name, subject, and date. Your tasks include: Summarizing the lesson, Identifying key themes and concepts, Checking learning objectives for coherence and appropriateness, Suggesting improvements or alternatives for phases, methods, or social forms, Suggesting follow-up activities or discussion questions. Do NOT ask the teacher to paste their lesson content — it is already provided. Respond directly and helpfully. Keep responses focused and actionable.",
+    chatSystem: "You are a helpful AI assistant for teachers, specialized in lesson planning and pedagogy. You receive the complete content of a lesson plan (lesson table) including metadata such as teacher name, subject, and date. Additionally, knowledge database content (e.g. from curricula, textbooks, worksheets) may be provided in the format 📚 Knowledge from [subject]: [source, page]. This knowledge database content has been uploaded by the teacher and is available for answering questions. Your tasks include: Summarizing the lesson, Identifying key themes and concepts, Checking learning objectives for coherence and appropriateness, Suggesting improvements or alternatives for phases, methods, or social forms, Suggesting follow-up activities or discussion questions. Do NOT ask the teacher to paste their lesson content — it is already provided. Respond directly and helpfully. Keep responses focused and actionable.",
+  },
+
+  subjectDb: {
+    title: "Knowledge Databases",
+    scanImport: "Scan & Import",
+    importing: "Importing...",
+    noDatabases: "No knowledge databases yet. Create folders under <Vault>/SubjectDBs/",
+    deleteConfirm: "Delete this knowledge database?",
+    noDbSelected: "None",
+    chat: {
+      selectDb: "Knowledge Base",
+      usedInContext: "{{count}} chunks used ({{tokens}} tokens)",
+      contextBudget: "Context: {{used}}/{{total}} tokens",
+    },
+    result: {
+      imported: "Imported {{chunks}} chunks from {{files}} files",
+      errors: "{{count}} errors",
+    },
+    tabs: {
+      databases: "Databases",
+    },
+    newSubjectPlaceholder: "Subject name (e.g. Mathematics)",
+    newGradePlaceholder: "Grade level (e.g. Grade 8)",
+    newTopicPlaceholder: "Topic (e.g. Linear Equations)",
+    notEmbedded: "(not embedded)",
+    addSubfolder: "Add subfolder",
+    generalTopic: "General",
+    generalGrade: "General",
+    pendingPdfs: "pending",
+    embedded: "embedded",
+    pending: "pending",
+    addPdfs: "Add PDFs",
+    selectPdfs: "Select PDF files",
+    folderHint: "Create subjects, grade levels, and topics. Drop PDFs into the topic folders and click \"Scan & Import\".",
   },
 };
 

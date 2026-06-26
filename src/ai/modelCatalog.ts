@@ -15,6 +15,7 @@ export interface AiModelCatalogItem {
   recommendedRam: string;
   recommendedContext: string;
   defaultNumCtx: number;
+  maxNumCtx: number;
   defaultNumPredict: number;
   description: string;
   recommended: boolean;
@@ -32,8 +33,9 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 4-6 GB · CPU: 8+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 8192,
+    maxNumCtx: 131072,
     defaultNumPredict: 1024,
-    description: "Extrem kompaktes Modell – perfekt für alte Laptops, Chromebooks und schwache Hardware. Läuft auf jedem System, schnelle Antworten bei einfachen Fragen.",
+    description: "Extrem kompaktes Modell",
     recommended: false,
     capabilities: ["multilingual", "low-latency", "long-context"],
   },
@@ -46,6 +48,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 6-8 GB · CPU: 12+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 262144,
     defaultNumPredict: 1024,
     description: "Kompaktes Multilingual-Modell mit 201 Sprachen und riesigem 256K-Kontext – ideal für einfache Übersetzungen und Unterrichtsfragen auf schwacher Hardware.",
     recommended: false,
@@ -62,6 +65,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 8-12 GB · CPU: 16+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 262144,
     defaultNumPredict: 1024,
     description: "NEUES STANDARD-MODELL: Beste Mehrsprachigkeit (201 Sprachen), Thinking-Unterstützung, riesiger 256K-Kontext und exzellente Deutschqualität – ideal für Unterrichtsplanung, Chat und Übersetzung.",
     recommended: true,
@@ -76,6 +80,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 8-10 GB · CPU: 16+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 16384,
+    maxNumCtx: 131072,
     defaultNumPredict: 1024,
     description: "Der Referenzstandard unter den Open-Source-Modellen. Riesige Community, hervorragend getunt für Mathe, Logik und naturwissenschaftliche Fragen – bewährt im Unterrichtskontext.",
     recommended: false,
@@ -90,6 +95,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 10-12 GB · CPU: 20+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 131072,
     defaultNumPredict: 2048,
     description: "Reasoning-Modell mit einzigartigen logischen Denkfähigkeiten – ideal für Schritt-für-Schritt-Analysen, Lernzielprüfung und komplexe pädagogische Fragen.",
     recommended: false,
@@ -104,6 +110,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 8-10 GB · CPU: 16+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 16384,
+    maxNumCtx: 131072,
     defaultNumPredict: 1024,
     description: "Schnelles Gemma-4-Profil mit starkem Speed/Qualitäts-Verhältnis – gut für schnelle Überarbeitungen und Chat bei moderater Hardware.",
     recommended: false,
@@ -120,6 +127,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 10-14 GB · CPU: 24+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 16384,
+    maxNumCtx: 131072,
     defaultNumPredict: 1024,
     description: "Apache 2.0, von Mistral für Europa optimiert. Beste Mehrsprachigkeit (DE/FR/EN/ES/IT) im Katalog – ideal für mehrsprachigen Unterricht, Übersetzungen und internationale Klassen.",
     recommended: false,
@@ -134,6 +142,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 10-14 GB · CPU: 24+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 131072,
     defaultNumPredict: 1024,
     description: "Solider Allrounder für umfangreichere Unterrichts-Chats und mehrsprachige Aufgaben – bewährt und zuverlässig.",
     recommended: false,
@@ -148,6 +157,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 14-18 GB · CPU: 28+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 131072,
     defaultNumPredict: 2048,
     description: "Deutlich stärkeres Reasoning als die 8B-Variante – perfekt für Mathe-Erklärungen, Physik-Aufgaben, Chemie und komplexe MINT-Fachanalysen.",
     recommended: false,
@@ -162,6 +172,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 20-24 GB · CPU: 32+ GB RAM",
     recommendedContext: "Max context: 128K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 131072,
     defaultNumPredict: 2048,
     description: "Starkes Multilingual-Modell mit exzellenter europäischer Sprachabdeckung und schneller Befolgung von Anweisungen – Premium-Option für anspruchsvolle Unterrichtsvorbereitung.",
     recommended: false,
@@ -178,6 +189,7 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 24+ GB · CPU: 32+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 262144,
     defaultNumPredict: 2048,
     description: "Premium-Mehrsprachigkeitsmodell mit maximaler Qualität für tiefgehende Unterrichtsanalyse, anspruchsvolle Übersetzungen und komplexe pädagogische Aufgaben.",
     recommended: false,
@@ -192,14 +204,33 @@ export const AI_MODEL_CATALOG: AiModelCatalogItem[] = [
     recommendedRam: "VRAM: 20-24 GB · CPU: 48+ GB RAM",
     recommendedContext: "Max context: 256K tokens",
     defaultNumCtx: 32768,
+    maxNumCtx: 262144,
     defaultNumPredict: 2048,
     description: "Hochkapazitives Gemma-4-Profil für tiefgreifendes Reasoning, mehrsprachige Aufgaben und lange, strukturierte Ausgaben – für Highend-Systeme.",
     recommended: false,
     capabilities: ["multilingual", "reasoning", "long-context"],
   },
+
+  // ── Embedding model (not used for chat) ──
+  {
+    id: "bge-m3",
+    label: "BGE-M3 (Embedding)",
+    tier: "small",
+    source: "ollama-registry",
+    estimatedDisk: "~2,2 GB",
+    recommendedRam: "VRAM: 4-6 GB · CPU: 8+ GB RAM",
+    recommendedContext: "Max input: 8192 tokens",
+    defaultNumCtx: 8192,
+    maxNumCtx: 8192,
+    defaultNumPredict: 128,
+    description: "Multilingual embedding model für RAG (Retrieval-Augmented Generation). Erzeugt 1024-dimensionale Vektoren und unterstützt 100+ Sprachen – ideal für die Wissensdatenbank-Suche.",
+    recommended: true,
+    capabilities: ["multilingual"],
+  },
 ];
 
 export const DEFAULT_AI_MODEL_ID = "qwen3.5:9b";
+export const EMBEDDING_MODEL_ID = "bge-m3";
 
 export const DEFAULT_MODEL_RUNTIME_DEFAULTS = {
   defaultNumCtx: 6144,
@@ -227,15 +258,17 @@ export function getAiModelCatalogItem(modelId: string): AiModelCatalogItem | und
 
 export function getAiModelRuntimeDefaults(modelId: string): {
   defaultNumCtx: number;
+  maxNumCtx: number;
   defaultNumPredict: number;
 } {
   const item = getAiModelCatalogItem(modelId);
   if (!item) {
-    return DEFAULT_MODEL_RUNTIME_DEFAULTS;
+    return { ...DEFAULT_MODEL_RUNTIME_DEFAULTS, maxNumCtx: 8192 };
   }
 
   return {
     defaultNumCtx: item.defaultNumCtx,
+    maxNumCtx: item.maxNumCtx,
     defaultNumPredict: item.defaultNumPredict,
   };
 }

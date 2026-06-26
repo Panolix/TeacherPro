@@ -83,6 +83,56 @@ export interface SubjectConfig {
   color: string;
 }
 
+export interface SubjectDbFile {
+  name: string;
+  is_embedded: boolean;
+  chunk_count: number;
+}
+
+export interface SubjectDbTopic {
+  name: string;
+  chunk_count: number;
+  pending_pdfs: number;
+  files: SubjectDbFile[];
+}
+
+export interface SubjectDbGrade {
+  name: string;
+  topics: SubjectDbTopic[];
+  files: SubjectDbFile[];
+}
+
+export interface SubjectDbInfo {
+  subject: string;
+  grades: SubjectDbGrade[];
+  files: SubjectDbFile[];
+}
+
+export interface ScoredChunk {
+  id: string;
+  text: string;
+  source: string;
+  page: number;
+  subject: string;
+  grade: string;
+  topic: string;
+  score: number;
+}
+
+export interface ChatContextBudget {
+  totalTokens: number;
+  usedByLesson: number;
+  usedByHistory: number;
+  usedByRag: number;
+  usedBySystem: number;
+  freeTokens: number;
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "developer";
+  content: string;
+}
+
 interface SaveLessonOptions {
   allowRename?: boolean;
 }
@@ -175,6 +225,22 @@ interface AppState {
    * Bridge that lets the TopBar call Editor-internal actions (save/preview/print/export)
    * and toggle its side panels. Editor registers these on mount; TopBar consumes them.
    */
+  // Subject databases
+  subjectDatabases: SubjectDbInfo[];
+  setSubjectDatabases: (dbs: SubjectDbInfo[]) => void;
+
+  // Active chat database selection
+  activeChatDb: string | null;         // subject name or null
+  activeChatGrade: string | null;      // grade name or null
+  activeChatTopic: string | null;      // topic name or null
+  setActiveChatDb: (db: string | null) => void;
+  setActiveChatGrade: (grade: string | null) => void;
+  setActiveChatTopic: (topic: string | null) => void;
+
+  // Context budget display
+  chatContextBudget: ChatContextBudget | null;
+  setChatContextBudget: (budget: ChatContextBudget | null) => void;
+
   editorActions: {
     save: () => void;
     preview: () => void;
@@ -914,6 +980,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeFileContent: null,
   activeMindmapContent: null,
 
+  subjectDatabases: [],
+  activeChatDb: null,
+  activeChatGrade: null,
+  activeChatTopic: null,
+  chatContextBudget: null,
+
   initVault: async () => {
     try {
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
@@ -1105,6 +1177,23 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ language });
     void persistUiSettings({ language });
   },
+
+  setSubjectDatabases: (dbs) => {
+    set({ subjectDatabases: dbs });
+  },
+  setActiveChatDb: (db) => {
+    set({ activeChatDb: db });
+  },
+  setActiveChatGrade: (grade) => {
+    set({ activeChatGrade: grade });
+  },
+  setActiveChatTopic: (topic) => {
+    set({ activeChatTopic: topic });
+  },
+  setChatContextBudget: (budget) => {
+    set({ chatContextBudget: budget });
+  },
+
   setAiModelInstallState: (modelId, installState) => {
     set((state) => ({
       aiModelInstallState: {

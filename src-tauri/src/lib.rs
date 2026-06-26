@@ -61,6 +61,8 @@ struct HardwareProbe {
     detected_hardware: Vec<String>,
 }
 
+mod subject_db;
+
 static AI_INSTALL_STATES: LazyLock<Mutex<HashMap<String, AiInstallStateInternal>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static AI_INSTALL_CHILDREN: LazyLock<Mutex<HashMap<String, Arc<Mutex<Child>>>>> =
@@ -1568,6 +1570,102 @@ async fn ai_generate_text(
     .map_err(|error| format!("AI generation task failed: {error}"))?
 }
 
+// ── AI Chat with native Messages (instead of a single prompt string) ──
+
+#[derive(serde::Deserialize)]
+struct ChatMessage {
+    role: String,
+    content: String,
+}
+
+#[tauri::command]
+async fn ai_generate_chat(
+    model_id: String,
+    messages: Vec<ChatMessage>,
+    temperature: Option<f64>,
+    enable_thinking: Option<bool>,
+    num_ctx: Option<u32>,
+    num_predict: Option<i32>,
+) -> Result<String, String> {
+    let task_model_id = model_id;
+    let task_temperature = temperature.unwrap_or(0.7).clamp(0.0, 2.0);
+    let task_thinking = enable_thinking.unwrap_or(false);
+    let task_num_ctx = num_ctx.unwrap_or(8_192).clamp(1_024, 131_072);
+    let task_num_predict = num_predict.unwrap_or(896).clamp(128, 4_096);
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = ensure_ollama_runtime()?;
+        maybe_realign_managed_runtime_backend(&task_model_id);
+
+        let base_url = std::env::var("OLLAMA_HOST")
+            .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
+        let base_url = base_url.trim_end_matches('/');
+
+        #[derive(serde::Deserialize)]
+        struct OllamaChatResponse {
+            message: OllamaChatMessage,
+        }
+        #[derive(serde::Deserialize)]
+        struct OllamaChatMessage {
+            content: String,
+            #[serde(default)]
+            thinking: String,
+        }
+
+        let agent = ureq::AgentBuilder::new()
+            .timeout(std::time::Duration::from_secs(300))
+            .build();
+
+        // Build the Ollama messages array from our ChatMessage structs.
+        // Map any "developer" role to "system" for Ollama compatibility.
+        let ollama_messages: Vec<serde_json::Value> = messages
+            .iter()
+            .map(|msg| {
+                let role = if msg.role == "developer" { "system" } else { &msg.role };
+                serde_json::json!({"role": role, "content": msg.content})
+            })
+            .collect();
+
+        let body = serde_json::json!({
+            "model": &task_model_id,
+            "messages": ollama_messages,
+            "stream": false,
+            "think": task_thinking,
+            "options": {
+                "temperature": task_temperature,
+                "num_ctx": task_num_ctx,
+                "num_predict": task_num_predict,
+            }
+        });
+
+        let resp = agent
+            .post(&format!("{base_url}/api/chat"))
+            .send_json(body);
+
+        let resp = match resp {
+            Ok(r) => r,
+            Err(ureq::Error::Status(code, resp)) => {
+                let body = resp.into_string().unwrap_or_default();
+                return Err(format!("Ollama API chat status {code}: {body}"));
+            }
+            Err(e) => return Err(format!("Ollama API chat: {e}")),
+        };
+
+        let chat: OllamaChatResponse = resp
+            .into_json()
+            .map_err(|e| format!("Bad chat JSON: {e}"))?;
+
+        let clean = strip_think_blocks(&chat.message.content);
+        if task_thinking && !chat.message.thinking.trim().is_empty() {
+            Ok(format!("<think>{}</think>\n{}", chat.message.thinking.trim(), clean))
+        } else {
+            Ok(clean)
+        }
+    })
+    .await
+    .map_err(|error| format!("AI generation task failed: {error}"))?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1590,7 +1688,15 @@ pub fn run() {
             ai_install_model,
             ai_remove_model,
             ai_import_local_model,
-            ai_generate_text
+            ai_generate_text,
+            subject_db::subject_db_list,
+            subject_db::subject_db_scan_import,
+            subject_db::subject_db_add_pdfs,
+            subject_db::subject_db_delete_file,
+            subject_db::subject_db_query,
+            subject_db::subject_db_delete,
+            subject_db::subject_db_diagnose,
+            ai_generate_chat
         ])
         .setup(|_app| {
             // Start Ollama at app launch so AI features work immediately
