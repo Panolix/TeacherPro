@@ -206,7 +206,7 @@ export function SettingsModal({ open, onClose }: Props) {
     [clearInstallPoller, pollModelInstallProgress],
   );
 
-  const syncInstalledModels = async () => {
+  const syncInstalledModels = useCallback(async () => {
     setAiInfoMessage(null);
     setAiErrorMessage(null);
     setAiActionBusy("refresh-models");
@@ -230,7 +230,7 @@ export function SettingsModal({ open, onClose }: Props) {
     } finally {
       setAiActionBusy(null);
     }
-  };
+  }, [setAiModelInstallState, setAiDefaultModelId, setAiRewriteTranslateModelId, setAiInstalledModelIds, setAiActionBusy, setAiInfoMessage, setAiErrorMessage]);
 
   const handleInstallModel = async (modelId: string) => {
     setAiInfoMessage(null);

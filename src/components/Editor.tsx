@@ -153,7 +153,15 @@ function parseThinkingFromResponse(raw: string): { thinking: string | null; resp
 
 
 
+/** Decode HTML entities like &rightarrow; to their actual characters. */
+function decodeHtmlEntities(text: string): string {
+  const el = document.createElement("textarea");
+  el.innerHTML = text;
+  return el.value;
+}
+
 function AiMarkdown({ text }: { text: string }) {
+  text = decodeHtmlEntities(text);
   // Render inline spans: **bold**, *italic*, `code`
   function renderInline(line: string, baseKey: string): React.ReactNode[] {
     const tokens: React.ReactNode[] = [];
