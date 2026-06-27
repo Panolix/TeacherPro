@@ -1,8 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.1] - 2026-06-27
 
 ### Fixed
+- **HTML-Entities im KI-Chat** — `&rightarrow;` und andere HTML-Entities werden
+  jetzt korrekt dekodiert und als tatsächliche Zeichen angezeigt
+- **Embedding-Modell nicht erkannt** — `bge-m3` wird jetzt auch dann als
+  installiert erkannt, wenn Ollama es mit `:latest`-Tag listet; Modellvergleich
+  ignoriert Tags
+- **„Aktualisieren"-Button flackert nicht mehr** — `syncInstalledModels` ist in
+  `useCallback` gewrapped, sodass der Effekt nicht mehr in einer Endlosschleife
+  feuert
+
+### Fixed (previous unreleased)
 - **Ollama GPU-Erkennung auf Windows** — `OLLAMA_LLM_LIBRARY` wird nicht mehr gesetzt;
   Ollama auto-detect findet jetzt CUDA/cuBLAS korrekt (z. B. RTX 4090, 24 GB VRAM)
 - **Ollama-Prozesse werden nicht mehr gekillt** — Der Windows-Dienst/die Tray-App
