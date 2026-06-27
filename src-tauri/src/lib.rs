@@ -286,7 +286,7 @@ fn ensure_ollama_server_started() {
                 std::thread::spawn(move || {
                     use std::io::BufRead;
                     let reader = std::io::BufReader::new(stderr);
-                    for text in reader.lines().flatten() {
+                    for text in reader.lines().map_while(Result::ok) {
                         if !text.is_empty() {
                             eprintln!("[Ollama] {text}");
                         }
