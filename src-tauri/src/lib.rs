@@ -795,7 +795,14 @@ fn parse_ollama_models(raw: &str) -> Vec<String> {
         .skip(1)
         .filter_map(|line| line.split_whitespace().next().map(str::trim))
         .filter(|name| !name.is_empty() && *name != "NAME")
-        .map(|name| name.split(':').next().unwrap_or(name).to_owned())
+        .map(|name| {
+            // Strip only the :latest tag that Ollama appends to tagless pulls
+            if let Some(stripped) = name.strip_suffix(":latest") {
+                stripped.to_owned()
+            } else {
+                name.to_owned()
+            }
+        })
         .collect()
 }
 
