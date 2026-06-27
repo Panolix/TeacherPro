@@ -61,7 +61,7 @@ fn chunk_text(text: &str, size: usize, overlap: usize) -> Vec<String> {
         }
 
         // Move start backwards by `overlap` chars
-        let next_start = if end > overlap { end - overlap } else { 0 };
+        let next_start = end.saturating_sub(overlap);
         if next_start <= start {
             start = end;
         } else {
@@ -81,7 +81,7 @@ fn find_split_char(chars: &[char], start: usize, max_size: usize) -> usize {
         return total;
     }
 
-    let search_start = if target > 60 { target - 60 } else { 0 };
+    let search_start = target.saturating_sub(60);
     let search_end = total.min(target + 20);
 
     // Search backwards from target through the search window

@@ -77,7 +77,7 @@ static OLLAMA_WE_STARTED: std::sync::atomic::AtomicBool =
 static AI_HARDWARE_PROBE: LazyLock<HardwareProbe> = LazyLock::new(probe_hardware);
 
 fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
-    let mut command = Command::new(program);
+    let command = Command::new(program);
 
     #[cfg(windows)]
     {
@@ -286,11 +286,9 @@ fn ensure_ollama_server_started() {
                 std::thread::spawn(move || {
                     use std::io::BufRead;
                     let reader = std::io::BufReader::new(stderr);
-                    for line in reader.lines() {
-                        if let Ok(text) = line {
-                            if !text.is_empty() {
-                                eprintln!("[Ollama] {text}");
-                            }
+                    for text in reader.lines().flatten() {
+                        if !text.is_empty() {
+                            eprintln!("[Ollama] {text}");
                         }
                     }
                 });
@@ -484,7 +482,9 @@ fn resolve_ollama_install_dir() -> String {
         if std::path::Path::new("/usr/local/bin/ollama").exists() {
             return "/usr/local".to_string();
         }
-        return "/usr".to_string();
+        if std::path::Path::new("/usr/bin/ollama").exists() {
+            return "/usr".to_string();
+        }
     }
     ".".to_string()
 }

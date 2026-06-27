@@ -363,7 +363,7 @@ async fn process_loose_pdfs(
             let dir = folder_path.join(&stem);
             std::fs::create_dir_all(&dir).ok();
             let dest = dir.join(&filename);
-            if !dest.exists() { std::fs::rename(&entry.path(), &dest).ok(); }
+            if !dest.exists() { std::fs::rename(entry.path(), &dest).ok(); }
             meta = FolderMeta {
                 subject: subject.to_string(),
                 grade: stem.clone(),
@@ -421,7 +421,7 @@ async fn process_and_embed_pdf(
 
     let chunked: Vec<ChunkWithEmbedding> = chunks
         .into_iter()
-        .zip(embeddings.into_iter())
+        .zip(embeddings)
         .map(|(chunk, embedding)| ChunkWithEmbedding { chunk, embedding })
         .collect();
 
@@ -518,7 +518,7 @@ pub async fn subject_db_query(
     top_k: u32,
 ) -> Result<Vec<ScoredChunk>, String> {
     let db_dir = subject_db_dir(&vault_path);
-    let top_k = top_k.max(1).min(50) as usize;
+    let top_k = top_k.clamp(1, 50) as usize;
 
     let base_url = get_ollama_base_url();
     let query_emb = embed::embed_texts(&[query], EMBEDDING_MODEL, &base_url)
@@ -605,12 +605,9 @@ pub async fn subject_db_diagnose(
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(5))
             .build();
-        match agent.post(&format!("{base_url}/api/show"))
+        agent.post(&format!("{base_url}/api/show"))
             .send_json(serde_json::json!({"model": "bge-m3"}))
-        {
-            Ok(_) => true,
-            Err(_) => false,
-        }
+            .is_ok()
     }).await.unwrap_or(false);
 
     let mut results = Vec::new();

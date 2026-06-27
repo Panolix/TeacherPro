@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "TeacherPro"
-version = "2.2.1"
+version = "2.2.2"
 dependencies = [
  "pdf-extract",
  "serde",
