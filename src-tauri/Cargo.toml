@@ -1,6 +1,6 @@
 [package]
 name = "TeacherPro"
-version = "2.2.1"
+version = "2.2.2"
 description = "TeacherPro desktop app"
 authors = ["you"]
 edition = "2021"

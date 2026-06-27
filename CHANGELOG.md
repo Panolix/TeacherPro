@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+## [2.2.2] - 2026-06-27
+
+### Fixed
+- **Alle KI-Modelle werden korrekt erkannt** — `parse_ollama_models` entfernt
+  nur noch das `:latest`-Suffix statt alle Tags. Modelle mit Doppelpunkt in der
+  ID (z. B. `qwen3.5:9b`) werden nicht mehr zerstört
+
 ## [2.2.1] - 2026-06-27
 
 ### Fixed
