@@ -13,9 +13,9 @@ jobs:
     outputs:
       release_id: ${{ steps.create-release.outputs.id }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
       - name: get version
@@ -62,10 +62,10 @@ jobs:
     runs-on: ${{ matrix.platform }}
     continue-on-error: ${{ matrix.platform != 'windows-latest' }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: setup node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
@@ -95,7 +95,7 @@ jobs:
           echo "Setting version to $VERSION"
           node scripts/sync-version.mjs "$VERSION"
 
-      - uses: tauri-apps/tauri-action@v1
+      - uses: tauri-apps/tauri-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -107,7 +107,7 @@ jobs:
           args: ${{ matrix.args }}
 
       - name: Upload installer artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: teacherpro-${{ matrix.platform }}-${{ github.ref_name }}
           path: src-tauri/target/release/bundle/
