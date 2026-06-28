@@ -1243,8 +1243,33 @@ export const useAppStore = create<AppState>((set, get) => ({
           const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
           await store.set("vault", { path: selected });
 
+          // Read vault backup first (portable settings from other device)
+          const vaultBackup = await readUiSettingsBackup(selected);
+          // Read current app store settings (empty on first launch on this device)
           const currentSettings = await store.get<Partial<UISettings>>("uiSettings");
-          const normalizedSettings = normalizeUiSettings(currentSettings);
+
+          let mergedSettings: Partial<UISettings>;
+          if (currentSettings && Object.keys(currentSettings).length > 0) {
+            // Device already has settings — use them as-is
+            mergedSettings = currentSettings;
+          } else if (vaultBackup) {
+            // First launch on this device — take portable settings from vault backup,
+            // but keep device-specific AI/model settings at defaults
+            mergedSettings = { ...vaultBackup };
+            // Device-specific: AI model, provider, and runtime config
+            delete (mergedSettings as any).aiDefaultModelId;
+            delete (mergedSettings as any).aiRewriteTranslateModelId;
+            delete (mergedSettings as any).aiProvider;
+            delete (mergedSettings as any).aiEnabled;
+            delete (mergedSettings as any).aiPersistChats;
+            delete (mergedSettings as any).aiChatHistoryLimit;
+            delete (mergedSettings as any).aiTemperature;
+            delete (mergedSettings as any).aiThinkingEnabled;
+          } else {
+            mergedSettings = {};
+          }
+
+          const normalizedSettings = normalizeUiSettings(mergedSettings);
           await store.set("uiSettings", normalizedSettings);
           await store.save();
 

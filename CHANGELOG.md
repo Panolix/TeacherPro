@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-06-28
+
+### Added
+- **Geräteübergreifende Vault-Portabilität** — Settings wie Lehrername, Fächer,
+  Sprache und Sidebar-Zustand werden jetzt beim ersten Öffnen eines Vaults aus
+  der `.teacherpro/ui-settings.backup.json` gelesen und nicht mehr mit Defaults
+  überschrieben. KI-Modell-Einstellungen bleiben gerätespezifisch.
+
+### Fixed
+- **Settings-Overwrite-Bug in `openVault`** — Beim Öffnen eines Vaults auf einem
+  neuen Gerät wurde die Backup-Datei im Vault mit leeren Defaults überschrieben,
+  sodass alle portablen Einstellungen verloren gingen
+
 ## [2.2.2] - 2026-06-27
 
 ### Fixed
