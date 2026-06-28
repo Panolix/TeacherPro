@@ -77,7 +77,7 @@ static OLLAMA_WE_STARTED: std::sync::atomic::AtomicBool =
 static AI_HARDWARE_PROBE: LazyLock<HardwareProbe> = LazyLock::new(probe_hardware);
 
 fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
-    let command = Command::new(program);
+    let mut command = Command::new(program);
 
     #[cfg(windows)]
     {
