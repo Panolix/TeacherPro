@@ -95,7 +95,7 @@ jobs:
           echo "Setting version to $VERSION"
           node scripts/sync-version.mjs "$VERSION"
 
-      - uses: tauri-apps/tauri-action@v2
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
