@@ -1,38 +1,38 @@
-# TeacherPro v2.2.4 – Sicherheits- und UI-Update
+# TeacherPro v2.2.4 – Security & UI Update
 
 ## Added
 
-### 🎨 Einheitliches Hover- und Druck-Feedback für alle Buttons
-Alle Schaltflächen der App – rechte Editor-Leiste, Seitenleiste, Top-Bar,
-Kalender, Dialoge und KI-Chat – reagieren jetzt mit derselben dezenten
-Animation: leichtes Anheben beim Überfahren, sanftes Eindrücken beim Klicken.
-Primär-Buttons leuchten beim Hover auf, destruktive Buttons bleiben rot.
+### 🎨 Unified hover and press feedback for all buttons
+Every button in the app — editor side rail, sidebar, top bar, calendar, dialogs
+and AI chat — now uses the same subtle interaction: a slight lift on hover and a
+soft press squash on click. Primary buttons brighten on hover, destructive
+buttons stay red.
 
-### ↔️ Spaltenbreite von Tabellen per Maus ziehen
-Fährt man im Unterrichtstabellen-Editor über eine Spaltengrenze, wechselt der
-Cursor zum bekannten Links-rechts-Symbol. Beim Ziehen markiert eine Akzentlinie
-die aktive Spaltengrenze.
+### ↔️ Drag table column borders with the mouse
+Hovering a column border in the lesson table editor now shows the familiar
+left-right resize cursor. While dragging, an accent line marks the active column
+boundary.
 
 ## Fixed
 
-### 🔒 Sicherheitshärtung
-- Druck- und Öffnen-Befehle validieren Pfade und übergeben sie nie mehr als
-  Teil eines Shell-/AppleScript-Strings
-- Subject-DB-Befehle prüfen `Fach/Stufe/Thema/Dateiname` und verhindern
-  Pfad-Traversal
-- Dateisystem-Zugriff der App ist auf den Vault und das Temp-Verzeichnis
-  beschränkt (Laufzeit-Freigabe inkl. kanonischer Pfade)
-- Content-Security-Policy für die Produktions-App (Dev-CSP separat)
-- Vorschau-Rendering bereinigt (Highlight-Farben, Überschriften)
-- GGUF-Import nutzt sichere Temp-Dateien statt eines vorhersagbaren Pfads
+### 🔒 Security hardening
+- Print and open commands validate paths and no longer pass them as part of a
+  shell/AppleScript string
+- Subject DB commands validate subject/grade/topic/filename and block path
+  traversal
+- App filesystem access is limited to the vault and the temp directory
+  (runtime grants including canonical paths)
+- Content Security Policy for the production app (with a separate dev CSP)
+- Sanitized preview rendering (highlight colours, headings)
+- GGUF import uses secure temp files instead of a predictable path
 
-### 🐛 Tote Hover-Effekte behoben
-Fontgrößen-Auswahl, Geplantes-Datum-Kalender, KI-Chat-Datenbankauswahl,
-Wochen-Navigation, „Heute"-Button sowie Plus/Löschen im Kalender hatten
-unsichtbare Hover-Zustände; sie reagieren jetzt wie der Rest der App.
+### 🐛 Fixed dead hover effects
+Font size picker, planned-date calendar, AI chat database selector, week
+navigation, the Today button, and the add/delete buttons in the calendar had
+invisible hover states; they now respond like the rest of the app.
 
 ## Files Changed
-- `src-tauri/src/lib.rs`, `src-tauri/src/subject_db/mod.rs` – Sicherheitshärtung
-- `src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json` – Scopes, CSP
-- `src/components/*` – einheitliches Hover-/Druck-Feedback, Tabellen-Resize-Cursor
-- `src/index.css` – zentrale Interaktions-Regeln
+- `src-tauri/src/lib.rs`, `src-tauri/src/subject_db/mod.rs` – security hardening
+- `src-tauri/capabilities/default.json`, `src-tauri/tauri.conf.json` – scopes, CSP
+- `src/components/*` – unified hover/press feedback, table resize cursor
+- `src/index.css` – shared interaction rules

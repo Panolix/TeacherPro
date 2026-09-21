@@ -5,17 +5,17 @@
 ## [2.2.4] - 2026-09-21
 
 ### Added
-- **Einheitliches Hover-/Druck-Feedback** — alle Buttons nutzen dieselbe dezente
-  Interaktion (leichtes Anheben, sanftes Eindrücken, einheitliche Hover-Flächen)
-- **Spalten-Resize-Cursor in Tabellen** — an Spaltengrenzen wechselt der Cursor zum
-  Links-rechts-Symbol, eine Akzentlinie zeigt die aktive Grenze
+- **Unified hover/press feedback** — all buttons use the same subtle interaction
+  (slight lift, soft press, consistent hover surfaces)
+- **Column resize cursor in tables** — the cursor changes to the left-right resize
+  icon at column borders, with an accent line marking the active edge
 
 ### Fixed
-- **Sicherheitshärtung** — Pfad-Validierung für Druck/Öffnen, Pfad-Traversal in der
-  Subject-DB, eingeschränkter Dateisystem-Scope mit Laufzeit-Freigabe, Produktions-CSP,
-  sichere GGUF-Temp-Datei und bereinigtes Vorschau-Rendering
-- **Tote Hover-Effekte** — Fontgröße, Datums-Picker, KI-Chat-Auswahl,
-  Kalender-Navigation und weitere Buttons reagieren wieder sichtbar
+- **Security hardening** — path validation for print/open, subject DB path
+  traversal protection, restricted filesystem scope with runtime grants,
+  production CSP, secure GGUF temp file, and sanitized preview rendering
+- **Dead hover effects** — font size picker, date picker, AI chat selector,
+  calendar navigation and other buttons respond visibly again
 
 ## [2.2.3] - 2026-06-28
 
