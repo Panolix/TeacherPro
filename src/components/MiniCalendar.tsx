@@ -59,15 +59,13 @@ export function MiniCalendar() {
           <div className="flex gap-1">
             <button
               onClick={prevMonth}
-              className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:[background:var(--tp-bg-4)] hover:[color:var(--tp-t-1)]"
-              style={{ color: "var(--tp-t-3)" }}
+              className="tp-mini-cal-nav h-7 w-7 inline-flex items-center justify-center rounded"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={nextMonth}
-              className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:[background:var(--tp-bg-4)] hover:[color:var(--tp-t-1)]"
-              style={{ color: "var(--tp-t-3)" }}
+              className="tp-mini-cal-nav h-7 w-7 inline-flex items-center justify-center rounded"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -131,12 +129,7 @@ export function MiniCalendar() {
         {vaultPath && (
           <button
             onClick={handleCreateLessonForDate}
-            className="mt-3 w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium transition-colors hover:[background:var(--tp-bg-4)] hover:[color:var(--tp-t-1)]"
-            style={{
-              background: "var(--tp-bg-3)",
-              border: "1px solid var(--tp-b-2)",
-              color: "var(--tp-t-2)",
-            }}
+            className="tp-mini-cal-create mt-3 w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium"
           >
             <Plus className="w-4 h-4" />
             {t("calendar.createLesson", { date: format(selectedDate, "MMM d", { locale: dateLocale }) })}
