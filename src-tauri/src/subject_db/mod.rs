@@ -375,31 +375,32 @@ async fn process_loose_pdfs(
         let filename = entry.file_name().to_string_lossy().to_string();
         let stem = entry.path().file_stem().and_then(|s| s.to_str()).unwrap_or(&filename).to_string();
 
-        let meta;
-        let store_path;
-        let file_to_process;
-        if grade.is_empty() {
+        let (meta, store_path, file_to_process) = if grade.is_empty() {
             // Subject-level PDF → use stem as both grade and topic
             let dir = folder_path.join(&stem);
             std::fs::create_dir_all(&dir).ok();
             let dest = dir.join(&filename);
             if !dest.exists() { std::fs::rename(entry.path(), &dest).ok(); }
-            meta = FolderMeta {
-                subject: subject.to_string(),
-                grade: stem.clone(),
-                topic: stem.clone(),
-            };
-            store_path = dir.join("chunks.json");
-            file_to_process = dest;
+            (
+                FolderMeta {
+                    subject: subject.to_string(),
+                    grade: stem.clone(),
+                    topic: stem.clone(),
+                },
+                dir.join("chunks.json"),
+                dest,
+            )
         } else {
             // Grade-level PDF → save to grade/chunks.json with topic = filename
-            meta = FolderMeta {
-                subject: subject.to_string(),
-                grade: grade.to_string(),
-                topic: stem.clone(),
-            };
-            store_path = folder_path.join("chunks.json");
-            file_to_process = entry.path().to_path_buf();
+            (
+                FolderMeta {
+                    subject: subject.to_string(),
+                    grade: grade.to_string(),
+                    topic: stem.clone(),
+                },
+                folder_path.join("chunks.json"),
+                entry.path().to_path_buf(),
+            )
         };
 
         let existing = read_existing_sources(&store_path);
