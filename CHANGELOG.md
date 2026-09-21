@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-09-21
+
+### Added
+- **Einheitliches Hover-/Druck-Feedback** — alle Buttons nutzen dieselbe dezente
+  Interaktion (leichtes Anheben, sanftes Eindrücken, einheitliche Hover-Flächen)
+- **Spalten-Resize-Cursor in Tabellen** — an Spaltengrenzen wechselt der Cursor zum
+  Links-rechts-Symbol, eine Akzentlinie zeigt die aktive Grenze
+
+### Fixed
+- **Sicherheitshärtung** — Pfad-Validierung für Druck/Öffnen, Pfad-Traversal in der
+  Subject-DB, eingeschränkter Dateisystem-Scope mit Laufzeit-Freigabe, Produktions-CSP,
+  sichere GGUF-Temp-Datei und bereinigtes Vorschau-Rendering
+- **Tote Hover-Effekte** — Fontgröße, Datums-Picker, KI-Chat-Auswahl,
+  Kalender-Navigation und weitere Buttons reagieren wieder sichtbar
+
 ## [2.2.3] - 2026-06-28
 
 ### Added
