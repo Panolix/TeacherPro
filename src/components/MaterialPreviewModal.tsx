@@ -147,7 +147,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
           <div className="text-sm text-gray-200 font-medium truncate">{fileName}</div>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded"
+            className="p-1 text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)] rounded"
             title={t("materialPreview.close")}
           >
             <X className="w-4 h-4" />

@@ -98,7 +98,7 @@ export function StatusBar() {
             type="button"
             onClick={() => bumpZoom(-0.1)}
             title={t('statusBar.zoomOut')}
-            className="h-[18px] w-[18px] inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors"
+            className="h-[18px] w-[18px] inline-flex items-center justify-center rounded text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
           >
             <Minus className="w-3 h-3" />
           </button>
@@ -106,7 +106,7 @@ export function StatusBar() {
             type="button"
             onClick={() => setZoomMenuOpen((v) => !v)}
             title={t('statusBar.zoomPresets')}
-            className="min-w-[44px] h-[18px] px-1.5 inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors font-medium tabular-nums"
+            className="min-w-[44px] h-[18px] px-1.5 inline-flex items-center justify-center rounded text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] font-medium tabular-nums"
           >
             {zoomLabel}
           </button>
@@ -114,7 +114,7 @@ export function StatusBar() {
             type="button"
             onClick={() => bumpZoom(0.1)}
             title={t('statusBar.zoomIn')}
-            className="h-[18px] w-[18px] inline-flex items-center justify-center rounded hover:bg-[var(--tp-bg-3)] hover:text-[var(--tp-t-2)] transition-colors"
+            className="h-[18px] w-[18px] inline-flex items-center justify-center rounded text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
           >
             <Plus className="w-3 h-3" />
           </button>
@@ -133,10 +133,10 @@ export function StatusBar() {
                   setLessonZoomMode("fit");
                   setZoomMenuOpen(false);
                 }}
-                className={`w-full text-left px-3 py-1 text-[11.5px] transition-colors ${
+                className={`w-full text-left px-3 py-1 text-[11.5px] ${
                   lessonZoomMode === "fit"
                     ? "text-[var(--tp-accent)]"
-                    : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)]"
+                    : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                 }`}
               >
                 {t('statusBar.fitToWidth')}
@@ -153,10 +153,10 @@ export function StatusBar() {
                       setLessonZoomFixed(preset);
                       setZoomMenuOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-1 text-[11.5px] transition-colors tabular-nums ${
+                    className={`w-full text-left px-3 py-1 text-[11.5px] tabular-nums ${
                       active
                         ? "text-[var(--tp-accent)]"
-                        : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)]"
+                        : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                     }`}
                   >
                     {Math.round(preset * 100)}%

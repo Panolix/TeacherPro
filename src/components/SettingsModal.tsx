@@ -523,7 +523,7 @@ export function SettingsModal({ open, onClose }: Props) {
                         />
                         <button
                           onClick={() => setSubjects(subjects.filter((_, i) => i !== idx))}
-                          className="h-9 w-9 inline-flex items-center justify-center rounded-md text-[var(--tp-t-3)] hover:text-red-400 hover:bg-[var(--tp-bg-3)] transition-colors"
+                          className="h-9 w-9 inline-flex items-center justify-center rounded-md text-[var(--tp-t-3)] hover:text-red-400 hover:bg-[var(--tp-bg-4)]"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -533,7 +533,7 @@ export function SettingsModal({ open, onClose }: Props) {
                   {subjects.length < 4 && (
                     <button
                       onClick={() => setSubjects([...subjects, { name: "", color: "#6366f1" }])}
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-colors hover:brightness-125"
                       style={{ background: "var(--tp-bg-3)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-2)" }}
                     >
                       <Plus className="w-3.5 h-3.5" /> {t("settings.lessons.addSubject")}
@@ -714,7 +714,7 @@ export function SettingsModal({ open, onClose }: Props) {
                               className={`px-2 py-1 text-[11px] rounded-l border-y border-l transition-colors ${
                                 aiDefaultModelId === id
                                   ? "border-[var(--tp-accent)] text-white"
-                                  : "border-[var(--tp-b-2)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)]"
+                                  : "border-[var(--tp-b-2)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)]"
                               }`}
                               style={aiDefaultModelId === id ? { background: "rgba(45,134,165,0.18)" } : undefined}
                               title={t("settings.ai.installedModelTooltip")}

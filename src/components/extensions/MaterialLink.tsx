@@ -303,7 +303,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
               <div className="text-sm text-gray-200 font-medium truncate">{fileName}</div>
               <button
                 onClick={closePreview}
-                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded"
+                className="p-1 text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)] rounded"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -321,12 +321,12 @@ export function SubjectDbManager() {
               </button>
               <div className="flex items-center gap-0.5 shrink-0">
                 <button onClick={() => startAdding({ type: "grade", subject: subject.subject })}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)] transition-colors"
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                   title={t("subjectDb.addSubfolder")}>
                   <FolderPlus className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => handleAddPdfsToSubject(subject.subject)}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)] transition-colors"
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                   title={t("subjectDb.addPdfs")}>
                   <Upload className="w-3.5 h-3.5" />
                 </button>
@@ -381,12 +381,12 @@ export function SubjectDbManager() {
                         </button>
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button onClick={() => startAdding({ type: "topic", subject: subject.subject, grade: grade.name })}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)] transition-colors"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                             title={t("subjectDb.addSubfolder")}>
                             <FolderPlus className="w-3 h-3" />
                           </button>
                           <button onClick={() => handleAddPdfsToGrade(subject.subject, grade.name)}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)] transition-colors"
+                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                             title={t("subjectDb.addPdfs")}>
                             <Upload className="w-3 h-3" />
                           </button>
@@ -454,7 +454,7 @@ export function SubjectDbManager() {
                                 </button>
                                 <div className="flex items-center gap-0.5 shrink-0">
                                   <button onClick={() => handleAddPdfsToTopic(subject.subject, grade.name, topic.name)}
-                                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)] transition-colors"
+                                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                                     title={t("subjectDb.addPdfs")}>
                                     <Upload className="w-3 h-3" />
                                   </button>

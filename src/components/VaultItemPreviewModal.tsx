@@ -228,7 +228,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-[#232323] rounded-md transition-colors"
+            className="p-1.5 text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)] rounded-md"
             title={t("materialPreview.close")}
           >
             <X className="w-4 h-4" />

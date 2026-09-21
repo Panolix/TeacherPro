@@ -917,7 +917,7 @@ export function SidebarMinimal() {
       return (
         <li key={key}>
           <div
-            className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)] cursor-pointer transition-colors"
+            className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] cursor-pointer transition-colors"
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             onClick={() =>
               setExpandedTrashSections((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -977,7 +977,7 @@ export function SidebarMinimal() {
     return (
       <li key={key}>
         <div
-          className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)] truncate transition-colors"
+          className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] truncate transition-colors"
           style={{ paddingLeft: `${8 + depth * 12 + 14}px` }}
           onContextMenu={(e) => {
             const isTrashLesson = sectionPrefix === "Lesson Plans";
@@ -1086,7 +1086,7 @@ export function SidebarMinimal() {
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "explorer" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <FolderOpen className="w-5 h-5" />
@@ -1099,7 +1099,7 @@ export function SidebarMinimal() {
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "search" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <Search className="w-5 h-5" />
@@ -1112,7 +1112,7 @@ export function SidebarMinimal() {
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "recent" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <Clock className="w-5 h-5" />
@@ -1125,7 +1125,7 @@ export function SidebarMinimal() {
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "calendar" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <Calendar className="w-5 h-5" />
@@ -1140,7 +1140,7 @@ export function SidebarMinimal() {
           className={`relative w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "trash" && pushPanelOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <Trash className="w-5 h-5" />
@@ -1161,7 +1161,7 @@ export function SidebarMinimal() {
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             settingsOpen
               ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
-              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
           <Settings className="w-5 h-5" />
@@ -1196,7 +1196,7 @@ export function SidebarMinimal() {
             <button
               onClick={() => setPushPanelOpen(false)}
               title={t('sidebar.closePanel')}
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)]"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -1261,7 +1261,7 @@ export function SidebarMinimal() {
                       onClick={handleImportMaterialFiles}
                       disabled={materialsImportBusy}
                       title={t('sidebar.tooltips.importFiles')}
-                      className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)] transition-colors disabled:opacity-50"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)] transition-colors disabled:opacity-50"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -1269,7 +1269,7 @@ export function SidebarMinimal() {
                       onClick={handleImportMaterialFolder}
                       disabled={materialsImportBusy}
                       title={t('sidebar.tooltips.importFolder')}
-                      className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-3)] transition-colors disabled:opacity-50"
+                      className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)] transition-colors disabled:opacity-50"
                     >
                       <FolderPlus className="w-3.5 h-3.5" />
                     </button>
@@ -1313,8 +1313,7 @@ export function SidebarMinimal() {
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery("")}
-                      className="h-5 w-5 inline-flex items-center justify-center rounded"
-                      style={{ color: "var(--tp-t-3)" }}
+                      className="h-5 w-5 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1471,7 +1470,7 @@ export function SidebarMinimal() {
                           onClick={() =>
                             setExpandedTrashSections((prev) => ({ ...prev, [sectionKey]: !open }))
                           }
-                          className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] rounded-md text-[var(--tp-t-4)] hover:text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-3)] cursor-pointer transition-colors uppercase tracking-wider"
+                          className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] rounded-md text-[var(--tp-t-4)] hover:text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] cursor-pointer transition-colors uppercase tracking-wider"
                         >
                           <ChevronRight
                             className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
@@ -1590,15 +1589,14 @@ export function SidebarMinimal() {
             >
               <button
                 onClick={() => setRenameModal(null)}
-                className="px-3 py-1.5 rounded-md text-[13px] transition-colors"
-                style={{ color: "var(--tp-t-3)" }}
+                className="px-3 py-1.5 rounded-md text-[13px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
               >
                 {t('common.cancel')}
               </button>
               <button
                 onClick={submitRename}
                 disabled={!renameInput.trim()}
-                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "var(--tp-accent)" }}
               >
                 {t('common.rename')}
@@ -1653,15 +1651,14 @@ export function SidebarMinimal() {
             >
               <button
                 onClick={() => setNewFolderModalOpen(false)}
-                className="px-3 py-1.5 rounded-md text-[13px] transition-colors"
-                style={{ color: "var(--tp-t-3)" }}
+                className="px-3 py-1.5 rounded-md text-[13px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
               >
                 {t('common.cancel')}
               </button>
               <button
                 onClick={submitNewFolder}
                 disabled={!newFolderName.trim()}
-                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: "var(--tp-accent)" }}
               >
                 {t('common.create')}

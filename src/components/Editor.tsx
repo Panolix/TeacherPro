@@ -654,12 +654,7 @@ const MenuBar = ({
         <button
           type="button"
           onClick={() => setFontSizeOpen((v) => !v)}
-          className="h-7 w-9 inline-flex items-center justify-center gap-0.5 rounded text-[10.5px] font-medium cursor-pointer outline-none transition-colors hover:[background:var(--tp-bg-3)]"
-          style={{
-            background: "var(--tp-bg-2)",
-            border: "1px solid var(--tp-b-2)",
-            color: "var(--tp-t-1)",
-          }}
+          className="h-7 w-9 inline-flex items-center justify-center gap-0.5 rounded text-[10.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontSize")}
           aria-haspopup="listbox"
           aria-expanded={fontSizeOpen}
@@ -694,17 +689,11 @@ const MenuBar = ({
                       editor.chain().focus().setFontSize(size).run();
                       setFontSizeOpen(false);
                     }}
-                    className="w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] transition-colors text-left"
-                    style={{
-                      color: isSelected ? "var(--tp-accent)" : "#b8b8b8",
-                      background: isSelected ? "rgba(45,134,165,0.12)" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "#2a2a2a";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isSelected) (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                    }}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
+                      isSelected
+                        ? "bg-[rgba(45,134,165,0.12)] text-[var(--tp-accent)]"
+                        : "text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                    }`}
                     role="option"
                     aria-selected={isSelected}
                   >
@@ -830,7 +819,7 @@ const MenuBar = ({
         </div>
         <div className="flex gap-0.5">
           <label
-            className="inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold hover:brightness-125"
             title={t("editor.toolbar.highlightColor")}
             style={{ background: currentHighlightColor, color: "#1a1a1a" }}
           >
@@ -3499,14 +3488,14 @@ export function Editor() {
                             <button
                               type="button"
                               onClick={() => setPlannedCalendarMonth((prev) => subMonths(prev, 1))}
-                              className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-[#2b2b2b]"
+                              className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setPlannedCalendarMonth((prev) => addMonths(prev, 1))}
-                              className="p-1 rounded text-gray-400 hover:text-gray-100 hover:bg-[#2b2b2b]"
+                              className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                             >
                               <ChevronRight className="h-4 w-4" />
                             </button>
@@ -3532,9 +3521,9 @@ export function Editor() {
                                   setPlannedForInput(formatDateFn(day, "dd/MM/yyyy"));
                                   setPlannedCalendarOpen(false);
                                 }}
-                                className={`h-7 rounded text-center transition-colors ${
+                                className={`h-7 rounded text-center transition-colors hover:brightness-110 ${
                                   inCurrentMonth
-                                    ? "text-gray-200 hover:bg-[#2d2d2d]"
+                                    ? "text-gray-200 hover:bg-[var(--tp-bg-4)]"
                                     : "text-gray-600 hover:bg-[#242424]"
                                 } ${isSelected ? "text-white font-semibold" : ""}`}
                                 style={isSelected ? { backgroundColor: "var(--tp-accent)" } : undefined}
@@ -3846,7 +3835,7 @@ export function Editor() {
               title={t("editor.panels.clearNotes")}
               className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                 lessonNotes.trim()
-                  ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
+                  ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-red-400"
                   : "text-[var(--tp-border-strong)] cursor-default pointer-events-none"
               }`}
             >
@@ -3854,7 +3843,7 @@ export function Editor() {
             </button>
             <button
               onClick={() => setNotesOpen(false)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
               title={t("editor.panels.closeNotes")}
             >
               <X className="w-3.5 h-3.5" />
@@ -3883,7 +3872,7 @@ export function Editor() {
             <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">{t("editor.panels.methodBank")}</span>
             <button
               onClick={() => setMethodBankOpen(false)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
               title={t("editor.panels.closeMethodBank")}
             >
               <X className="h-3.5 w-3.5" />
@@ -3910,7 +3899,7 @@ export function Editor() {
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     methodBankTypeFilter === key
                       ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/20 text-[var(--tp-accent)]"
-                      : "border-[var(--tp-border-strong)] text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)]"
+                      : "border-[var(--tp-border-strong)] text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                   }`}
                 >
                   {label}
@@ -3949,7 +3938,7 @@ export function Editor() {
                       className={`w-full rounded-md border px-2 py-2 text-left transition-colors ${
                         isSelected
                           ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/15"
-                          : "border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] hover:border-[var(--tp-accent)]/60"
+                          : "border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] hover:bg-[var(--tp-bg-4)] hover:border-[var(--tp-accent)]/60"
                       }`}
                     >
                       <div className="min-w-0 flex-1">
@@ -4021,7 +4010,7 @@ export function Editor() {
                   title={t("editor.panels.clearChatHistory")}
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     chatMessages.length > 0
-                      ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-red-400"
+                      ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-red-400"
                       : "text-[var(--tp-border-strong)] cursor-default pointer-events-none"
                   }`}
                 >
@@ -4042,9 +4031,9 @@ export function Editor() {
                   }
                   className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
                     modelSupportsThinking && aiThinkingEnabled
-                      ? "text-[var(--tp-accent)] hover:bg-[var(--tp-panel-muted)]"
+                      ? "text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)]"
                       : modelSupportsThinking
-                        ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)]"
+                        ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)]"
                         : "text-[var(--tp-border-strong)] cursor-not-allowed"
                   }`}
                   aria-disabled={!modelSupportsThinking}
@@ -4053,7 +4042,7 @@ export function Editor() {
                 </button>
                 <button
                   onClick={() => setChatOpen(false)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-panel-muted)] hover:text-[var(--tp-text-primary)]"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                   title={t("editor.panels.closeAiChat")}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -4067,8 +4056,7 @@ export function Editor() {
                 <div className="relative">
                   <button
                     onClick={() => setDbMenuOpen(!dbMenuOpen)}
-                    className="flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-[11px] text-left hover:bg-[var(--tp-panel-muted)] transition-colors"
-                    style={{ background: "var(--tp-panel-muted)", color: "var(--tp-text-primary)" }}
+                    className="flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-[11px] text-left bg-[var(--tp-panel-muted)] text-[var(--tp-text-primary)] hover:bg-[var(--tp-bg-4)]"
                   >
                     <Database className="w-3 h-3 shrink-0 text-[var(--tp-accent)]" />
                     <span className="flex-1 truncate">
@@ -4093,7 +4081,7 @@ export function Editor() {
                         {/* — Keine — option */}
                         <button
                           onClick={() => { selectDb("", "", ""); setDbMenuOpen(false); }}
-                          className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-[var(--tp-panel-muted)] transition-colors border-b"
+                          className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-[var(--tp-bg-4)] transition-colors border-b"
                           style={{ borderColor: "var(--tp-border-strong)", color: "var(--tp-text-secondary)" }}
                         >
                           — {t("subjectDb.noDbSelected")} —
@@ -4106,7 +4094,7 @@ export function Editor() {
                             return (
                               <div key={s.subject}>
                                 {/* Subject row */}
-                                <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-panel-muted)]">
+                                <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-bg-4)]">
                                   <button
                                     onClick={() => setDbExpandedSubjects((p) => ({ ...p, [s.subject]: !p[s.subject] }))}
                                     className="w-5 h-5 flex items-center justify-center shrink-0"
@@ -4130,7 +4118,7 @@ export function Editor() {
                                   const gradeExpanded = dbExpandedGrades[gradeKey];
                                   return (
                                     <div key={gradeKey} style={{ paddingLeft: "24px" }}>
-                                      <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-panel-muted)]">
+                                      <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-bg-4)]">
                                         <button
                                           onClick={() => setDbExpandedGrades((p) => ({ ...p, [gradeKey]: !p[gradeKey] }))}
                                           className="w-5 h-5 flex items-center justify-center shrink-0"
@@ -4153,7 +4141,7 @@ export function Editor() {
                                         <div key={t.name} style={{ paddingLeft: "36px" }}>
                                           <button
                                             onClick={() => { selectDb(s.subject, g.name, t.name); setDbMenuOpen(false); }}
-                                            className="flex items-center gap-1.5 w-full text-left px-1 py-1 truncate hover:bg-[var(--tp-panel-muted)]"
+                                            className="flex items-center gap-1.5 w-full text-left px-1 py-1 truncate hover:bg-[var(--tp-bg-4)]"
                                           >
                                             <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
                                             <span className="truncate">{t.name}</span>
@@ -4200,7 +4188,7 @@ export function Editor() {
                         key={label}
                         disabled={isChatBusy}
                         onClick={() => void handleSubmitChat(prompt)}
-                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] text-xs text-gray-300 hover:border-[var(--tp-accent)] hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] text-xs text-gray-300 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {label}
                       </button>
@@ -4237,7 +4225,7 @@ export function Editor() {
                                 return next;
                               });
                             }}
-                            className="flex items-center gap-1.5 text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] transition-colors"
+                            className="flex items-center gap-1.5 text-[11px] text-[var(--tp-text-muted)] hover:text-[var(--tp-t-1)]"
                           >
                             <Brain className="w-3 h-3" />
                             {expandedThinking.has(message.id) ? t("editor.chat.hideThinking") : t("editor.chat.showThinking")}
@@ -4289,7 +4277,7 @@ export function Editor() {
                 <button
                   onClick={() => { void handleSubmitChat(); }}
                   disabled={isChatBusy || !chatInput.trim()}
-                  className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
                   title={isChatBusy ? t("editor.panels.aiIsResponding") : t("editor.panels.send")}
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -4325,7 +4313,7 @@ export function Editor() {
                   className={`w-full px-3 py-2 text-left transition-colors ${
                     index === slashMenu.selectedIndex
                       ? "bg-[var(--tp-accent)]/20"
-                      : "hover:bg-[var(--tp-panel-muted)]"
+                      : "hover:bg-[var(--tp-bg-4)]"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -4390,7 +4378,7 @@ export function Editor() {
                 <button
                   type="button"
                   onClick={() => setCustomTableDialog({ ...customTableDialog, withHeaderRow: !customTableDialog.withHeaderRow })}
-                  className="w-10 h-5 rounded-full relative transition-colors"
+                  className="w-10 h-5 rounded-full relative transition-colors hover:brightness-125"
                   style={{ background: customTableDialog.withHeaderRow ? "var(--tp-accent)" : "var(--tp-bg-4)" }}
                 >
                   <span
@@ -4432,14 +4420,14 @@ export function Editor() {
             >
               <button
                 onClick={() => setCustomTableDialog(null)}
-                className="h-8 px-3 rounded-md text-[12px] font-medium transition-colors"
+                className="h-8 px-3 rounded-md text-[12px] font-medium transition-colors hover:brightness-125"
                 style={{ background: "var(--tp-bg-3)", color: "var(--tp-t-2)", border: "1px solid var(--tp-b-2)" }}
               >
                 {t("common.cancel")}
               </button>
               <button
                 onClick={confirmInsertCustomTable}
-                className="h-8 px-4 rounded-md text-[12px] font-medium text-white transition-colors"
+                className="h-8 px-4 rounded-md text-[12px] font-medium text-white transition-colors hover:brightness-110"
                 style={{ background: "var(--tp-accent)" }}
               >
                 {t("editor.insertTableDialog.title")}
@@ -4465,13 +4453,13 @@ export function Editor() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintPDF}
-                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[#303030]"
+                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                 >
                   {t("editor.pdf.printSavePDF")}
                 </button>
                 <button
                   onClick={() => setPdfPreviewUrl(null)}
-                  className="p-1 rounded text-gray-400 hover:text-gray-200 hover:bg-[#232323]"
+                  className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                 >
                   <X className="w-4 h-4" />
                 </button>

@@ -186,7 +186,7 @@ html[data-tp-theme="light"] {
 }
 
 .tp-accent-btn:hover {
-  filter: brightness(0.95);
+  filter: brightness(1.08);
 }
 
 /* ===== Editor right rail buttons (v3) ===== */
@@ -214,8 +214,17 @@ html[data-tp-theme="light"] {
   background: var(--tp-bg-6);
 }
 
+.tp-rail-color-btn {
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
 .tp-rail-color-btn:hover {
   background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  transform: translateY(var(--tp-lift));
+}
+.tp-rail-color-btn:active {
+  transform: translateY(0) scale(var(--tp-press));
 }
 
 html[data-tp-theme="light"] body {
@@ -894,9 +903,35 @@ body.tp-exporting #lesson-plan-export-content .ProseMirror td,
 
 /* ====== v3 Fluid Animations & Transparency ====== */
 
-/* Smooth transitions on all interactive elements */
+/* Unified button interaction: subtle lift on hover, soft press.
+   Uses :where() so intentional one-off transforms (e.g. colour swatches)
+   still win without needing !important. */
+:root {
+  --tp-lift: -0.25px;
+  --tp-press: 0.98;
+}
+
+/* Keep the app easing on inputs/links too */
 button, a, input, select, textarea {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:not(:disabled) {
+  transition:
+    background-color 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:where(:hover):not(:disabled) {
+  transform: translateY(var(--tp-lift));
+}
+
+button:where(:active):not(:disabled) {
+  transform: translateY(0) scale(var(--tp-press));
 }
 
 /* Smooth hover micro-interactions for buttons */
@@ -904,14 +939,6 @@ button, a, input, select, textarea {
 .tp-chrome-btn,
 .tp-rail-btn-active {
   transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.tp-rail-btn:hover:not(:disabled) {
-  transform: translateY(-0.5px);
-}
-
-.tp-rail-btn:active:not(:disabled) {
-  transform: translateY(0px) scale(0.96);
 }
 
 /* View tab pill animation */
@@ -957,15 +984,9 @@ button, a, input, select, textarea {
   to   { opacity: 1; }
 }
 
-/* Subtle hover glow on accent buttons */
+/* Accent buttons (primary) — brighten on hover, unified motion */
 .tp-accent-btn {
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-.tp-accent-btn:hover {
-  box-shadow: 0 0 16px rgba(45, 134, 165, 0.25);
-}
-.tp-accent-btn:active {
-  transform: scale(0.97);
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Sidebar action buttons (Lesson / Mindmap / Folder) */
@@ -973,21 +994,11 @@ button, a, input, select, textarea {
   background: var(--tp-bg-2);
   border: 1px solid var(--tp-b-1);
   color: var(--tp-t-2);
-  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
   cursor: pointer;
 }
-.tp-action-btn:hover {
+.tp-action-btn:hover:not(:disabled) {
   background: var(--tp-bg-4);
-  border-color: var(--tp-accent);
   color: var(--tp-t-1);
-  box-shadow: 0 0 0 1px var(--tp-accent), 0 2px 8px rgba(0, 0, 0, 0.25);
-  transform: translateY(-1px);
-}
-.tp-action-btn:active {
-  transform: translateY(0) scale(0.97);
-  background: var(--tp-accent);
-  color: #fff;
-  border-color: var(--tp-accent);
 }
 
 /* Mini calendar — create-lesson button (rail-style hover/press) */
@@ -1001,10 +1012,6 @@ button, a, input, select, textarea {
 .tp-mini-cal-create:hover {
   background: var(--tp-bg-4);
   color: var(--tp-t-1);
-  transform: translateY(-0.5px);
-}
-.tp-mini-cal-create:active {
-  transform: translateY(0) scale(0.96);
 }
 
 /* Mini calendar — month navigation chevrons */
@@ -1018,10 +1025,6 @@ button, a, input, select, textarea {
 .tp-mini-cal-nav:hover {
   background: var(--tp-bg-4);
   color: var(--tp-t-1);
-  transform: translateY(-0.5px);
-}
-.tp-mini-cal-nav:active {
-  transform: translateY(0) scale(0.96);
 }
 
 /* Top bar buttons — same hover/press language as the sidebar rail */
@@ -1040,10 +1043,6 @@ button, a, input, select, textarea {
 .tp-chrome-btn:hover:not(:disabled) {
   background: var(--tp-bg-4);
   color: var(--tp-t-1);
-  transform: translateY(-0.5px);
-}
-.tp-chrome-btn:active:not(:disabled) {
-  transform: translateY(0) scale(0.96);
 }
 
 .tp-topact {
@@ -1054,10 +1053,6 @@ button, a, input, select, textarea {
 .tp-topact:hover:not(:disabled) {
   background: var(--tp-bg-4);
   color: var(--tp-t-1);
-  transform: translateY(-0.5px);
-}
-.tp-topact:active:not(:disabled) {
-  transform: translateY(0) scale(0.96);
 }
 .tp-topact--accent,
 .tp-topact--accent:hover:not(:disabled) {
@@ -1080,10 +1075,6 @@ button, a, input, select, textarea {
 .tp-topbar-tab:hover:not(:disabled) {
   background: var(--tp-bg-4);
   color: var(--tp-t-1);
-  transform: translateY(-0.5px);
-}
-.tp-topbar-tab:active:not(:disabled) {
-  transform: translateY(0) scale(0.96);
 }
 .tp-topbar-tab--active {
   background: var(--tp-bg-3);
@@ -1123,8 +1114,8 @@ button, a, input, select, textarea {
 }
 
 .tp-cm-item:hover:not(.disabled) {
-  background: #2a2a2a;
-  color: #ffffff;
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
 }
 
 .tp-cm-item.active {
@@ -1239,6 +1230,10 @@ button, a, input, select, textarea {
   transform: scale(1.15);
 }
 
+.tp-cm-color-dot:active {
+  transform: scale(1.06);
+}
+
 .tp-cm-color-dot.active {
   border-color: #ffffff;
   box-shadow: 0 0 0 1px #222222;
@@ -1282,8 +1277,8 @@ button, a, input, select, textarea {
 }
 
 .tp-settings-close:hover {
-  background: #2a2a2a;
-  color: #ffffff;
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
 }
 
 .tp-settings-tabs {
@@ -1315,8 +1310,8 @@ button, a, input, select, textarea {
 }
 
 .tp-settings-tab:hover {
-  color: #ffffff;
-  background: #2a2a2a;
+  color: var(--tp-t-1);
+  background: var(--tp-bg-4);
 }
 
 .tp-settings-tab.active {
@@ -1430,6 +1425,10 @@ select.tp-input {
   background: var(--tp-accent);
 }
 
+.tp-toggle:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
 .tp-toggle::after {
   content: "";
   position: absolute;
@@ -1469,6 +1468,10 @@ select.tp-input {
   transform: scale(1.1);
 }
 
+button.tp-color-option:active {
+  transform: scale(1.04);
+}
+
 .tp-color-option.active {
   border-color: #ffffff;
   box-shadow: 0 0 0 2px #222222;
@@ -1499,9 +1502,9 @@ select.tp-input {
 }
 
 .tp-num-btn:hover {
-  background: #2a2a2a;
-  color: #ffffff;
-  border-color: #333333;
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  border-color: var(--tp-b-2);
 }
 
 .tp-num-input {
@@ -1546,13 +1549,9 @@ select.tp-input {
 }
 
 .tp-btn:hover {
-  background: #2a2a2a;
-  color: #ffffff;
-  border-color: #404040;
-}
-
-.tp-btn:active {
-  transform: translateY(1px);
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  border-color: var(--tp-b-2);
 }
 
 .tp-btn-primary {
@@ -1587,8 +1586,8 @@ select.tp-input {
   font-family: inherit;
 }
 .tp-context-menu--legacy button:hover:not(:disabled) {
-  background: #2a2a2a;
-  color: #ffffff;
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
 }
 .tp-context-menu--legacy button:disabled {
   opacity: 0.4;

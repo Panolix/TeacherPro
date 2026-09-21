@@ -277,16 +277,14 @@ export function CalendarView() {
         >
           <button
             onClick={prevWeek}
-            className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
-            style={{ color: "var(--tp-t-2)" }}
+            className="h-8 w-8 inline-flex items-center justify-center text-[var(--tp-t-2)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
             title={t('calendar.navigation.previousWeek')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={nextWeek}
-            className="h-8 w-8 inline-flex items-center justify-center hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)] transition-colors"
-            style={{ color: "var(--tp-t-2)" }}
+            className="h-8 w-8 inline-flex items-center justify-center text-[var(--tp-t-2)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
             title={t('calendar.navigation.nextWeek')}
           >
             <ChevronRight className="w-4 h-4" />
@@ -294,12 +292,7 @@ export function CalendarView() {
         </div>
         <button
           onClick={goToToday}
-          className="h-8 px-3.5 rounded-md text-sm font-medium transition-colors hover:![background:var(--tp-bg-3)] hover:![color:var(--tp-t-1)] active:![background:var(--tp-bg-2)]"
-          style={{
-            background: "var(--tp-bg-1)",
-            border: "1px solid var(--tp-b-1)",
-            color: "var(--tp-t-2)",
-          }}
+          className="h-8 px-3.5 rounded-md text-sm font-medium bg-[var(--tp-bg-1)] border border-[var(--tp-b-1)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
         >
           {t('calendar.navigation.today')}
         </button>
@@ -315,7 +308,9 @@ export function CalendarView() {
         <button
           onClick={handleDeleteSelected}
           disabled={selectedLessons.size === 0 || isDeletingLessons}
-          className="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+          className={`h-9 w-9 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40 ${
+            selectedLessons.size > 0 ? "hover:brightness-125" : ""
+          }`}
           title={isDeletingLessons ? t('calendar.actions.moving') : t('calendar.tooltips.moveToTrash')}
           style={{
             background: selectedLessons.size > 0 ? "rgba(239, 68, 68, 0.12)" : "transparent",
@@ -417,7 +412,7 @@ export function CalendarView() {
                         {/* Title row — clickable to open */}
                         <button
                           onClick={() => lessonName && openLesson(lessonName)}
-                          className="w-full px-2.5 pt-2.5 pb-1.5 text-left"
+                          className="w-full px-2.5 pt-2.5 pb-1.5 text-left hover:bg-[var(--tp-bg-4)]"
                         >
                           <div
                             className="text-[13px] font-semibold leading-snug"
@@ -458,8 +453,8 @@ export function CalendarView() {
                               event.stopPropagation();
                               if (lessonName) toggleSelectedLesson(lessonName);
                             }}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded"
-                            style={{ color: isSelected ? "var(--tp-accent)" : "var(--tp-t-3)" }}
+                            className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                            style={isSelected ? { color: "var(--tp-accent)" } : undefined}
                             title={isSelected ? t('calendar.tooltips.deselect') : t('calendar.tooltips.select')}
                           >
                             {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
@@ -488,8 +483,7 @@ export function CalendarView() {
                                 }
                               }}
                               disabled={isDeletingLessons}
-                              className="h-6 w-6 inline-flex items-center justify-center rounded disabled:opacity-30 disabled:cursor-not-allowed hover:text-red-400 hover:bg-red-400/10 active:text-red-500 transition-colors"
-                              style={{ color: "var(--tp-t-3)" }}
+                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] disabled:opacity-30 disabled:cursor-not-allowed hover:text-red-400 hover:bg-red-400/10"
                               title={t('calendar.tooltips.moveToTrash')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
@@ -509,8 +503,7 @@ export function CalendarView() {
               >
                 <button
                   onClick={() => void createNewLesson(day)}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:[background:var(--tp-bg-3)] hover:[color:var(--tp-t-1)]"
-                  style={{ color: "var(--tp-t-3)" }}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                   title={t('calendar.actions.add')}
                 >
                   <Plus className="w-3 h-3" />
