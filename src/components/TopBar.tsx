@@ -65,8 +65,7 @@ export function TopBar() {
             type="button"
             onClick={() => setSidebarOpen(true)}
             title={t('topbar.expandSidebar')}
-            className="tp-chrome-btn h-8 w-8 inline-flex items-center justify-center rounded-md transition-colors"
-            style={{ color: "var(--tp-t-2)" }}
+            className="tp-chrome-btn h-8 w-8 inline-flex items-center justify-center rounded-md"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
@@ -83,12 +82,9 @@ export function TopBar() {
         {/* Weekly Calendar Mini View */}
         <button
           onClick={toggleWeeklyView}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-[12px] font-medium transition-colors hover:bg-[var(--tp-bg-3)]"
-          style={{
-            background: currentView === "calendar" ? "var(--tp-bg-3)" : "transparent",
-            borderColor: currentView === "calendar" ? "var(--tp-accent)" : "var(--tp-b-1)",
-            color: currentView === "calendar" ? "var(--tp-t-1)" : "var(--tp-t-2)",
-          }}
+          className={`tp-topbar-tab inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] font-medium${
+            currentView === "calendar" ? " tp-topbar-tab--active" : ""
+          }`}
           title={t('topbar.openWeeklyPlanner')}
         >
           <CalendarDays className="w-3.5 h-3.5" />
@@ -228,17 +224,7 @@ function TopAct({
   iconOnly?: boolean;
   disabled?: boolean;
 }) {
-  const bg = primary
-    ? "var(--tp-accent)"
-    : active
-      ? "var(--tp-accent)"
-      : "var(--tp-bg-3)";
-  const color = primary || active ? "#fff" : "var(--tp-t-1)";
-  const border = primary
-    ? "var(--tp-accent)"
-    : active
-      ? "var(--tp-accent)"
-      : "var(--tp-b-2)";
+  const isAccent = Boolean(primary || active);
   return (
     <button
       type="button"
@@ -246,12 +232,11 @@ function TopAct({
       disabled={disabled}
       title={title ?? label}
       aria-pressed={active}
-      className="h-[30px] inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      className={`tp-topact h-[30px] inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium disabled:opacity-50${
+        isAccent ? " tp-topact--accent" : ""
+      }`}
       style={{
         padding: iconOnly ? "0 8px" : "0 10px",
-        background: bg,
-        border: `1px solid ${border}`,
-        color,
       }}
     >
       {icon}

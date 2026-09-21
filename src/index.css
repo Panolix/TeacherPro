@@ -990,26 +990,21 @@ button, a, input, select, textarea {
   border-color: var(--tp-accent);
 }
 
-/* Mini calendar — create-lesson button (same hover language as .tp-action-btn) */
+/* Mini calendar — create-lesson button (rail-style hover/press) */
 .tp-mini-cal-create {
   background: var(--tp-bg-3);
   border: 1px solid var(--tp-b-2);
   color: var(--tp-t-2);
   cursor: pointer;
-  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .tp-mini-cal-create:hover {
   background: var(--tp-bg-4);
-  border-color: var(--tp-accent);
   color: var(--tp-t-1);
-  box-shadow: 0 0 0 1px var(--tp-accent), 0 2px 8px rgba(0, 0, 0, 0.25);
-  transform: translateY(-1px);
+  transform: translateY(-0.5px);
 }
 .tp-mini-cal-create:active {
-  transform: translateY(0) scale(0.97);
-  background: var(--tp-accent);
-  color: #fff;
-  border-color: var(--tp-accent);
+  transform: translateY(0) scale(0.96);
 }
 
 /* Mini calendar — month navigation chevrons */
@@ -1018,10 +1013,81 @@ button, a, input, select, textarea {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: all 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .tp-mini-cal-nav:hover {
   background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  transform: translateY(-0.5px);
+}
+.tp-mini-cal-nav:active {
+  transform: translateY(0) scale(0.96);
+}
+
+/* Top bar buttons — same hover/press language as the sidebar rail */
+.tp-chrome-btn,
+.tp-topact,
+.tp-topbar-tab {
+  cursor: pointer;
+  transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tp-chrome-btn {
+  background: transparent;
+  border: none;
+  color: var(--tp-t-2);
+}
+.tp-chrome-btn:hover:not(:disabled) {
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  transform: translateY(-0.5px);
+}
+.tp-chrome-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+
+.tp-topact {
+  background: var(--tp-bg-3);
+  border: 1px solid var(--tp-b-2);
+  color: var(--tp-t-1);
+}
+.tp-topact:hover:not(:disabled) {
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  transform: translateY(-0.5px);
+}
+.tp-topact:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+.tp-topact--accent,
+.tp-topact--accent:hover:not(:disabled) {
+  background: var(--tp-accent);
+  border-color: var(--tp-accent);
+  color: #fff;
+}
+.tp-topact--accent:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.tp-topact:disabled {
+  cursor: not-allowed;
+}
+
+.tp-topbar-tab {
+  background: transparent;
+  border: 1px solid var(--tp-b-1);
+  color: var(--tp-t-2);
+}
+.tp-topbar-tab:hover:not(:disabled) {
+  background: var(--tp-bg-4);
+  color: var(--tp-t-1);
+  transform: translateY(-0.5px);
+}
+.tp-topbar-tab:active:not(:disabled) {
+  transform: translateY(0) scale(0.96);
+}
+.tp-topbar-tab--active {
+  background: var(--tp-bg-3);
+  border-color: var(--tp-accent);
   color: var(--tp-t-1);
 }
 
