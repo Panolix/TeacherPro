@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-21
+
+### Changed
+- **AI model catalog refreshed** — outdated locally-runnable models replaced with
+  current generations: Granite 4.2, LFM 2.5, Ministral 3, GPT-OSS 20B,
+  Qwen 3.6/3.8 and Gemma 4 12B/31B. Removed Llama 3.1/3.2, DeepSeek R1,
+  Mistral Nemo and Mistral Small 3.1. All entries now fit hardware from
+  8 GB RAM laptops up to a 24 GB VRAM (RTX 4090 class) GPU.
+
+### Removed
+- Unused legacy `modelCatalog` translation strings in `src/i18n/de.ts` and `en.ts`.
+
 ## [2.2.4] - 2026-09-21
 
 ### Added
