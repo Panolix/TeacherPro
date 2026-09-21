@@ -13,6 +13,7 @@ import {
   stat,
 } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
 import { DEFAULT_AI_MODEL_ID } from "./ai/modelCatalog";
 
@@ -334,6 +335,27 @@ interface AppState {
 const STORE_KEY = "teacherpro-settings.json";
 const SETTINGS_BACKUP_DIR = ".teacherpro";
 const SETTINGS_BACKUP_FILE = "ui-settings.backup.json";
+
+/**
+ * Register paths in the Tauri fs scope at runtime (canonicalized on the Rust
+ * side). The static scope is intentionally narrow, so every path the frontend
+ * wants to read or write must be granted here or by a dialog selection.
+ */
+async function registerFsPaths(paths: Array<string | null | undefined>): Promise<void> {
+  const cleaned = paths.filter(
+    (path): path is string => typeof path === "string" && path.trim().length > 0,
+  );
+
+  try {
+    await invoke("allow_fs_scopes", { paths: cleaned });
+  } catch (error) {
+    console.warn("Could not register fs scope", error);
+  }
+}
+
+async function grantVaultScope(path: string | null): Promise<void> {
+  await registerFsPaths([path]);
+}
 
 const MIN_DEFAULT_LESSON_TABLE_BODY_ROWS = 1;
 const MAX_DEFAULT_LESSON_TABLE_BODY_ROWS = 12;
@@ -990,6 +1012,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
       const savedVault = await store.get<{ path: string }>("vault");
+      await grantVaultScope(savedVault?.path ?? null);
       const savedSettings = await store.get<Partial<UISettings>>("uiSettings");
       let loadedSettings = savedSettings || null;
 
@@ -1232,10 +1255,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const selected = await open({
         directory: true,
         multiple: false,
+        recursive: true,
         title: "Select TeacherPro Vault",
       });
 
       if (selected && typeof selected === "string") {
+        await grantVaultScope(selected);
         set({ vaultPath: selected, activeFilePath: null, activeFileContent: null, currentView: "editor" });
         
         // Save persistent store
@@ -1964,6 +1989,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const selectedFiles = Array.isArray(selected) ? selected : [selected];
+      await registerFsPaths(selectedFiles);
       const subSegs = (targetSubFolder || "").split("/").filter(Boolean);
       const materialsFolder = subSegs.length > 0
         ? await join(vaultPath, "Materials", ...subSegs)
@@ -1997,6 +2023,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const selected = await open({
         multiple: false,
         directory: true,
+        recursive: true,
         title: "Select Material Folder",
       });
 
@@ -2004,6 +2031,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return null;
       }
 
+      await registerFsPaths([selected]);
       const subSegs = (targetSubFolder || "").split("/").filter(Boolean);
       const materialsFolder = subSegs.length > 0
         ? await join(vaultPath, "Materials", ...subSegs)

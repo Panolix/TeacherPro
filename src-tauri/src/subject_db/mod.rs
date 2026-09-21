@@ -97,6 +97,26 @@ fn subject_db_dir(vault_path: &str) -> PathBuf {
     PathBuf::from(vault_path).join("SubjectDBs")
 }
 
+/// Validate a single folder or file name coming from the frontend.
+///
+/// Rejects path separators, traversal components, empty names and NUL bytes so
+/// a crafted `subject`/`grade`/`topic`/`filename` can never escape the subject
+/// database directory. Backslashes are only rejected on Windows, where they act
+/// as path separators; on Unix they are valid (if unusual) file-name characters.
+fn validate_segment(raw: &str, field: &str) -> Result<String, String> {
+    if raw.is_empty() || raw == "." || raw == ".." {
+        return Err(format!("Invalid {field}."));
+    }
+    if raw.contains('\0') || raw.contains('/') {
+        return Err(format!("Invalid {field}."));
+    }
+    #[cfg(windows)]
+    if raw.contains('\\') {
+        return Err(format!("Invalid {field}."));
+    }
+    Ok(raw.to_string())
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 
 /// Collect immediate subdirectories, sorted by name.
@@ -438,6 +458,10 @@ pub async fn subject_db_add_pdfs(
     topic: Option<String>,
     file_paths: Vec<String>,
 ) -> Result<(), String> {
+    let subject = validate_segment(&subject, "subject")?;
+    let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
+    let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
+
     let base = subject_db_dir(&vault_path).join(&subject);
 
     let target_dir = match (&grade, &topic) {
@@ -480,6 +504,11 @@ pub async fn subject_db_delete_file(
     topic: Option<String>,
     filename: String,
 ) -> Result<(), String> {
+    let subject = validate_segment(&subject, "subject")?;
+    let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
+    let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
+    let filename = validate_segment(&filename, "filename")?;
+
     let base = subject_db_dir(&vault_path).join(&subject);
     let file_path = match (&grade, &topic) {
         (Some(g), Some(t)) => base.join(g).join(t).join(&filename),
@@ -517,6 +546,10 @@ pub async fn subject_db_query(
     query: String,
     top_k: u32,
 ) -> Result<Vec<ScoredChunk>, String> {
+    let subject = validate_segment(&subject, "subject")?;
+    let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
+    let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
+
     let db_dir = subject_db_dir(&vault_path);
     let top_k = top_k.clamp(1, 50) as usize;
 
@@ -555,6 +588,10 @@ pub async fn subject_db_delete(
     grade: Option<String>,
     topic: Option<String>,
 ) -> Result<(), String> {
+    let subject = validate_segment(&subject, "subject")?;
+    let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
+    let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
+
     let db_dir = subject_db_dir(&vault_path);
     let target = db_dir.join(&subject);
 
@@ -692,4 +729,39 @@ fn collect_topic_dirs(
         }
     }
     Ok(dirs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_segment;
+
+    #[test]
+    fn accepts_plain_folder_names() {
+        assert_eq!(validate_segment("Math", "subject").unwrap(), "Math");
+        assert_eq!(validate_segment("Grade-7 A", "grade").unwrap(), "Grade-7 A");
+        assert_eq!(validate_segment("Unit 1.2 (basics)", "topic").unwrap(), "Unit 1.2 (basics)");
+    }
+
+    #[test]
+    fn rejects_traversal_and_separators() {
+        assert!(validate_segment("", "subject").is_err());
+        assert!(validate_segment(".", "subject").is_err());
+        assert!(validate_segment("..", "subject").is_err());
+        assert!(validate_segment("../Lesson Plans", "topic").is_err());
+        assert!(validate_segment("a/b", "topic").is_err());
+        assert!(validate_segment("/etc", "subject").is_err());
+        assert!(validate_segment("bad\0name", "filename").is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_backslash_on_windows() {
+        assert!(validate_segment("a\\b", "topic").is_err());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn allows_backslash_on_unix() {
+        assert_eq!(validate_segment("a\\b", "topic").unwrap(), "a\\b");
+    }
 }

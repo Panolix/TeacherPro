@@ -1,11 +1,12 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::io::{BufRead, BufReader, Read};
-use std::path::Path;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
+use tauri_plugin_fs::FsExt;
 
 #[derive(Serialize)]
 struct AiRuntimeStatus {
@@ -88,6 +89,52 @@ fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
     }
 
     command
+}
+
+/// Spawn a process without waiting for it, but reap it on a background thread
+/// so it does not stay around as a zombie.
+fn spawn_detached(command: &mut Command) -> Result<(), String> {
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Failed to launch process: {error}"))?;
+
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+
+    Ok(())
+}
+
+/// Validate a path that is about to be opened with the OS default handler.
+/// The path is used as a process argument only (never interpolated into a
+/// shell string), so this is defense in depth.
+fn validated_existing_path(path: &str) -> Result<PathBuf, String> {
+    let candidate = PathBuf::from(path);
+    if !candidate.exists() {
+        return Err("Path not found.".to_string());
+    }
+    Ok(candidate)
+}
+
+/// Validate a path that is about to be sent to the OS print pipeline.
+/// Must exist and have a `.pdf` extension.
+fn validated_pdf_path(path: &str) -> Result<PathBuf, String> {
+    let candidate = validated_existing_path(path)?;
+    if !candidate.is_file() {
+        return Err("Path is not a file.".to_string());
+    }
+
+    let is_pdf = candidate
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(false);
+
+    if !is_pdf {
+        return Err("Only PDF files can be printed.".to_string());
+    }
+
+    Ok(candidate)
 }
 
 fn query_nvidia_gpu_names() -> Vec<String> {
@@ -946,29 +993,79 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
+fn allow_fs_scopes(window: tauri::Window, paths: Vec<String>) -> Result<(), String> {
+    let scope = window.fs_scope();
+
+    // Always grant the OS temp directory (used to spool print PDFs). Both the
+    // raw and canonical forms are needed because Tauri canonicalizes existing
+    // paths but not ones about to be created (macOS: /var -> /private/var).
+    let temp_dir = std::env::temp_dir();
+    let _ = scope.allow_directory(&temp_dir, true);
+    if let Ok(canonical_temp) = std::fs::canonicalize(&temp_dir) {
+        let _ = scope.allow_directory(canonical_temp, true);
+    }
+
+    for raw_path in paths {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        let raw = PathBuf::from(trimmed);
+
+        // Tauri canonicalizes checked paths when they exist but not when they
+        // are about to be created, and scope patterns are never canonicalized.
+        // Grant both forms so existing and new files work, including paths that
+        // contain symlinked components.
+        let canonical = std::fs::canonicalize(&raw).unwrap_or_else(|_| raw.clone());
+
+        let grant = |path: &Path| -> Result<(), String> {
+            let result = if path.is_dir() {
+                scope.allow_directory(path, true)
+            } else {
+                scope.allow_file(path)
+            };
+            result.map_err(|error| format!("Failed to grant file access: {error}"))
+        };
+
+        grant(&raw)?;
+        if canonical != raw {
+            grant(&canonical)?;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn open_file_in_default_app(path: String) -> Result<(), String> {
+    let target = validated_existing_path(&path)?;
+    let target = target.to_string_lossy().to_string();
+
     #[cfg(target_os = "macos")]
     {
-        command_for("open")
-            .arg(&path)
-            .spawn()
-            .map_err(|error| format!("Failed to open path: {error}"))?;
+        spawn_detached(command_for("open").arg(&target))?;
     }
 
     #[cfg(target_os = "windows")]
     {
-        command_for("cmd")
-            .args(["/C", "start", "", &path])
-            .spawn()
-            .map_err(|error| format!("Failed to open path: {error}"))?;
+        spawn_detached(
+            command_for("powershell")
+                .env("TP_OPEN_PATH", &target)
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "Start-Process -FilePath $env:TP_OPEN_PATH",
+                ]),
+        )?;
     }
 
     #[cfg(target_os = "linux")]
     {
-        command_for("xdg-open")
-            .arg(&path)
-            .spawn()
-            .map_err(|error| format!("Failed to open path: {error}"))?;
+        spawn_detached(command_for("xdg-open").arg(&target))?;
     }
 
     Ok(())
@@ -976,46 +1073,55 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn print_pdf_file(path: String) -> Result<(), String> {
+    let target = validated_pdf_path(&path)?;
+    let target = target.to_string_lossy().to_string();
+
     #[cfg(target_os = "macos")]
     {
-        let script = format!(
-            "tell application \"Preview\"\n\
+        // The path is passed as an osascript argument (argv), never
+        // interpolated into the AppleScript source, to prevent script injection.
+        let script = "on run argv\n\
+             tell application \"Preview\"\n\
              activate\n\
-             print (POSIX file \"{}\") with print dialog\n\
-             end tell", path
-        );
-        
-        command_for("osascript")
-            .arg("-e")
-            .arg(&script)
-            .spawn()
-            .map_err(|error| format!("Failed to open print dialog: {error}"))?;
+             print (POSIX file (item 1 of argv)) with print dialog\n\
+             end tell\n\
+             end run";
+
+        spawn_detached(command_for("osascript").arg("-e").arg(script).arg(&target))?;
     }
 
     #[cfg(target_os = "windows")]
     {
         // Some Windows PDF handlers do not expose a "Print" shell verb.
         // When that happens, open the file so the user can print manually.
-        let escaped_path = path.replace('\'', "''");
-        let print_script = format!(
-            "$ErrorActionPreference='Stop'; Start-Process -FilePath '{escaped_path}' -Verb Print -ErrorAction Stop"
-        );
+        // The path travels through an environment variable, so PowerShell
+        // never parses it as code.
+        let print_script = "$ErrorActionPreference='Stop'; Start-Process -FilePath $env:TP_PRINT_PATH -Verb Print -ErrorAction Stop";
 
         let print_attempt = command_for("powershell")
+            .env("TP_PRINT_PATH", &target)
             .args([
                 "-NoProfile",
                 "-NonInteractive",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                &print_script,
+                print_script,
             ])
             .output()
             .map_err(|error| format!("Failed to run print command: {error}"))?;
 
         if !print_attempt.status.success() {
-            let open_attempt = command_for("cmd")
-                .args(["/C", "start", "", &path])
+            let open_attempt = command_for("powershell")
+                .env("TP_PRINT_PATH", &target)
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "Start-Process -FilePath $env:TP_PRINT_PATH",
+                ])
                 .status()
                 .map_err(|error| format!("Failed to print or open file: {error}"))?;
 
@@ -1032,10 +1138,7 @@ fn print_pdf_file(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "linux")]
     {
-        command_for("lpr")
-            .arg(&path)
-            .spawn()
-            .map_err(|error| format!("Failed to print file: {error}"))?;
+        spawn_detached(command_for("lpr").arg(&target))?;
     }
 
     Ok(())
@@ -1384,10 +1487,25 @@ fn ai_import_local_model(gguf_path: String, model_id: String) -> Result<AiModelI
         );
 
         let modelfile_content = format!("FROM {}\n", task_gguf_path);
-        let safe_name = task_model_id.replace(':', "_").replace(['/', '\\'], "_");
-        let modelfile_path = std::env::temp_dir().join(format!("teacherpro_modelfile_{safe_name}.tmp"));
 
-        if let Err(error) = std::fs::write(&modelfile_path, &modelfile_content) {
+        let mut modelfile = match tempfile::Builder::new()
+            .prefix("teacherpro_modelfile_")
+            .suffix(".tmp")
+            .tempfile()
+        {
+            Ok(file) => file,
+            Err(error) => {
+                set_install_state(
+                    &task_model_id,
+                    "failed",
+                    0.0,
+                    Some(format!("Failed to create modelfile: {error}")),
+                );
+                return;
+            }
+        };
+
+        if let Err(error) = modelfile.write_all(modelfile_content.as_bytes()) {
             set_install_state(
                 &task_model_id,
                 "failed",
@@ -1398,13 +1516,13 @@ fn ai_import_local_model(gguf_path: String, model_id: String) -> Result<AiModelI
         }
 
         let binary = resolve_ollama_binary();
-        let modelfile_str = modelfile_path.to_string_lossy().to_string();
+        let modelfile_str = modelfile.path().to_string_lossy().to_string();
 
         let result = command_for(&binary)
             .args(["create", &task_model_id, "-f", &modelfile_str])
             .output();
 
-        let _ = std::fs::remove_file(&modelfile_path);
+        drop(modelfile);
 
         match result {
             Ok(output) if output.status.success() => {
@@ -1684,6 +1802,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             open_file_in_default_app,
+            allow_fs_scopes,
             print_pdf_file,
             ai_runtime_status,
             ai_runtime_diagnostics,
@@ -1723,4 +1842,42 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validated_existing_path, validated_pdf_path};
+    use std::io::Write;
+
+    #[test]
+    fn missing_paths_are_rejected() {
+        assert!(validated_existing_path("/definitely/not/here").is_err());
+        assert!(validated_pdf_path("/definitely/not/here.pdf").is_err());
+    }
+
+    #[test]
+    fn pdf_validation_accepts_pdf_files_only() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let pdf_path = dir.path().join("lesson.pdf");
+        let upper_path = dir.path().join("lesson.PDF");
+        let txt_path = dir.path().join("lesson.txt");
+
+        std::fs::File::create(&pdf_path)
+            .expect("create pdf")
+            .write_all(b"%PDF-1.4")
+            .expect("write pdf");
+        std::fs::File::create(&upper_path)
+            .expect("create upper")
+            .write_all(b"%PDF-1.4")
+            .expect("write upper");
+        std::fs::File::create(&txt_path)
+            .expect("create txt")
+            .write_all(b"not a pdf")
+            .expect("write txt");
+
+        assert!(validated_pdf_path(pdf_path.to_str().unwrap()).is_ok());
+        assert!(validated_pdf_path(upper_path.to_str().unwrap()).is_ok());
+        assert!(validated_pdf_path(txt_path.to_str().unwrap()).is_err());
+        assert!(validated_pdf_path(dir.path().to_str().unwrap()).is_err());
+    }
 }

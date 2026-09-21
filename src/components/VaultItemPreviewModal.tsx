@@ -21,6 +21,16 @@ interface Props {
 }
 
 // Simple HTML renderer for TipTap lesson content
+function sanitizeHighlightColor(value: unknown): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  return "#fbbf24";
+}
+
 function renderTipTapContent(content: any): string {
   if (!content || typeof content !== "object") return "";
   
@@ -38,7 +48,7 @@ function renderTipTapContent(content: any): string {
         else if (mark.type === "strike") text = `<s>${text}</s>`;
         else if (mark.type === "code") text = `<code>${text}</code>`;
         else if (mark.type === "highlight") {
-          const color = mark.attrs?.color || "#fbbf24";
+          const color = sanitizeHighlightColor(mark.attrs?.color);
           text = `<mark style="background:${color};padding:2px 4px;border-radius:3px;">${text}</mark>`;
         }
       }
@@ -51,7 +61,8 @@ function renderTipTapContent(content: any): string {
     case "paragraph":
       return `<p style="margin:0.5em 0;">${renderTipTapContent(content.content)}</p>`;
     case "heading":
-      const level = attrs.level || 1;
+      const rawLevel = Number(attrs.level);
+      const level = Number.isInteger(rawLevel) && rawLevel >= 1 && rawLevel <= 6 ? rawLevel : 1;
       const sizes = ["1.75em", "1.5em", "1.25em", "1.1em", "1em", "0.9em"];
       return `<h${level} style="margin:0.75em 0 0.5em;font-size:${sizes[level-1]};font-weight:600;">${renderTipTapContent(content.content)}</h${level}>`;
     case "bulletList":

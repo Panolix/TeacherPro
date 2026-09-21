@@ -1,6 +1,7 @@
 import { save } from "@tauri-apps/plugin-dialog";
 import { exists, mkdir, writeFile } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
 import { toCanvas } from "html-to-image";
 import { jsPDF } from "jspdf";
 
@@ -118,6 +119,14 @@ export async function savePdfToVault({
 
   if (!selectedPath) {
     return null;
+  }
+
+  // Register the chosen destination in the runtime fs scope (canonicalized on
+  // the Rust side) so symlinked locations keep working.
+  try {
+    await invoke("allow_fs_scopes", { paths: [selectedPath] });
+  } catch (error) {
+    console.warn("Could not register export path", error);
   }
 
   await writeFile(selectedPath, pdfBytes);
