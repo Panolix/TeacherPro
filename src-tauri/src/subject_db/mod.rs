@@ -344,7 +344,9 @@ async fn process_topic_folder(
 
     // Save store if anything changed
     if processed > 0 {
-        store::save_store(&store, store_path).ok();
+        if let Err(e) = store::save_store(&store, store_path) {
+            errors.push(format!("Failed to save chunk store: {e}"));
+        }
     }
 
     Ok((total_chunks, processed, errors))
@@ -411,7 +413,9 @@ async fn process_loose_pdfs(
                 let mut store = store::load_or_new(&store_path);
                 let count = chunked.len();
                 store.add_chunks(chunked);
-                store::save_store(&store, &store_path).ok();
+                if let Err(e) = store::save_store(&store, &store_path) {
+                    errors.push(format!("{filename}: failed to save chunk store: {e}"));
+                }
                 total_chunks += count;
                 processed += 1;
             }
@@ -527,7 +531,7 @@ pub async fn subject_db_delete_file(
             if store_path.exists() {
                 if let Ok(mut store) = store::load_store(&store_path) {
                     store.chunks.retain(|c| c.chunk.source_file != filename);
-                    store::save_store(&store, &store_path).ok();
+                    store::save_store(&store, &store_path)?;
                 }
             }
         }

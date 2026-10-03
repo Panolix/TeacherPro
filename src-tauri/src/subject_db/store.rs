@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::{Chunk, ChunkWithEmbedding, ScoredChunk};
 
@@ -70,8 +70,46 @@ impl VectorStore {
 }
 
 /// Load a store from disk, or create a new empty one.
+///
+/// A store file that exists but cannot be parsed is quarantined (renamed to
+/// `<name>.corrupt-<unix-seconds>`) instead of being silently replaced by an
+/// empty store — a partially written `chunks.json` must never wipe the
+/// topic's embeddings, and the quarantined copy keeps the data recoverable.
 pub fn load_or_new(path: &Path) -> VectorStore {
-    load_store(path).unwrap_or_else(|_| VectorStore::new())
+    match load_store(path) {
+        Ok(store) => store,
+        Err(error) => {
+            if path.exists() {
+                let seconds = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let mut quarantined_name = path.as_os_str().to_os_string();
+                quarantined_name.push(format!(".corrupt-{seconds}"));
+                let quarantined = PathBuf::from(quarantined_name);
+
+                match std::fs::rename(path, &quarantined) {
+                    Ok(()) => {
+                        eprintln!(
+                            "[TeacherPro] Vector store at {} failed to load ({error}); \
+                             quarantined the file as {} and starting a new store.",
+                            path.display(),
+                            quarantined.display()
+                        );
+                    }
+                    Err(rename_error) => {
+                        eprintln!(
+                            "[TeacherPro] Vector store at {} failed to load ({error}) and \
+                             could not be quarantined ({rename_error}); continuing with a \
+                             new in-memory store, but saving may fail.",
+                            path.display()
+                        );
+                    }
+                }
+            }
+            VectorStore::new()
+        }
+    }
 }
 
 /// Load a store from a JSON file.
@@ -93,6 +131,12 @@ pub fn load_store(path: &Path) -> Result<VectorStore, String> {
 }
 
 /// Save a store to a JSON file.
+///
+/// The data is written to a temp file in the same directory and then renamed
+/// over the target, so a crash mid-write can never truncate `chunks.json`.
+/// `std::fs::rename` replaces existing files on Windows, macOS and Linux; if
+/// the replace fails because the target is briefly locked (antivirus scan,
+/// file open elsewhere), fall back to a direct write after cleanup.
 pub fn save_store(store: &VectorStore, path: &Path) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -111,10 +155,29 @@ pub fn save_store(store: &VectorStore, path: &Path) -> Result<(), String> {
     let data = serde_json::to_string_pretty(&stored)
         .map_err(|e| format!("Failed to serialize store: {e}"))?;
 
-    std::fs::write(path, data)
-        .map_err(|e| format!("Failed to write store file: {e}"))?;
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut tmp_name = path.as_os_str().to_os_string();
+    tmp_name.push(format!(".tmp-{seconds}"));
+    let tmp_path = PathBuf::from(tmp_name);
 
-    Ok(())
+    std::fs::write(&tmp_path, &data)
+        .map_err(|e| format!("Failed to write store temp file: {e}"))?;
+
+    match std::fs::rename(&tmp_path, path) {
+        Ok(()) => Ok(()),
+        Err(rename_error) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            eprintln!(
+                "[TeacherPro] Atomic store replace failed ({rename_error}); \
+                 writing {} directly.",
+                path.display()
+            );
+            std::fs::write(path, data).map_err(|e| format!("Failed to write store file: {e}"))
+        }
+    }
 }
 
 /// Load only metadata (no embeddings) from a store file.
@@ -182,7 +245,10 @@ mod tests {
     fn test_query_returns_top_k() {
         let mut store = VectorStore::new();
         for i in 0..10 {
-            let emb = vec![i as f32; 4];
+            // Embeddings must not be parallel to the query or every cosine
+            // score is 1.0. [9, i, 0, 0] vs [9, 9, 9, 9] gives a strictly
+            // increasing similarity for i in 0..=9, so chunk-9 ranks first.
+            let emb = vec![9.0f32, i as f32, 0.0, 0.0];
             store.add_chunks(vec![ChunkWithEmbedding {
                 chunk: Chunk {
                     id: format!("chunk-{i}"),

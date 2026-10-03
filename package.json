@@ -1,7 +1,7 @@
 {
   "name": "teacherpro",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.3.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -37,8 +37,10 @@
     "html-to-image": "^1.11.13",
     "html2pdf.js": "^0.14.0",
     "jspdf": "^4.2.1",
+    "lucide-react": "^1.8.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.2.2",
@@ -47,13 +49,9 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "autoprefixer": "^10.5.0",
-    "clsx": "^2.1.1",
-    "lucide-react": "^1.8.0",
     "postcss": "^8.5.9",
-    "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
-    "zustand": "^5.0.12"
+    "vite": "^7.0.4"
   }
 }

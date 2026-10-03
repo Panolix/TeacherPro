@@ -264,6 +264,10 @@ fn probe_hardware() -> HardwareProbe {
     }
 }
 
+// On Windows the GPU-backend probe and `command` below the cfg block are
+// intentionally unused — Ollama must auto-detect the backend there. The
+// allows keep clippy quiet on that target without affecting other platforms.
+#[allow(unused_variables, unreachable_code)]
 fn apply_preferred_backend_env(command: &mut Command) {
     if let Ok(val) = std::env::var("OLLAMA_LLM_LIBRARY") {
         eprintln!("[TeacherPro] OLLAMA_LLM_LIBRARY already set in env: {val} (not overriding)");
@@ -1146,74 +1150,103 @@ fn print_pdf_file(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn ai_runtime_status() -> AiRuntimeStatus {
-    let version_result = run_ollama_command(&["--version"]);
-    match version_result {
-        Ok(version) => AiRuntimeStatus {
-            provider: "ollama",
-            available: true,
-            version: Some(version.trim().to_string()),
-            detail: None,
-        },
-        Err(error) => AiRuntimeStatus {
-            provider: "ollama",
-            available: false,
-            version: None,
-            detail: Some(error),
-        },
-    }
+async fn ai_runtime_status() -> AiRuntimeStatus {
+    // Run on blocking thread so the UI doesn't freeze while Ollama responds
+    tauri::async_runtime::spawn_blocking(|| {
+        let version_result = run_ollama_command(&["--version"]);
+        match version_result {
+            Ok(version) => AiRuntimeStatus {
+                provider: "ollama",
+                available: true,
+                version: Some(version.trim().to_string()),
+                detail: None,
+            },
+            Err(error) => AiRuntimeStatus {
+                provider: "ollama",
+                available: false,
+                version: None,
+                detail: Some(error),
+            },
+        }
+    })
+    .await
+    .unwrap_or_else(|error| AiRuntimeStatus {
+        provider: "ollama",
+        available: false,
+        version: None,
+        detail: Some(format!("Runtime status check failed: {error}")),
+    })
 }
 
 #[tauri::command]
-fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
-    let probe = &*AI_HARDWARE_PROBE;
-    let version_result = run_ollama_command(&["--version"]);
-    let runtime_available = version_result.is_ok();
-    let version = version_result
-        .as_ref()
-        .ok()
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    let detail = version_result.err();
-    let server_running = is_ollama_server_running();
+async fn ai_runtime_diagnostics() -> AiRuntimeDiagnostics {
+    // Run on blocking thread — probes Ollama, nvidia-smi/rocm-smi and more
+    tauri::async_runtime::spawn_blocking(|| {
+        let probe = &*AI_HARDWARE_PROBE;
+        let version_result = run_ollama_command(&["--version"]);
+        let runtime_available = version_result.is_ok();
+        let version = version_result
+            .as_ref()
+            .ok()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let detail = version_result.err();
+        let server_running = is_ollama_server_running();
 
-    let active_models = if server_running {
-        match run_ollama_command(&["ps"]) {
-            Ok(raw) => parse_ollama_ps(&raw),
-            Err(_) => Vec::new(),
+        let active_models = if server_running {
+            match run_ollama_command(&["ps"]) {
+                Ok(raw) => parse_ollama_ps(&raw),
+                Err(_) => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
+        let recommendation = build_runtime_recommendation(
+            probe,
+            &active_models,
+            runtime_available,
+            server_running,
+        );
+
+        let preferred_backend = std::env::var("OLLAMA_LLM_LIBRARY")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| probe.preferred_backend.clone());
+        let backend_policy = build_backend_policy_text(&preferred_backend);
+
+        AiRuntimeDiagnostics {
+            provider: "ollama",
+            available: runtime_available,
+            version,
+            server_running,
+            server_managed_by_app: OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst),
+            platform: std::env::consts::OS,
+            architecture: std::env::consts::ARCH,
+            preferred_backend,
+            backend_policy,
+            detected_hardware: probe.detected_hardware.clone(),
+            active_models,
+            recommendation,
+            detail,
         }
-    } else {
-        Vec::new()
-    };
-
-    let recommendation = build_runtime_recommendation(
-        probe,
-        &active_models,
-        runtime_available,
-        server_running,
-    );
-
-    let preferred_backend = std::env::var("OLLAMA_LLM_LIBRARY")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| probe.preferred_backend.clone());
-    let backend_policy = build_backend_policy_text(&preferred_backend);
-
-    AiRuntimeDiagnostics {
+    })
+    .await
+    .unwrap_or_else(|error| AiRuntimeDiagnostics {
         provider: "ollama",
-        available: runtime_available,
-        version,
-        server_running,
-        server_managed_by_app: OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst),
+        available: false,
+        version: None,
+        server_running: false,
+        server_managed_by_app: false,
         platform: std::env::consts::OS,
         architecture: std::env::consts::ARCH,
-        preferred_backend,
-        backend_policy,
-        detected_hardware: probe.detected_hardware.clone(),
-        active_models,
-        recommendation,
-        detail,
-    }
+        preferred_backend: String::new(),
+        backend_policy: String::new(),
+        detected_hardware: Vec::new(),
+        active_models: Vec::new(),
+        recommendation: Some(format!("Diagnostics failed: {error}")),
+        detail: None,
+    })
 }
 
 #[tauri::command]
@@ -1414,23 +1447,31 @@ fn ai_cancel_model_install(model_id: String) -> Result<AiModelInstallProgress, S
 }
 
 #[tauri::command]
-fn ai_install_model(model_id: String) -> Result<String, String> {
+async fn ai_install_model(model_id: String) -> Result<String, String> {
     if !is_safe_model_id(&model_id) {
         return Err("Invalid model ID format.".to_string());
     }
 
-    let _ = ensure_ollama_runtime()?;
+    // Run on blocking thread so the UI doesn't freeze while Ollama pulls
+    tauri::async_runtime::spawn_blocking(move || {
+        let _ = ensure_ollama_runtime()?;
 
-    run_ollama_command(&["pull", &model_id])
+        run_ollama_command(&["pull", &model_id])
+    })
+    .await
+    .map_err(|e| format!("Model install failed: {e}"))?
 }
 
 #[tauri::command]
-fn ai_remove_model(model_id: String) -> Result<String, String> {
+async fn ai_remove_model(model_id: String) -> Result<String, String> {
     if !is_safe_model_id(&model_id) {
         return Err("Invalid model ID format.".to_string());
     }
 
-    run_ollama_command(&["rm", &model_id])
+    // Run on blocking thread so the UI doesn't freeze while Ollama removes
+    tauri::async_runtime::spawn_blocking(move || run_ollama_command(&["rm", &model_id]))
+        .await
+        .map_err(|e| format!("Model removal failed: {e}"))?
 }
 
 #[tauri::command]

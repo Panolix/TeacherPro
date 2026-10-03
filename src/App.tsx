@@ -43,19 +43,15 @@ function App() {
   const { initVault, accentColor } = useAppStore();
 
   useEffect(() => {
-    console.log("App mounted. Attempting to show window immediately...");
     const win = getCurrentWindow();
     
     win.show().then(() => {
-      console.log("Window show() succeeded");
       win.setFocus();
     }).catch(err => {
       console.error("Window show() failed:", err);
     });
 
-    initVault().then(() => {
-      console.log("Vault initialized");
-    }).catch(err => {
+    initVault().catch(err => {
       console.error("Vault init failed:", err);
     });
 
@@ -65,9 +61,7 @@ function App() {
 
     // Start Ollama in background so AI features work immediately when needed
     setTimeout(() => {
-      invoke("ai_ensure_runtime").then(() => {
-        console.log("Ollama started");
-      }).catch((err: any) => {
+      invoke("ai_ensure_runtime").catch((err: any) => {
         console.warn("Ollama not available:", err);
       });
     }, 3000);

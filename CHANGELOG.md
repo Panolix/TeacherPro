@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-10-03
+
+### Fixed
+- **Crash-safe document saving** — lessons, mindmaps and settings backups are
+  written atomically (temp file + rename) on Windows, macOS and Linux, so a
+  crash or power loss can no longer truncate a document.
+- **Embedding stores no longer wiped by corruption** — a partially written
+  `chunks.json` is quarantined (`chunks.json.corrupt-<timestamp>`) instead of
+  being silently reset to an empty store.
+- **UI freezes during AI operations** — runtime status, diagnostics and model
+  install/removal commands moved to background threads (`spawn_blocking`).
+- **Duplicating binary materials** — PDFs, images and other non-text files can
+  now be duplicated from the vault context menu (uses `copyFile` instead of
+  text read/write).
+- **Wrong document closed on delete/rename** — the `endsWith` filename match is
+  replaced with an exact, separator-aware path comparison, so files like
+  "My Lesson.json" no longer get confused with "Lesson.json".
+- **Settings write races** — settings persistence is serialized, so rapid
+  changes can no longer drop a merged value.
+- **Swallowed save errors** — chunk-store write failures are now reported in
+  the import/delete result messages instead of failing silently.
+- **Test fix** — the vector store top-k test used parallel embeddings that made
+  all cosine scores identical; embeddings are now strictly ordered.
+
+### Changed
+- Dependency hygiene: `zustand` and `lucide-react` moved to `dependencies`;
+  unused `clsx` and `tailwind-merge` removed.
+- Removed leftover debug `console.log` output (including AI response dumps).
+- Removed obsolete files: `patch_main_content.js`, `MindmapView.tsx.bak`,
+  `pdfExport.ts.bak2/.bak3`.
+- Zero `cargo clippy` warnings across platforms.
+
 ## [2.3.0] - 2026-09-21
 
 ### Changed

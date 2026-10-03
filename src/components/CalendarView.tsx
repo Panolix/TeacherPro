@@ -224,13 +224,11 @@ export function CalendarView() {
   };
 
   const handleDeleteAllForDate = async (date: Date) => {
-    console.log("Delete all clicked for:", date, "isDeletingLessons:", isDeletingLessons);
     if (isDeletingLessons) {
       return;
     }
 
     const lessons = getLessonsForDate(date).filter((lesson) => !!lesson.name);
-    console.log("Lessons to delete:", lessons.length, lessons.map(l => l.name));
     if (lessons.length === 0) {
       return;
     }
@@ -245,7 +243,6 @@ export function CalendarView() {
     try {
       for (const lesson of lessons) {
         const lessonPath = lesson.relativePath || lesson.name || "";
-        console.log("Delete all - deleting:", lessonPath);
         if (lessonPath) await deleteLesson(lessonPath);
       }
 

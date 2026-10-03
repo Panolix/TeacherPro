@@ -1764,10 +1764,7 @@ export function Editor() {
           numPredict: rewriteRuntimeDefaults.defaultNumPredict,
         });
 
-        console.log("[AI rewrite] raw response:", JSON.stringify(response));
-
         const transformedText = normalizeAiFragmentOutput(response, sourceText);
-        console.log("[AI rewrite] normalized:", JSON.stringify(transformedText));
         if (!transformedText) {
           throw new Error("AI returned an empty response.");
         }

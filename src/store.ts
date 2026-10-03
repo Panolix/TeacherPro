@@ -357,6 +357,39 @@ async function grantVaultScope(path: string | null): Promise<void> {
   await registerFsPaths([path]);
 }
 
+/**
+ * Write a file atomically: content goes to a temp file in the same directory
+ * (so the rename stays on one volume), then the temp file replaces the target.
+ * A crash mid-write can then only lose the temp file, never truncate the
+ * document. std::fs::rename (backing the Tauri fs plugin) replaces existing
+ * files on Windows, macOS and Linux. If the replace fails because the target
+ * is briefly locked (antivirus scan, file open elsewhere), fall back to a
+ * direct write so saving still succeeds.
+ */
+async function writeTextFileAtomic(path: string, contents: string): Promise<void> {
+  const tmpPath = `${path}.${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`;
+  await writeTextFile(tmpPath, contents);
+  try {
+    await rename(tmpPath, path);
+  } catch (error) {
+    console.warn("Atomic replace failed, writing directly", error);
+    try {
+      await remove(tmpPath);
+    } catch {
+      // Best effort — a leftover temp file is harmless.
+    }
+    await writeTextFile(path, contents);
+  }
+}
+
+/**
+ * Compare two vault paths regardless of the platform separator (Windows uses
+ * backslashes, macOS/Linux forward slashes; Tauri's join() returns native
+ * separators on each).
+ */
+const sameVaultPath = (a: string, b: string) =>
+  a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+
 const MIN_DEFAULT_LESSON_TABLE_BODY_ROWS = 1;
 const MAX_DEFAULT_LESSON_TABLE_BODY_ROWS = 12;
 
@@ -522,7 +555,7 @@ async function writeUiSettingsBackup(vaultPath: string, uiSettings: UISettings):
     uiSettings,
   };
 
-  await writeTextFile(backupFilePath, JSON.stringify(payload, null, 2));
+  await writeTextFileAtomic(backupFilePath, JSON.stringify(payload, null, 2));
 }
 
 async function readUiSettingsBackup(vaultPath: string): Promise<Partial<UISettings> | null> {
@@ -730,7 +763,20 @@ async function buildLessonSubjectIndex(vaultPath: string, lessonTree: MaterialEn
 
 let searchIndexBuildVersion = 0;
 
-async function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
+// Serialize settings writes: each persist does a load-modify-save cycle, so
+// concurrent calls (rapid slider drags, quick folder toggles) must not
+// interleave, or a merged patch can be overwritten by a stale snapshot.
+let uiSettingsPersistChain: Promise<void> = Promise.resolve();
+
+function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
+  const run = uiSettingsPersistChain.then(() => writeUiSettings(patch));
+  uiSettingsPersistChain = run.catch((error) => {
+    console.warn("Could not persist UI settings", error);
+  });
+  return run;
+}
+
+async function writeUiSettings(patch: Partial<UISettings>): Promise<void> {
   const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
   const current = (await store.get<Partial<UISettings>>("uiSettings")) || {};
   const mergedSectionCollapsed: Record<SidebarSectionKey, boolean> = {
@@ -1496,7 +1542,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       };
       
-      await writeTextFile(filePath, JSON.stringify(initialContent, null, 2));
+      await writeTextFileAtomic(filePath, JSON.stringify(initialContent, null, 2));
       set({
         activeFilePath: filePath,
         activeFileContent: initialContent,
@@ -1534,7 +1580,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         // Keep original content for legacy/non-standard files.
       }
 
-      await writeTextFile(destinationPath, nextText);
+      await writeTextFileAtomic(destinationPath, nextText);
       await get().refreshVault();
       await get().openLesson(duplicatedFileName);
     } catch (error) {
@@ -1625,9 +1671,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         finalFileName = extractBaseName(nextPath);
       }
 
-      await writeTextFile(savePath, JSON.stringify(nextLessonData, null, 2));
+      await writeTextFileAtomic(savePath, JSON.stringify(nextLessonData, null, 2));
 
-      if (activeFilePath?.endsWith(fileName)) {
+      if (activeFilePath && sameVaultPath(activeFilePath, sourcePath)) {
         set({
           activeFilePath: savePath,
           activeFileContent: nextLessonData,
@@ -1652,14 +1698,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const filePath = await join(lessonPlansFolder, fileName);
       // Extract just the basename for trash naming (handles nested paths like "Folder/Lesson.json")
       const baseName = fileName.split("/").pop() || fileName;
-      console.log("deleteLesson:", { fileName, baseName, filePath });
       const didMove = await movePathToTrash(vaultPath, filePath, "Lesson Plans", baseName);
 
       if (!didMove) {
         console.warn(`Skipped deleting lesson \"${fileName}\" because it no longer exists.`);
       }
 
-      if (currentView === "editor" && activeFilePath?.endsWith(fileName)) {
+      if (currentView === "editor" && activeFilePath && sameVaultPath(activeFilePath, filePath)) {
         set({ activeFilePath: null, activeFileContent: null });
       }
 
@@ -1696,7 +1741,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       await rename(oldPath, newPath);
 
-      if (currentView === "editor" && activeFilePath?.endsWith(oldFileName)) {
+      if (currentView === "editor" && activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
       }
 
@@ -1783,7 +1828,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
-      await writeTextFile(savePath, JSON.stringify(newLessonData, null, 2));
+      await writeTextFileAtomic(savePath, JSON.stringify(newLessonData, null, 2));
       set({ activeFileContent: newLessonData, activeFilePath: savePath });
       await get().refreshVault(); 
     } catch (error) {
@@ -1867,7 +1912,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         edges: []
       };
       
-      await writeTextFile(filePath, JSON.stringify(initialContent, null, 2));
+      await writeTextFileAtomic(filePath, JSON.stringify(initialContent, null, 2));
       set({ activeFilePath: filePath, activeMindmapContent: initialContent, currentView: "mindmap" });
       await get().refreshVault();
     } catch (error) {
@@ -1887,7 +1932,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const baseName = fileName.split("/").pop() || fileName;
       await movePathToTrash(vaultPath, filePath, "Mindmaps", baseName);
 
-      if (currentView === "mindmap" && activeFilePath?.endsWith(fileName)) {
+      if (currentView === "mindmap" && activeFilePath && sameVaultPath(activeFilePath, filePath)) {
         set({ activeFilePath: null, activeMindmapContent: null });
       }
 
@@ -1924,7 +1969,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       await rename(oldPath, newPath);
 
-      if (currentView === "mindmap" && activeFilePath?.endsWith(oldFileName)) {
+      if (currentView === "mindmap" && activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
       }
 
@@ -1946,7 +1991,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         edges
       };
 
-      await writeTextFile(activeFilePath, JSON.stringify(newMindmapData, null, 2));
+      await writeTextFileAtomic(activeFilePath, JSON.stringify(newMindmapData, null, 2));
       set({ activeMindmapContent: newMindmapData });
     } catch (error) {
       console.error("Failed to save mindmap:", error);
@@ -2260,8 +2305,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const candidateName = `${stem} copy${ext}`;
       const destinationPath = await ensureUniqueTargetPath(parentPath, candidateName);
 
-      const text = await readTextFile(sourcePath);
-      await writeTextFile(destinationPath, text);
+      // copyFile handles both text documents and binary materials
+      // (PDFs, images, …) — reading everything as text would corrupt them.
+      await copyFile(sourcePath, destinationPath);
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to duplicate vault path:", error);
