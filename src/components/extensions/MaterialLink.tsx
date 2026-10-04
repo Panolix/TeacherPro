@@ -1,7 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { File, ExternalLink, Trash2, Folder, Eye, FolderOpen, X } from "lucide-react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
@@ -151,7 +150,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         alert(t('editor.materialLink.pathNotFound', { path: filePath }));
         return;
       }
-      await revealItemInDir(fullPath);
+      await invoke("reveal_item_in_file_manager", { path: fullPath });
     } catch (error) {
       console.error("Failed to reveal file", error);
       alert(t('editor.materialLink.couldNotReveal'));

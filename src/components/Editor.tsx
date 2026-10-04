@@ -27,7 +27,7 @@ import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { ChatContextBar } from "./ChatContextBar";
-import type { ScoredChunk, ChatMessage, SubjectDbInfo } from "../store";
+import type { ScoredChunk, ChatMessage, SubjectDbInfo, LessonMetadata, LessonData } from "../store";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
@@ -946,6 +946,7 @@ export function Editor() {
     activeFileContent,
     activeFilePath,
     saveActiveLesson,
+    saveLessonAtPath,
     vaultPath,
     draggedMaterial,
     setDraggedMaterial,
@@ -1008,7 +1009,6 @@ export function Editor() {
   const [translateSubmenuOpen, setTranslateSubmenuOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
-  const [editorRevision, setEditorRevision] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [methodBankOpen, setMethodBankOpen] = useState(false);
@@ -1146,6 +1146,71 @@ export function Editor() {
   const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
+
+  // ── Autosave machinery (ref-based, so typing no longer re-renders the tree) ──
+  const editorRef = useRef<any>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  // Latest document JSON, captured on every editor update. Lets the
+  // switch/unmount flush read the outgoing document even after the editor
+  // instance has been destroyed.
+  const latestDocJsonRef = useRef<any>(null);
+  // The vault path whose content the editor currently holds (set on load).
+  const autosavePathRef = useRef<string | null>(null);
+  // Latest autosave inputs. Updated after every commit; the flush reads it
+  // during effect cleanup, i.e. while it still holds the outgoing lesson's
+  // values (the sync effects for the incoming lesson have not run yet).
+  const autosaveInputsRef = useRef<{
+    teacher: string;
+    subject: string;
+    plannedForInput: string;
+    lessonNotes: string;
+    lastKnownPlannedFor: string | null;
+    baseMetadata: LessonMetadata | null;
+  }>({
+    teacher,
+    subject,
+    plannedForInput,
+    lessonNotes,
+    lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
+    baseMetadata: activeFileContent?.metadata ?? null,
+  });
+  useEffect(() => {
+    autosaveInputsRef.current = {
+      teacher,
+      subject,
+      plannedForInput,
+      lessonNotes,
+      lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
+      baseMetadata: activeFileContent?.metadata ?? null,
+    };
+  });
+
+  // The metadata values as last persisted. Autosave triggers compare against
+  // these so a timer that fires after merely *opening* a lesson (the metadata
+  // sync effects re-arm the autosave on load) can never write to disk when
+  // nothing actually changed — regardless of any JSON normalization noise
+  // between the store object and editor.getJSON().
+  const lastSavedMetaRef = useRef({
+    teacher: activeFileContent?.metadata?.teacher || "",
+    subject: activeFileContent?.metadata?.subject || "",
+    plannedFor: activeFileContent?.metadata?.plannedFor || null,
+    notes: activeFileContent?.notes || "",
+  });
+  const docDirtyRef = useRef(false);
+
+  const metaIsDirty = useCallback(
+    (candidate: {
+      teacher: string;
+      subject: string;
+      notes: string;
+      plannedFor: string | null;
+    }) =>
+      candidate.teacher !== lastSavedMetaRef.current.teacher ||
+      candidate.subject !== lastSavedMetaRef.current.subject ||
+      candidate.notes !== lastSavedMetaRef.current.notes ||
+      candidate.plannedFor !== lastSavedMetaRef.current.plannedFor,
+    [],
+  );
   // Per-lesson chat cache for session-level persistence.
   const chatStoreRef = useRef<Record<string, AiChatMessage[]>>({});
   const prevFilePathRef = useRef<string | null>(null);
@@ -1355,8 +1420,195 @@ export function Editor() {
   });
 
   useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    editorRef.current = editor;
+  }, [editor]);
+
+  // ── Shared autosave snapshot helper ──
+  // The snapshot must be byte-identical across the debounced autosave and the
+  // switch/unmount flush, so both go through this builder.
+  const buildAutosavePayload = useCallback(() => {
+    const currentEditor = editorRef.current;
+    let json: any = null;
+    if (currentEditor && !currentEditor.isDestroyed) {
+      try {
+        json = currentEditor.getJSON();
+      } catch {
+        json = null;
+      }
+    }
+    if (!json) {
+      json = latestDocJsonRef.current;
+    }
+    if (!json) {
+      return null;
+    }
+
+    const inputs = autosaveInputsRef.current;
+    const parsedPlannedFor = parseEuropeanDateToIso(inputs.plannedForInput);
+    // An unparseable date must not block saving: the document keeps its
+    // previous plannedFor and everything else is saved as usual.
+    const effectivePlannedFor =
+      parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
+    const snapshot = JSON.stringify({
+      content: json,
+      teacher: inputs.teacher,
+      subject: inputs.subject,
+      plannedFor: effectivePlannedFor ?? null,
+      notes: inputs.lessonNotes,
+    });
+    const metadataPatch: Partial<LessonMetadata> = {
+      teacher: inputs.teacher,
+      subject: inputs.subject,
+    };
+    if (parsedPlannedFor !== undefined) {
+      metadataPatch.plannedFor = parsedPlannedFor;
+    }
+
+    return { json, snapshot, metadataPatch, inputs };
+  }, []);
+
+  // Debounced autosave. The timer lives in a ref so editor updates do not
+  // need to re-render this component to re-arm it.
+  const clearAutosaveTimer = useCallback(() => {
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+  }, []);
+
+  const runAutosave = useCallback(async () => {
+    if (!editorRef.current || editorRef.current.isDestroyed || !autosavePathRef.current) {
+      return;
+    }
+
+    const inputs = autosaveInputsRef.current;
+    const parsedPlannedFor = parseEuropeanDateToIso(inputs.plannedForInput);
+    const effectivePlannedFor =
+      parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
+
+    // Nothing changed since the last save — never touch the disk.
+    if (
+      !docDirtyRef.current &&
+      !metaIsDirty({
+        teacher: inputs.teacher,
+        subject: inputs.subject,
+        notes: inputs.lessonNotes,
+        plannedFor: effectivePlannedFor ?? null,
+      })
+    ) {
+      return;
+    }
+
+    const payload = buildAutosavePayload();
+    if (!payload || payload.snapshot === lastSavedSnapshotRef.current) {
+      docDirtyRef.current = false;
+      return;
+    }
+
+    const ok = await saveActiveLesson(payload.json, payload.metadataPatch, payload.inputs.lessonNotes);
+    if (ok) {
+      lastSavedSnapshotRef.current = payload.snapshot;
+      docDirtyRef.current = false;
+      lastSavedMetaRef.current = {
+        teacher: inputs.teacher,
+        subject: inputs.subject,
+        notes: inputs.lessonNotes,
+        plannedFor: effectivePlannedFor ?? null,
+      };
+    }
+  }, [buildAutosavePayload, metaIsDirty, saveActiveLesson]);
+
+  const scheduleAutosave = useCallback(() => {
+    clearAutosaveTimer();
+    autosaveTimerRef.current = window.setTimeout(() => {
+      autosaveTimerRef.current = null;
+      void runAutosave();
+    }, 1800);
+  }, [clearAutosaveTimer, runAutosave]);
+
+  // Flush pending edits for the lesson the editor currently holds. Runs when
+  // the active lesson changes or the editor unmounts — effect cleanup executes
+  // BEFORE the incoming lesson's content is loaded, so the editor still shows
+  // the outgoing document here.
+  const flushPendingAutosave = useCallback(() => {
+    clearAutosaveTimer();
+
+    const outgoingPath = autosavePathRef.current;
+    if (!outgoingPath) {
+      return;
+    }
+
+    const inputs = autosaveInputsRef.current;
+    const parsedPlannedFor = parseEuropeanDateToIso(inputs.plannedForInput);
+    const effectivePlannedFor =
+      parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
+
+    // Nothing changed since the last save — nothing to flush.
+    if (
+      !docDirtyRef.current &&
+      !metaIsDirty({
+        teacher: inputs.teacher,
+        subject: inputs.subject,
+        notes: inputs.lessonNotes,
+        plannedFor: effectivePlannedFor ?? null,
+      })
+    ) {
+      return;
+    }
+
+    const payload = buildAutosavePayload();
+    if (!payload || payload.snapshot === lastSavedSnapshotRef.current) {
+      return;
+    }
+
+    const baseMetadata = inputs.baseMetadata ?? {
+      teacher: "",
+      subject: "",
+      createdAt: new Date().toISOString(),
+      plannedFor: null,
+    };
+    const lessonData: LessonData = {
+      version: 1,
+      metadata: {
+        ...baseMetadata,
+        teacher: inputs.teacher,
+        subject: inputs.subject,
+        ...(payload.metadataPatch.plannedFor !== undefined
+          ? { plannedFor: payload.metadataPatch.plannedFor }
+          : {}),
+      },
+      notes: inputs.lessonNotes,
+      content: payload.json,
+    };
+
+    void (async () => {
+      await saveLessonAtPath(outgoingPath, lessonData);
+    })();
+  }, [buildAutosavePayload, clearAutosaveTimer, metaIsDirty, saveLessonAtPath]);
+
+  // Deps intentionally exclude activeFileContent (matches the original
+  // behavior): a save or a re-open of the already-active lesson replaces the
+  // store object under the same path, and syncing then would revert unsaved
+  // editor edits. The closure still reads the latest activeFileContent on
+  // genuine path changes, which always update together.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
     if (!editor || !activeFileContent) {
       return;
+    }
+
+    // Rebind the per-lesson autosave bookkeeping only when the lesson actually
+    // changes — a save updates activeFileContent under the same path, and
+    // resetting then would drop a freshly armed autosave timer.
+    if (autosavePathRef.current !== activeFilePath) {
+      autosavePathRef.current = activeFilePath;
+      latestDocJsonRef.current = null;
+      docDirtyRef.current = false;
+      clearAutosaveTimer();
     }
 
     try {
@@ -1370,7 +1622,16 @@ export function Editor() {
     }
 
     editor.commands.setContent(activeFileContent.content, { emitUpdate: false });
-  }, [editor, activeFilePath]);
+  }, [editor, activeFilePath, clearAutosaveTimer]);
+
+  // Flush the outgoing lesson's pending edits when switching lessons or
+  // unmounting. Effect cleanup runs before the incoming lesson's content is
+  // loaded, so the editor still holds the outgoing document here.
+  useEffect(() => {
+    return () => {
+      flushPendingAutosave();
+    };
+  }, [editor, activeFilePath, flushPendingAutosave]);
 
   useEffect(() => {
     if (!editor) {
@@ -1378,7 +1639,13 @@ export function Editor() {
     }
 
     const handleContentUpdate = () => {
-      setEditorRevision((previous) => previous + 1);
+      docDirtyRef.current = true;
+      try {
+        latestDocJsonRef.current = editor.getJSON();
+      } catch {
+        // Keep the previous capture if serialization fails.
+      }
+      scheduleAutosave();
     };
 
     editor.on("update", handleContentUpdate);
@@ -1386,10 +1653,18 @@ export function Editor() {
     return () => {
       editor.off("update", handleContentUpdate);
     };
-  }, [editor]);
+  }, [editor, scheduleAutosave]);
 
   useEffect(() => {
     if (!editor || !activeFilePath || !activeFileContent) {
+      return;
+    }
+
+    // The editor may hold unsaved edits even though the store replaced the
+    // content object (re-opening the already-active lesson re-parses the
+    // file). Resetting the save baseline then would make the pending
+    // autosave believe the edits were saved — keep it until they persist.
+    if (docDirtyRef.current) {
       return;
     }
 
@@ -1400,48 +1675,24 @@ export function Editor() {
       plannedFor: activeFileContent.metadata.plannedFor || null,
       notes: activeFileContent.notes || "",
     });
+    lastSavedMetaRef.current = {
+      teacher: activeFileContent.metadata.teacher || "",
+      subject: activeFileContent.metadata.subject || "",
+      plannedFor: activeFileContent.metadata.plannedFor || null,
+      notes: activeFileContent.notes || "",
+    };
+    docDirtyRef.current = false;
   }, [editor, activeFilePath, activeFileContent]);
 
+  // Metadata edits (teacher/subject/date/notes fields) also arm the autosave.
   useEffect(() => {
     if (!editor || !activeFilePath) {
       return;
     }
 
-    const autosaveTimer = window.setTimeout(async () => {
-      const parsedPlannedFor = parseEuropeanDateToIso(plannedForInput);
-      if (parsedPlannedFor === undefined) {
-        return;
-      }
-
-      const json = editor.getJSON();
-      const nextSnapshot = JSON.stringify({
-        content: json,
-        teacher,
-        subject,
-        plannedFor: parsedPlannedFor,
-        notes: lessonNotes,
-      });
-
-      if (nextSnapshot === lastSavedSnapshotRef.current) {
-        return;
-      }
-
-      try {
-        await saveActiveLesson(json, {
-          teacher,
-          subject,
-          plannedFor: parsedPlannedFor,
-        }, lessonNotes);
-        lastSavedSnapshotRef.current = nextSnapshot;
-      } catch (error) {
-        console.error("Autosave failed:", error);
-      }
-    }, 1800);
-
-    return () => {
-      window.clearTimeout(autosaveTimer);
-    };
-  }, [editor, activeFilePath, editorRevision, teacher, subject, plannedForInput, lessonNotes, saveActiveLesson]);
+    scheduleAutosave();
+    return clearAutosaveTimer;
+  }, [editor, activeFilePath, teacher, subject, plannedForInput, lessonNotes, scheduleAutosave, clearAutosaveTimer]);
 
   const insertLessonTable = () => {
     if (!editor) return;
@@ -1565,7 +1816,7 @@ export function Editor() {
         aiSelection,
       });
     },
-    [editor],
+    [editor, aiEnabled],
   );
 
   const handleSave = useCallback(async () => {
@@ -1578,18 +1829,27 @@ export function Editor() {
     }
 
     const json = editor.getJSON();
-    await saveActiveLesson(json, {
+    const ok = await saveActiveLesson(json, {
       teacher,
       subject,
       plannedFor: parsedPlannedFor,
     }, lessonNotes);
-    lastSavedSnapshotRef.current = JSON.stringify({
-      content: json,
-      teacher,
-      subject,
-      plannedFor: parsedPlannedFor,
-      notes: lessonNotes,
-    });
+    if (ok) {
+      lastSavedSnapshotRef.current = JSON.stringify({
+        content: json,
+        teacher,
+        subject,
+        plannedFor: parsedPlannedFor,
+        notes: lessonNotes,
+      });
+      docDirtyRef.current = false;
+      lastSavedMetaRef.current = {
+        teacher,
+        subject,
+        plannedFor: parsedPlannedFor,
+        notes: lessonNotes,
+      };
+    }
   }, [editor, plannedForInput, saveActiveLesson, teacher, subject, lessonNotes]);
 
   useEffect(() => {

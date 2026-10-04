@@ -18,7 +18,6 @@ import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
 import { Eye, Plus, Save, Printer, Download, X, FolderOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
@@ -345,12 +344,31 @@ export function MindmapView() {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
 
+  // The graph state that was last handed to saveActiveMindmap. The store
+  // echoes it back via activeMindmapContent once the write completes; without
+  // this check the echo would reset the graph and discard edits made while
+  // the save was still writing.
+  const lastSavedNodesRef = useRef<Node[] | null>(null);
+  const lastSavedEdgesRef = useRef<Edge[] | null>(null);
+
   // Sync state when active file changes
   useEffect(() => {
     if (activeMindmapContent) {
+      if (
+        lastSavedNodesRef.current &&
+        activeMindmapContent.nodes === lastSavedNodesRef.current &&
+        activeMindmapContent.edges === lastSavedEdgesRef.current
+      ) {
+        // Echo of our own save — keep the live graph state.
+        return;
+      }
+      lastSavedNodesRef.current = null;
+      lastSavedEdgesRef.current = null;
       setNodes(activeMindmapContent.nodes || []);
       setEdges(activeMindmapContent.edges || []);
     } else {
+      lastSavedNodesRef.current = null;
+      lastSavedEdgesRef.current = null;
       setNodes([]);
       setEdges([]);
     }
@@ -474,6 +492,8 @@ export function MindmapView() {
   }, []);
 
   const handleSave = () => {
+    lastSavedNodesRef.current = nodes;
+    lastSavedEdgesRef.current = edges;
     saveActiveMindmap(nodes, edges);
   };
 
@@ -537,7 +557,7 @@ export function MindmapView() {
         return;
       }
 
-      await revealItemInDir(absolutePath);
+      await invoke("reveal_item_in_file_manager", { path: absolutePath });
     },
     [resolveMaterialAbsolutePath],
   );

@@ -22,9 +22,9 @@ import {
 } from "lucide-react";
 import { Eye, ExternalLink, FolderOpen as FolderRevealIcon } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { join } from "@tauri-apps/api/path";
 import { exists } from "@tauri-apps/plugin-fs";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type MaterialEntry, type VaultRoot } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { MiniCalendar } from "./MiniCalendar";
@@ -113,6 +113,7 @@ export function SidebarMinimal() {
     relativePath: string;
     currentName: string;
     isDirectory: boolean;
+    material?: boolean; // materials are renamed via renameMaterialEntry, not renameVaultPath
   } | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
@@ -257,12 +258,16 @@ export function SidebarMinimal() {
   const submitRename = useCallback(async () => {
     if (!renameModal) return;
     const newName = renameInput.trim();
-    for (const r of renameModal.roots) {
-      await renameVaultPath(r, renameModal.relativePath, newName);
+    if (renameModal.material) {
+      await renameMaterialEntry(renameModal.relativePath, newName);
+    } else {
+      for (const r of renameModal.roots) {
+        await renameVaultPath(r, renameModal.relativePath, newName);
+      }
     }
     setRenameModal(null);
     setRenameInput("");
-  }, [renameModal, renameInput, renameVaultPath]);
+  }, [renameModal, renameInput, renameMaterialEntry, renameVaultPath]);
 
   // Build context menu entries for a file
   const buildFileMenu = useCallback(
@@ -721,7 +726,7 @@ export function SidebarMinimal() {
           alert(t('sidebar.material.notFound', { path: relativePath }));
           return;
         }
-        await revealItemInDir(fullPath);
+        await invoke("reveal_item_in_file_manager", { path: fullPath });
       } catch (err) {
         console.error("Failed to reveal material", err);
         alert(t('sidebar.material.couldNotReveal'));
@@ -763,6 +768,19 @@ export function SidebarMinimal() {
     [currentView, activeFilePath, setPendingMaterialDrop, setDraggedMaterial],
   );
 
+  // window.confirm is blocked in the Tauri webview (it always returns false),
+  // so permanent trash deletes must use the native dialog plugin.
+  const confirmPermanentDelete = useCallback(
+    async (relativePath: string) => {
+      const leaf = relativePath.split("/").filter(Boolean).pop() || relativePath;
+      return ask(t('sidebar.trash.permanentConfirm', { name: leaf }), {
+        title: t('sidebar.trash.permanentTitle'),
+        kind: "warning",
+      });
+    },
+    [t],
+  );
+
   const buildMaterialMenu = useCallback(
     (entry: MaterialEntry): ContextMenuEntry[] => {
       const isFile = !entry.isDirectory;
@@ -802,10 +820,15 @@ export function SidebarMinimal() {
         onClick: () => {
           const segs = entry.relativePath.split("/").filter(Boolean);
           const name = segs[segs.length - 1] || "";
-          const newName = window.prompt(t('sidebar.renameDialog.newNamePlaceholder'), name);
-          if (newName && newName.trim() && newName !== name) {
-            renameMaterialEntry(entry.relativePath, newName.trim());
-          }
+          // window.prompt is blocked in the Tauri webview — use the shared rename modal.
+          setRenameInput(name);
+          setRenameModal({
+            roots: [],
+            relativePath: entry.relativePath,
+            currentName: name,
+            isDirectory: entry.isDirectory,
+            material: true,
+          });
         },
       });
       items.push({ type: "divider" });
@@ -822,7 +845,6 @@ export function SidebarMinimal() {
       currentView,
       activeFilePath,
       insertMaterialAtCursor,
-      renameMaterialEntry,
       deleteMaterialEntry,
       openMaterialInDefaultApp,
       revealMaterial,
@@ -934,7 +956,11 @@ export function SidebarMinimal() {
                   label: t('sidebar.contextMenu.deletePermanently'),
                   icon: <Trash2 className="w-4 h-4" />,
                   danger: true,
-                  onClick: () => permanentlyDeleteTrashEntry(fullPath, true),
+                  onClick: async () => {
+                    if (await confirmPermanentDelete(fullPath)) {
+                      await permanentlyDeleteTrashEntry(fullPath, true);
+                    }
+                  },
                 },
               ])
             }
@@ -955,9 +981,11 @@ export function SidebarMinimal() {
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                permanentlyDeleteTrashEntry(fullPath, true);
+                if (await confirmPermanentDelete(fullPath)) {
+                  await permanentlyDeleteTrashEntry(fullPath, true);
+                }
               }}
               title={t('sidebar.contextMenu.deletePermanently')}
               className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
@@ -1004,7 +1032,11 @@ export function SidebarMinimal() {
                 label: t('sidebar.contextMenu.deletePermanently'),
                 icon: <Trash2 className="w-4 h-4" />,
                 danger: true,
-                onClick: () => permanentlyDeleteTrashEntry(fullPath, false),
+                onClick: async () => {
+                  if (await confirmPermanentDelete(fullPath)) {
+                    await permanentlyDeleteTrashEntry(fullPath, false);
+                  }
+                },
               },
             ]);
           }}
@@ -1026,9 +1058,11 @@ export function SidebarMinimal() {
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              permanentlyDeleteTrashEntry(fullPath, false);
+              if (await confirmPermanentDelete(fullPath)) {
+                await permanentlyDeleteTrashEntry(fullPath, false);
+              }
             }}
             title={t('sidebar.contextMenu.deletePermanently')}
             className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
@@ -1438,14 +1472,14 @@ export function SidebarMinimal() {
                 </span>
                 {trashEntries.length > 0 && (
                   <button
-                    onClick={() => {
-                      if (!confirm(t('sidebar.trash.emptyConfirm'))) return;
+                    onClick={async () => {
+                      if (!(await ask(t('sidebar.trash.emptyConfirm'), { kind: "warning" }))) return;
                       // Each section's children already carry section name in relativePath
-                      trashEntries.forEach((sec) => {
-                        sec.children.forEach((child) => {
-                          permanentlyDeleteTrashEntry(child.relativePath, child.isDirectory);
-                        });
-                      });
+                      for (const sec of trashEntries) {
+                        for (const child of sec.children) {
+                          await permanentlyDeleteTrashEntry(child.relativePath, child.isDirectory);
+                        }
+                      }
                     }}
                     className="text-[11px] text-[var(--tp-t-3)] hover:text-red-400 transition-colors"
                   >

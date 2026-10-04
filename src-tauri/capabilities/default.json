@@ -8,8 +8,6 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "opener:allow-open-path",
-    "opener:allow-reveal-item-in-dir",
     "dialog:default",
     "dialog:allow-confirm",
     "dialog:allow-ask",

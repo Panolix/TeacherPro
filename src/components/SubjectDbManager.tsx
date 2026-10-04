@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { mkdir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
   Folder, Trash2, RefreshCw, AlertCircle, CheckCircle2,
   Loader2, Database, Plus, ChevronDown, ChevronRight, Upload, FolderPlus,
@@ -164,8 +164,18 @@ export function SubjectDbManager() {
   };
 
   // ── Delete ──
+  // window.confirm is unreliable in the Tauri webview — use the native
+  // dialog plugin for destructive confirmations.
+  const confirmDelete = useCallback(async (name: string) => {
+    return ask(t("subjectDb.deleteConfirmNamed", { name }), {
+      title: t("subjectDb.deleteConfirmTitle"),
+      kind: "warning",
+    });
+  }, [t]);
+
   const handleDeleteFile = async (subject: string, grade: string | null, topic: string | null, filename: string) => {
     if (!vaultPath) return;
+    if (!(await confirmDelete(filename))) return;
     try {
       await invoke("subject_db_delete_file", {
         vaultPath, subject, grade, topic, filename,
@@ -175,16 +185,19 @@ export function SubjectDbManager() {
   };
   const handleDeleteTopic = async (s: string, g: string, t: string) => {
     if (!vaultPath) return;
+    if (!(await confirmDelete(`${s} / ${g} / ${t}`))) return;
     try { await invoke("subject_db_delete", { vaultPath, subject: s, grade: g, topic: t }); await fetchDatabases(); }
     catch (e) { setError(String(e)); }
   };
   const handleDeleteGrade = async (s: string, g: string) => {
     if (!vaultPath) return;
+    if (!(await confirmDelete(`${s} / ${g}`))) return;
     try { await invoke("subject_db_delete", { vaultPath, subject: s, grade: g, topic: null }); await fetchDatabases(); }
     catch (e) { setError(String(e)); }
   };
   const handleDeleteSubject = async (s: string) => {
     if (!vaultPath) return;
+    if (!(await confirmDelete(s))) return;
     try { await invoke("subject_db_delete", { vaultPath, subject: s, grade: null, topic: null }); await fetchDatabases(); }
     catch (e) { setError(String(e)); }
   };

@@ -257,6 +257,8 @@ const en = {
       empty: "Trash is empty.",
       emptyAll: "Empty Trash",
       emptyConfirm: "Permanently delete ALL trashed items? This cannot be undone.",
+      permanentConfirm: 'Delete "{{name}}" permanently? This cannot be undone.',
+      permanentTitle: "Delete permanently",
       restore: "Restore",
       deletePermanently: "Delete permanently",
     },
@@ -599,6 +601,7 @@ const en = {
     zoomIn: "Zoom in (Cmd/Ctrl +)",
     fitToWidth: "Fit to width",
     fit: "Fit",
+    saved: "Saved {{time}}",
   },
 
   materialPreview: {
@@ -662,6 +665,8 @@ const en = {
     importing: "Importing...",
     noDatabases: "No knowledge databases yet. Create folders under <Vault>/SubjectDBs/",
     deleteConfirm: "Delete this knowledge database?",
+    deleteConfirmNamed: 'Delete "{{name}}"? Everything inside it — PDFs and all embedded text chunks — will be permanently removed. This cannot be undone.',
+    deleteConfirmTitle: "Delete from Knowledge Database",
     noDbSelected: "None",
     chat: {
       selectDb: "Knowledge Base",

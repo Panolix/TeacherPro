@@ -242,6 +242,9 @@ interface AppState {
   chatContextBudget: ChatContextBudget | null;
   setChatContextBudget: (budget: ChatContextBudget | null) => void;
 
+  /** Timestamp (ms) of the last successful lesson/mindmap save, for the status bar. */
+  lastSavedAt: number | null;
+
   editorActions: {
     save: () => void;
     preview: () => void;
@@ -309,7 +312,14 @@ interface AppState {
     metadata?: Partial<LessonMetadata>,
     notes?: string,
     options?: SaveLessonOptions,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
+  /**
+   * Write a complete lesson payload to an explicit path without touching the
+   * active-document state. Used by the Editor's switch/unmount flush, which
+   * must persist the outgoing lesson even though the store has already moved
+   * to a different active file.
+   */
+  saveLessonAtPath: (filePath: string, lessonData: LessonData) => Promise<boolean>;
   openLesson: (fileName: string) => Promise<void>;
   createNewMindmap: (subFolder?: string) => Promise<void>;
   deleteMindmap: (fileName: string) => Promise<void>;
@@ -1049,6 +1059,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeMindmapContent: null,
 
   subjectDatabases: [],
+  lastSavedAt: null,
   activeChatDb: null,
   activeChatGrade: null,
   activeChatTopic: null,
@@ -1059,6 +1070,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
       const savedVault = await store.get<{ path: string }>("vault");
       await grantVaultScope(savedVault?.path ?? null);
+
+      // Tell the Rust side which vault is active so IPC commands that open or
+      // reveal files can verify the target stays inside it.
+      if (savedVault?.path) {
+        try {
+          await invoke("register_vault_root", { path: savedVault.path });
+        } catch (error) {
+          console.warn("Could not register vault root", error);
+        }
+      }
       const savedSettings = await store.get<Partial<UISettings>>("uiSettings");
       let loadedSettings = savedSettings || null;
 
@@ -1307,6 +1328,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (selected && typeof selected === "string") {
         await grantVaultScope(selected);
+        try {
+          await invoke("register_vault_root", { path: selected });
+        } catch (error) {
+          console.warn("Could not register vault root", error);
+        }
         set({ vaultPath: selected, activeFilePath: null, activeFileContent: null, currentView: "editor" });
         
         // Save persistent store
@@ -1757,9 +1783,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     updatedMetadata?: Partial<LessonMetadata>,
     updatedNotes?: string,
     options?: SaveLessonOptions,
-  ) => {
+  ): Promise<boolean> => {
     const { activeFilePath, activeFileContent, vaultPath } = get();
-    if (!activeFilePath || !activeFileContent || !vaultPath) return;
+    if (!activeFilePath || !activeFileContent || !vaultPath) return true;
     const allowRename = options?.allowRename ?? true;
 
     try {
@@ -1784,20 +1810,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const currentFileName = activeFilePath.split(/[\/\\]/).pop() || "";
 
-      // Preserve subfolder prefix (e.g. "History/") from the active file path
-      const lpPrefix = lessonPlansFolder.endsWith("/") ? lessonPlansFolder : lessonPlansFolder + "/";
-      const relativeActive = activeFilePath.startsWith(lpPrefix)
-        ? activeFilePath.slice(lpPrefix.length)
+      // Preserve subfolder prefix (e.g. "History/") from the active file path.
+      // Compare with normalized separators so this also works on Windows,
+      // where join() returns backslash paths.
+      const normalizedPrefix =
+        lessonPlansFolder.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+      const normalizedActive = activeFilePath.replace(/\\/g, "/");
+      const relativeActive = normalizedActive.startsWith(normalizedPrefix)
+        ? normalizedActive.slice(normalizedPrefix.length)
         : currentFileName;
       const folderSlash = relativeActive.lastIndexOf("/");
       const folderPrefix = folderSlash >= 0 ? relativeActive.slice(0, folderSlash + 1) : "";
 
-      const dateStr = newLessonData.metadata.plannedFor 
-        ? newLessonData.metadata.plannedFor.split("T")[0] 
+      const dateStr = newLessonData.metadata.plannedFor
+        ? newLessonData.metadata.plannedFor.split("T")[0]
         : newLessonData.metadata.createdAt.split("T")[0];
 
       let newFileName = currentFileName;
-      
+
       // Intelligent Naming Logic
       if (newLessonData.metadata.subject && newLessonData.metadata.subject.trim() !== "") {
         const sanitizedSubject = newLessonData.metadata.subject.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '-');
@@ -1829,11 +1859,81 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       await writeTextFileAtomic(savePath, JSON.stringify(newLessonData, null, 2));
-      set({ activeFileContent: newLessonData, activeFilePath: savePath });
-      await get().refreshVault(); 
+
+      // Only touch the active-document state if the user is still on this
+      // lesson — an in-flight autosave must never clobber a newly opened file.
+      const currentActivePath = get().activeFilePath;
+      const stillOnLesson = !!currentActivePath && (
+        sameVaultPath(currentActivePath, activeFilePath) ||
+        sameVaultPath(currentActivePath, savePath)
+      );
+      if (stillOnLesson) {
+        set({ activeFileContent: newLessonData, activeFilePath: savePath });
+      }
+
+      // Same-path saves only change one file's content: patch the search
+      // indexes directly instead of rescanning the whole vault. Renames
+      // change the tree, so they still get a full refresh.
+      if (sameVaultPath(savePath, activeFilePath)) {
+        const relativeKey = folderPrefix + (extractBaseName(savePath) || "");
+        const searchKey = folderPrefix ? "" : relativeKey; // text index only covers root files
+        set((state) => ({
+          lessonSearchIndex: searchKey
+            ? { ...state.lessonSearchIndex, [searchKey]: buildLessonSearchText(newLessonData) }
+            : state.lessonSearchIndex,
+          lessonSubjectIndex:
+            relativeKey && state.lessonSubjectIndex[relativeKey] !== undefined
+              ? { ...state.lessonSubjectIndex, [relativeKey]: newLessonData.metadata.subject || "" }
+              : state.lessonSubjectIndex,
+        }));
+      } else {
+        await get().refreshVault();
+      }
+      set({ lastSavedAt: Date.now() });
+      return true;
     } catch (error) {
       console.error("Failed to save lesson:", error);
       alert("Error saving lesson: " + String(error));
+      return false;
+    }
+  },
+
+  saveLessonAtPath: async (filePath: string, lessonData: LessonData): Promise<boolean> => {
+    const { vaultPath } = get();
+    if (!vaultPath || !filePath) return false;
+
+    try {
+      // The outgoing lesson may have been deleted or renamed in the meantime —
+      // never resurrect a file the user got rid of.
+      if (!(await exists(filePath))) {
+        return false;
+      }
+
+      await writeTextFileAtomic(filePath, JSON.stringify(lessonData, null, 2));
+
+      // Patch the search indexes when the flushed path lives in Lesson Plans.
+      const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+      const normalizedPrefix =
+        lessonPlansFolder.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+      const normalizedPath = filePath.replace(/\\/g, "/");
+      if (normalizedPath.startsWith(normalizedPrefix)) {
+        const relativeKey = normalizedPath.slice(normalizedPrefix.length);
+        const searchKey = relativeKey.includes("/") ? "" : relativeKey;
+        set((state) => ({
+          lessonSearchIndex: searchKey
+            ? { ...state.lessonSearchIndex, [searchKey]: buildLessonSearchText(lessonData) }
+            : state.lessonSearchIndex,
+          lessonSubjectIndex: state.lessonSubjectIndex[relativeKey] !== undefined
+            ? { ...state.lessonSubjectIndex, [relativeKey]: lessonData.metadata?.subject || "" }
+            : state.lessonSubjectIndex,
+        }));
+      }
+      set({ lastSavedAt: Date.now() });
+      return true;
+    } catch (error) {
+      console.error("Failed to flush lesson save:", error);
+      alert("Error saving lesson: " + String(error));
+      return false;
     }
   },
 
@@ -1992,7 +2092,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       };
 
       await writeTextFileAtomic(activeFilePath, JSON.stringify(newMindmapData, null, 2));
-      set({ activeMindmapContent: newMindmapData });
+
+      // Only update the active-document state if the user is still on this
+      // mindmap — an in-flight save must never clobber a newly opened file.
+      const currentActivePath = get().activeFilePath;
+      if (currentActivePath && sameVaultPath(currentActivePath, activeFilePath)) {
+        set({ activeMindmapContent: newMindmapData });
+      }
+      set({ lastSavedAt: Date.now() });
     } catch (error) {
       console.error("Failed to save mindmap:", error);
       alert("Error saving mindmap: " + String(error));

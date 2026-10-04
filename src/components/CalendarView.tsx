@@ -3,6 +3,7 @@ import { de } from "date-fns/locale";
 import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
 
 export function CalendarView() {
@@ -88,6 +89,12 @@ export function CalendarView() {
       return;
     }
 
+    // rescheduleLesson returns the bare filename; selection keys are paths
+    // relative to "Lesson Plans", so re-attach the lesson's folder prefix.
+    const folderSlash = lessonName.lastIndexOf("/");
+    const folderPrefix = folderSlash >= 0 ? lessonName.slice(0, folderSlash + 1) : "";
+    const nextRelativePath = folderPrefix + nextFileName;
+
     setSelectedLessons((previous) => {
       if (!previous.has(lessonName)) {
         return previous;
@@ -95,7 +102,7 @@ export function CalendarView() {
 
       const next = new Set(previous);
       next.delete(lessonName);
-      next.add(nextFileName);
+      next.add(nextRelativePath);
       return next;
     });
   };
@@ -206,7 +213,7 @@ export function CalendarView() {
     }
 
     const names = Array.from(selectedLessons);
-    const confirmed = confirm(t('calendar.confirm.moveMultiple', { count: names.length }));
+    const confirmed = await ask(t('calendar.confirm.moveMultiple', { count: names.length }));
     if (!confirmed) {
       return;
     }
@@ -234,7 +241,7 @@ export function CalendarView() {
     }
 
     const dateLabel = format(date, "EEE, MMM d", { locale: dateLocale });
-    const confirmed = confirm(t('calendar.confirm.moveAllForDate', { count: lessons.length, date: dateLabel }));
+    const confirmed = await ask(t('calendar.confirm.moveAllForDate', { count: lessons.length, date: dateLabel }));
     if (!confirmed) {
       return;
     }
@@ -462,7 +469,7 @@ export function CalendarView() {
                             <button
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                if (confirm(t('calendar.confirm.moveSingle', { title: cleanTitle }))) {
+                                if (await ask(t('calendar.confirm.moveSingle', { title: cleanTitle }))) {
                                   setIsDeletingLessons(true);
                                   try {
                                     await deleteLesson(lessonName);

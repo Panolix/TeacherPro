@@ -257,6 +257,8 @@ const de = {
       empty: "Papierkorb ist leer.",
       emptyAll: "Papierkorb leeren",
       emptyConfirm: "Alle Elemente im Papierkorb endgültig löschen? Dies kann nicht rückgängig gemacht werden.",
+      permanentConfirm: '"{{name}}" endgültig löschen? Dies kann nicht rückgängig gemacht werden.',
+      permanentTitle: "Endgültig löschen",
       restore: "Wiederherstellen",
       deletePermanently: "Endgültig löschen",
     },
@@ -599,6 +601,7 @@ const de = {
     zoomIn: "Vergrößern (Cmd/Strg +)",
     fitToWidth: "An Breite anpassen",
     fit: "Anpassen",
+    saved: "Gespeichert {{time}}",
   },
 
   materialPreview: {
@@ -662,6 +665,8 @@ const de = {
     importing: "Importiere...",
     noDatabases: "Noch keine Wissensdatenbanken. Erstelle Ordner unter <Vault>/SubjectDBs/",
     deleteConfirm: "Diese Wissensdatenbank löschen?",
+    deleteConfirmNamed: '"{{name}}" löschen? Alles darin – PDFs und alle gespeicherten Textausschnitte – wird endgültig entfernt. Diese Aktion kann nicht rückgängig gemacht werden.',
+    deleteConfirmTitle: "Aus Wissensdatenbank löschen",
     noDbSelected: "Keine",
     chat: {
       selectDb: "Wissensdatenbank",

@@ -1,3 +1,4 @@
+import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { Minus, Plus } from "lucide-react";
 import { useAppStore } from "../store";
@@ -20,6 +21,7 @@ export function StatusBar() {
     lessonZoomFixed,
     setLessonZoomMode,
     setLessonZoomFixed,
+    lastSavedAt,
   } = useAppStore();
 
   const { t } = useTranslation();
@@ -85,6 +87,12 @@ export function StatusBar() {
 
       {activeFilePath && currentView === "editor" && (
         <span className="truncate">{t('statusBar.editing')}</span>
+      )}
+
+      {lastSavedAt && (
+        <span title={t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm:ss") })}>
+          {t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm") })}
+        </span>
       )}
 
       <div className="flex-1" />

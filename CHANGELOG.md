@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-04
+
+### Added
+- **"Saved" indicator** — the status bar shows `Saved HH:MM` after every
+  successful save (autosave, manual save and mindmap saves).
+- **Confirmation dialogs for destructive actions** — Empty Trash, per-item
+  "Delete permanently" in the trash, and subject/grade/topic/file deletes in
+  the Knowledge Databases now ask before destroying anything.
+
+### Fixed
+- **Autosave silently disabled by an invalid "Planned for" date** — a mistyped
+  date stopped all saving without warning; saving now continues and the file
+  keeps its previous valid date.
+- **Failed saves were marked as saved** — save failures are now detected and
+  retried by the next autosave instead of being recorded as saved.
+- **Switching lessons lost pending edits** — edits typed within the 1.8 s
+  autosave window are now flushed immediately when the lesson changes, and an
+  in-flight save can no longer overwrite a newly opened document's state.
+- **Calendar lesson deletion never worked** — the delete buttons used
+  `window.confirm`, which Tauri's webview silently blocks (always "no");
+  deletion now works and asks for confirmation first.
+- **Empty Trash never worked** — same blocked-dialog cause; it now shows a
+  native confirmation and actually empties the trash.
+- **Renaming materials silently did nothing** — `window.prompt` is blocked in
+  the webview; renaming now opens the shared in-app rename dialog.
+- **Nested lessons jumped to the root on Windows** — saving a subfolder lesson
+  with a subject set could move it to "Lesson Plans" root (separator-sensitive
+  prefix comparison); folder placement is preserved on all platforms.
+- **Mindmap edits discarded while saving** — the save-completion echo no longer
+  resets the graph, keeping edits made during the write.
+
+### Changed
+- **Security: contained file access** — opening, revealing and printing paths
+  are now validated on the Rust side to stay inside the vault (or the OS temp
+  directory for print spool files), on all platforms. Crafted lesson documents
+  can no longer open arbitrary files.
+- **Typing performance** — the editor no longer re-renders the full component
+  tree on every keystroke.
+- **Save performance** — same-name autosaves update only the affected file's
+  search index entries instead of rescanning the entire vault.
+- **macOS/Linux: closing the app no longer kills an independently started
+  Ollama server** — only a server spawned by TeacherPro is stopped.
+
 ## [2.3.1] - 2026-10-03
 
 ### Fixed

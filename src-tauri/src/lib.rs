@@ -117,6 +117,54 @@ fn validated_existing_path(path: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Canonicalized vault root registered by the frontend (`register_vault_root`).
+/// Paths the webview asks to open, reveal or print are verified to stay inside
+/// this root (or the OS temp directory, for print spool files) — lesson
+/// documents can carry material paths of unknown origin, so containment is
+/// enforced on the Rust side rather than trusting frontend-supplied paths.
+static VAULT_ROOT: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
+
+#[tauri::command]
+fn register_vault_root(path: String) -> Result<(), String> {
+    let candidate = PathBuf::from(path.trim());
+    if !candidate.is_dir() {
+        return Err("Vault path is not a directory.".to_string());
+    }
+    let canonical = std::fs::canonicalize(&candidate).unwrap_or(candidate);
+    if let Ok(mut guard) = VAULT_ROOT.lock() {
+        *guard = Some(canonical);
+    }
+    Ok(())
+}
+
+/// Check that `path` (which must exist) resolves inside the registered vault
+/// root or the OS temp directory. Canonicalization happens before the
+/// comparison, so `..` segments, symlinks and Windows case differences are
+/// judged against the real on-disk location.
+fn is_allowed_path(path: &Path) -> bool {
+    let resolved = match std::fs::canonicalize(path) {
+        Ok(canonical) => canonical,
+        Err(_) => return false,
+    };
+
+    let temp_dir = std::env::temp_dir();
+    if resolved.starts_with(&temp_dir) {
+        return true;
+    }
+    if let Ok(canonical_temp) = std::fs::canonicalize(&temp_dir) {
+        if resolved.starts_with(canonical_temp) {
+            return true;
+        }
+    }
+
+    if let Ok(guard) = VAULT_ROOT.lock() {
+        if let Some(root) = guard.as_ref() {
+            return resolved.starts_with(root);
+        }
+    }
+    false
+}
+
 /// Validate a path that is about to be sent to the OS print pipeline.
 /// Must exist and have a `.pdf` extension.
 fn validated_pdf_path(path: &str) -> Result<PathBuf, String> {
@@ -377,20 +425,24 @@ fn stop_ollama_server() {
         *guard = None;
     }
     // Fallback: ollama serve sometimes forks a subprocess that outlives the
-    // tracked child handle. Kill all ollama processes by name.
-    #[cfg(target_os = "macos")]
-    {
-        // The official Ollama.app runs as "Ollama" (capital O) in the menu bar.
-        // The Homebrew/CLI install runs as "ollama" (lowercase).
-        // Quit the app bundle gracefully first, then force-kill any remnant.
-        let _ = command_for("osascript")
-            .args(["-e", "tell application \"Ollama\" to quit"])
-            .output();
-        let _ = command_for("pkill").args(["-ix", "ollama"]).output();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = command_for("pkill").args(["-x", "ollama"]).output();
+    // tracked child handle. Kill all ollama processes by name — but only when
+    // WE started the runtime, so an Ollama server the user launched
+    // independently stays up.
+    if OLLAMA_WE_STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+        #[cfg(target_os = "macos")]
+        {
+            // The official Ollama.app runs as "Ollama" (capital O) in the menu bar.
+            // The Homebrew/CLI install runs as "ollama" (lowercase).
+            // Quit the app bundle gracefully first, then force-kill any remnant.
+            let _ = command_for("osascript")
+                .args(["-e", "tell application \"Ollama\" to quit"])
+                .output();
+            let _ = command_for("pkill").args(["-ix", "ollama"]).output();
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = command_for("pkill").args(["-x", "ollama"]).output();
+        }
     }
     #[cfg(windows)]
     {
@@ -1045,6 +1097,9 @@ fn allow_fs_scopes(window: tauri::Window, paths: Vec<String>) -> Result<(), Stri
 #[tauri::command]
 fn open_file_in_default_app(path: String) -> Result<(), String> {
     let target = validated_existing_path(&path)?;
+    if !is_allowed_path(&target) {
+        return Err("Path is outside the vault.".to_string());
+    }
     let target = target.to_string_lossy().to_string();
 
     #[cfg(target_os = "macos")]
@@ -1079,6 +1134,9 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
 #[tauri::command]
 fn print_pdf_file(path: String) -> Result<(), String> {
     let target = validated_pdf_path(&path)?;
+    if !is_allowed_path(&target) {
+        return Err("Path is outside the vault and the temporary directory.".to_string());
+    }
     let target = target.to_string_lossy().to_string();
 
     #[cfg(target_os = "macos")]
@@ -1147,6 +1205,15 @@ fn print_pdf_file(path: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn reveal_item_in_file_manager(path: String) -> Result<(), String> {
+    let target = validated_existing_path(&path)?;
+    if !is_allowed_path(&target) {
+        return Err("Path is outside the vault.".to_string());
+    }
+    tauri_plugin_opener::reveal_item_in_dir(&target).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1844,6 +1911,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             open_file_in_default_app,
+            reveal_item_in_file_manager,
+            register_vault_root,
             allow_fs_scopes,
             print_pdf_file,
             ai_runtime_status,
