@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-10-04
+
+### Removed
+- **Status bar item counts** — the lesson plan/mindmap counts no longer
+  appear in the bottom bar; it now shows only vault status, save time and
+  zoom controls.
+- **Status bar "editing" indicator** — the "Bearbeite"/"Editing" label while
+  a lesson plan or mindmap is open was removed as well.
+
 ## [2.5.0] - 2026-10-04
 
 ### Added
