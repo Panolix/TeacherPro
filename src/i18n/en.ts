@@ -670,17 +670,12 @@ const en = {
   statusBar: {
     vaultSynced: "Vault synced",
     noVault: "No vault",
-    editing: "Editing",
     zoomOut: "Zoom out (Cmd/Ctrl -)",
     zoomPresets: "Zoom presets",
     zoomIn: "Zoom in (Cmd/Ctrl +)",
     fitToWidth: "Fit to width",
     fit: "Fit",
     saved: "Saved {{time}}",
-    lessonCountOne: "1 lesson plan",
-    lessonCountMany: "{{count}} lesson plans",
-    mindmapCountOne: "1 mindmap",
-    mindmapCountMany: "{{count}} mindmaps",
   },
 
   materialPreview: {

@@ -15,8 +15,6 @@ export function StatusBar() {
     vaultPath,
     currentView,
     activeFilePath,
-    lessonPlans,
-    mindmaps,
     lessonZoomMode,
     lessonZoomFixed,
     setLessonZoomMode,
@@ -25,10 +23,6 @@ export function StatusBar() {
   } = useAppStore();
 
   const { t } = useTranslation();
-
-  const lessonCount = lessonPlans?.length ?? 0;
-  const mindmapCount = mindmaps?.length ?? 0;
-  const countLabel = `${lessonCount === 1 ? t('statusBar.lessonCountOne') : t('statusBar.lessonCountMany', { count: lessonCount })} · ${mindmapCount === 1 ? t('statusBar.mindmapCountOne') : t('statusBar.mindmapCountMany', { count: mindmapCount })}`;
 
   const zoomControlsVisible =
     currentView === "editor" && !!activeFilePath && !!vaultPath;
@@ -78,12 +72,6 @@ export function StatusBar() {
         </span>
       ) : (
         <span>{t('statusBar.noVault')}</span>
-      )}
-
-      <span>{countLabel}</span>
-
-      {activeFilePath && (currentView === "editor" || currentView === "mindmap") && (
-        <span className="truncate">{t('statusBar.editing')}</span>
       )}
 
       {lastSavedAt && (
