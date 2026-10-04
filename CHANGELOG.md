@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-04
+
+### Added
+- **Apple Silicon (MLX) model variants** — 10 models also available as MLX
+  builds (qwen3.5 4B/9B, gemma4 E2B/E4B/12B/26B/31B, qwen3.6 27B/35B,
+  qwen3.8 27B) with an "Apple Silicon optimized" badge; standard builds stay
+  in the list for Windows/Linux/dedicated GPUs.
+- **Full translation coverage** — vault error alerts, AI model management
+  errors, AI selection/chat status messages, PDF export error details, chat
+  quick-action prompts, Knowledge Databases panel strings, file picker
+  titles, date-picker tooltip and mindmap "New Idea" label now follow the
+  language selector; AI model descriptions are bilingual.
+
+### Improved
+- **Status bar counts** — always shows `N lesson plans · N mindmaps`
+  (translated, proper singulars) instead of switching with the active view;
+  the "editing" indicator now also appears for open mindmaps.
+
+### Fixed
+- **Empty folders counted as lessons/mindmaps** — leftover subject subfolders
+  no longer inflate the status bar counts.
+- **Model catalog accuracy** — verified against the live Ollama registry;
+  corrected the bge-m3 disk estimate.
+
 ## [2.4.0] - 2026-10-04
 
 ### Added

@@ -26,6 +26,7 @@ import {
   printCurrentWindow,
   printPdfBlobUrl,
   renderElementToPdfBytes,
+  PdfExportError,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
@@ -197,9 +198,9 @@ const NODE_COLOR_PRESETS: NodeColorPreset[] = [
   },
 ];
 
-function getNodeLabel(node: Node): string {
+function getNodeLabel(node: Node, fallbackLabel = "New Idea"): string {
   const label = node.data?.label;
-  return typeof label === "string" ? label : "New Idea";
+  return typeof label === "string" ? label : fallbackLabel;
 }
 
 function hasTransferType(dataTransfer: DataTransfer, type: string): boolean {
@@ -812,9 +813,9 @@ export function MindmapView() {
       }
 
       setEditingNodeId(node.id);
-      setEditValue(getNodeLabel(node));
+      setEditValue(getNodeLabel(node, t("mindmap.newIdea")));
     },
-    [previewMaterialItem],
+    [previewMaterialItem, t],
   );
 
   const saveEdit = () => {
@@ -938,7 +939,7 @@ export function MindmapView() {
     }
 
     setEditingNodeId(node.id);
-    setEditValue(getNodeLabel(node));
+    setEditValue(getNodeLabel(node, t("mindmap.newIdea")));
     setContextMenu(null);
   };
 
@@ -1044,7 +1045,7 @@ export function MindmapView() {
 
     const sourceElement = mindmapSurfaceRef.current || document.getElementById("mindmap-export-surface");
     if (!sourceElement) {
-      throw new Error("Could not find mindmap canvas to export.");
+      throw new Error(t("mindmap.alerts.noCanvas"));
     }
 
     const exportHost = document.createElement("div");
@@ -1140,7 +1141,7 @@ export function MindmapView() {
       }
     } catch (error) {
       console.error("Mindmap PDF export failed:", error);
-      alert(t("mindmap.alerts.exportFailed", { error: String(error) }));
+      alert(t("mindmap.alerts.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1216,7 +1217,7 @@ export function MindmapView() {
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Mindmap PDF print failed:", error);
-      alert(t("mindmap.alerts.printFailed", { error: String(error) }));
+      alert(t("mindmap.alerts.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
     } finally {
       setIsPdfBusy(false);
     }

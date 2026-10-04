@@ -37,6 +37,7 @@ import {
   printCurrentWindow,
   printPdfBlobUrl,
   renderElementToPdfBytes,
+  PdfExportError,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
@@ -1903,7 +1904,7 @@ export function Editor() {
   const getSelectionValidationError = useCallback(
     (selection: SelectedTextRange): string | null => {
       if (!editor) {
-        return "Editor is not ready yet.";
+        return t("editor.chat.notReady");
       }
 
       const docSize = editor.state.doc.content.size;
@@ -1911,7 +1912,7 @@ export function Editor() {
       const to = Math.max(from, Math.min(selection.to, docSize));
 
       if (from === to) {
-        return "Select text first to use AI actions.";
+        return t("editor.chat.selectTextFirst");
       }
 
       const $from = editor.state.doc.resolve(from);
@@ -1921,12 +1922,12 @@ export function Editor() {
       const fromParent = $from.parent;
       const toParent = $to.parent;
       if (fromParent !== toParent) {
-        return "Select text within a single paragraph or cell — multi-block selections can't be safely rewritten.";
+        return t("editor.chat.singleBlockSelection");
       }
 
       return null;
     },
-    [editor],
+    [editor, t],
   );
 
   const runAiSelectionAction = useCallback(
@@ -2026,19 +2027,19 @@ export function Editor() {
 
         const transformedText = normalizeAiFragmentOutput(response, sourceText);
         if (!transformedText) {
-          throw new Error("AI returned an empty response.");
+          throw new Error(t("editor.chat.emptyResponse"));
         }
 
         const selectionStillValid = !getSelectionValidationError(selectedRange);
         if (!selectionStillValid) {
-          throw new Error("Selection changed while AI was running. Please select the text again and retry.");
+          throw new Error(t("editor.chat.selectionChanged"));
         }
 
         const currentSelectionText = editor.state.doc
           .textBetween(selectedRange.from, selectedRange.to, "\n", " ")
           .trim();
         if (currentSelectionText !== sourceText) {
-          throw new Error("Selection content changed while AI was running. Please retry.");
+          throw new Error(t("editor.chat.selectionContentChanged"));
         }
 
         const transaction = editor.state.tr.insertText(
@@ -3351,7 +3352,7 @@ export function Editor() {
   const createLessonPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
     const sourceElement = document.getElementById("lesson-plan-export-content");
     if (!sourceElement) {
-      throw new Error("Could not find lesson content to export.");
+      throw new Error(t("editor.pdf.noContent"));
     }
 
     const exportHost = document.createElement("div");
@@ -3468,7 +3469,7 @@ export function Editor() {
         pdfBytes,
         fileName,
         vaultPath,
-        dialogTitle: "Export Lesson Plan as PDF",
+        dialogTitle: t("editor.pdf.exportDialogTitle"),
       });
 
       if (savedPath) {
@@ -3476,7 +3477,7 @@ export function Editor() {
       }
     } catch (error) {
       console.error("Lesson PDF export failed:", error);
-      alert(t("editor.pdf.exportFailed", { error: String(error) }));
+      alert(t("editor.pdf.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -3552,7 +3553,7 @@ export function Editor() {
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
-      alert(t("editor.pdf.printFailed", { error: String(error) }));
+      alert(t("editor.pdf.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -3730,7 +3731,7 @@ export function Editor() {
                       }}
                       className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:opacity-70 print:hidden"
                       style={{ color: "var(--tp-paper-ink-3)", border: "1px solid var(--tp-paper-line)" }}
-                      title="Pick planned date"
+                      title={t("editor.pdf.pickPlannedDate")}
                     >
                       <CalendarDays className="w-4 h-4" />
                     </button>
@@ -4435,11 +4436,11 @@ export function Editor() {
                   </p>
                   <div className="flex flex-col gap-1.5 w-full">
                     {([
-                      { label: t("editor.chat.summarize"), prompt: "Please summarize this lesson plan in a few sentences." },
-                      { label: t("editor.chat.keyThemes"), prompt: "What are the key themes and topics covered in this lesson plan?" },
-                      { label: t("editor.chat.checkObjectives"), prompt: "Are the learning objectives clear and well-structured? How could they be improved?" },
-                      { label: t("editor.chat.suggestImprovements"), prompt: "What improvements would you suggest to make this lesson plan more effective?" },
-                      { label: t("editor.chat.activityIdeas"), prompt: "Can you suggest some additional activity ideas that would complement this lesson?" },
+                      { label: t("editor.chat.summarize"), prompt: t("editor.chat.promptSummarize") },
+                      { label: t("editor.chat.keyThemes"), prompt: t("editor.chat.promptKeyThemes") },
+                      { label: t("editor.chat.checkObjectives"), prompt: t("editor.chat.promptCheckObjectives") },
+                      { label: t("editor.chat.suggestImprovements"), prompt: t("editor.chat.promptSuggestImprovements") },
+                      { label: t("editor.chat.activityIdeas"), prompt: t("editor.chat.promptActivityIdeas") },
                     ] as const).map(({ label, prompt }) => (
                       <button
                         key={label}

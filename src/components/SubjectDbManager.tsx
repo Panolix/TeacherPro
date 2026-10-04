@@ -228,7 +228,7 @@ export function SubjectDbManager() {
   );
 
   if (!vaultPath) {
-    return <div className="flex items-center justify-center h-32 text-sm text-[var(--tp-text-muted)]">No vault configured.</div>;
+    return <div className="flex items-center justify-center h-32 text-sm text-[var(--tp-text-muted)]">{t("subjectDb.noVault")}</div>;
   }
 
   return (
@@ -261,7 +261,7 @@ export function SubjectDbManager() {
             placeholder={t("subjectDb.newSubjectPlaceholder")}
             className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
           <button onClick={confirmAdd} disabled={!inputValue.trim()}
-            className="tp-action-btn px-2 py-1 rounded text-xs font-medium disabled:opacity-40">OK</button>
+            className="tp-action-btn px-2 py-1 rounded text-xs font-medium disabled:opacity-40">{t("common.ok")}</button>
           <button onClick={cancelAdding} className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-xs">✕</button>
         </div>
       )}
@@ -369,7 +369,7 @@ export function SubjectDbManager() {
                       placeholder={t("subjectDb.newGradePlaceholder")}
                       className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
                     <button onClick={confirmAdd} disabled={!inputValue.trim()}
-                      className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">OK</button>
+                      className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">{t("common.ok")}</button>
                     <button onClick={cancelAdding}
                       className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[10px]">✕</button>
                   </div>
@@ -429,7 +429,7 @@ export function SubjectDbManager() {
                                 placeholder={t("subjectDb.newTopicPlaceholder")}
                                 className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
                               <button onClick={confirmAdd} disabled={!inputValue.trim()}
-                                className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">OK</button>
+                                className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">{t("common.ok")}</button>
                               <button onClick={cancelAdding}
                                 className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[10px]">✕</button>
                             </div>
@@ -506,13 +506,13 @@ export function SubjectDbManager() {
           try {
             const diag = await invoke<Array<{subject: string; grade: string; topic: string; chunk_count: number; has_store: boolean; store_path: string; embedding_model_available: boolean}>>("subject_db_diagnose", { vaultPath });
             const msg = diag.map((d) => `${d.subject}/${d.grade}/${d.topic}: ${d.chunk_count} chunks (store: ${d.has_store})`).join("\n");
-            const modelStatus = diag.length > 0 ? `\nbge-m3: ${diag[0].embedding_model_available ? "✅ verfügbar" : "❌ NICHT verfügbar"}` : "\nKeine Datenbanken";
+            const modelStatus = diag.length > 0 ? `\nbge-m3: ${diag[0].embedding_model_available ? t("subjectDb.embeddingAvailable") : t("subjectDb.embeddingNotAvailable")}` : t("subjectDb.noDatabasesDiag");
             setDiagnostic(msg + modelStatus);
           } catch (e) {
-            setDiagnostic("Fehler: " + String(e));
+            setDiagnostic(t("subjectDb.diagErrorPrefix") + String(e));
           }
         }} className="tp-action-btn px-2 py-0.5 rounded text-[10px] font-medium">
-          Diagnose
+          {t("subjectDb.diagnose")}
         </button>
       </div>
     </div>

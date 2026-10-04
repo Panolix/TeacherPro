@@ -15,6 +15,7 @@ import {
 import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
+import { t } from "./i18n/translations";
 import { DEFAULT_AI_MODEL_ID } from "./ai/modelCatalog";
 
 export interface LessonMetadata {
@@ -1000,6 +1001,16 @@ function fallbackSubjectFromLessonFileName(fileName: string, subjects: SubjectCo
   return token.replace(/-/g, " ");
 }
 
+// i18n helpers for non-React code. Only evaluated at action-run time, after the
+// store exists, so referencing useAppStore here is safe despite the declaration below.
+function tr(key: string, params?: Record<string, string | number>): string {
+  return t(useAppStore.getState().language, key, params);
+}
+
+function alertT(key: string, params?: Record<string, string | number>): void {
+  alert(tr(key, params));
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   vaultPath: null,
@@ -1323,7 +1334,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         directory: true,
         multiple: false,
         recursive: true,
-        title: "Select TeacherPro Vault",
+        title: tr("dialogs.selectVault"),
       });
 
       if (selected && typeof selected === "string") {
@@ -1445,11 +1456,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       // Read folders
       const lessonPlansPath = await join(vaultPath, "Lesson Plans");
       const lpEntries = await readDir(lessonPlansPath);
-      const lpFiltered = lpEntries.filter(e => !e.name?.startsWith(".")).sort(byName);
+      // Only actual files count as lessons — leftover (empty) subject folders must not.
+      const lpFiltered = lpEntries.filter(e => !e.name?.startsWith(".") && !e.isDirectory).sort(byName);
 
       const mindmapsPath = await join(vaultPath, "Mindmaps");
       const mmEntries = await readDir(mindmapsPath);
-      const mmFiltered = mmEntries.filter(e => !e.name?.startsWith(".")).sort(byName);
+      const mmFiltered = mmEntries.filter(e => !e.name?.startsWith(".") && !e.isDirectory).sort(byName);
 
       const materialsPath = await join(vaultPath, "Materials");
       const materialTree = await readMaterialTree(materialsPath);
@@ -1509,7 +1521,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const trimmed = folderName.trim();
       if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
-        alert("Invalid folder name");
+        alertT("alerts.invalidFolderName");
         return;
       }
       const base = parentPath
@@ -1517,14 +1529,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         : await join(vaultPath, "Lesson Plans");
       const newFolderPath = await join(base, trimmed);
       if (await exists(newFolderPath)) {
-        alert("A folder with that name already exists");
+        alertT("alerts.folderExists");
         return;
       }
       await mkdir(newFolderPath, { recursive: true });
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to create folder:", error);
-      alert("Error creating folder: " + String(error));
+      alertT("alerts.createFolder", { error: String(error) });
     }
   },
 
@@ -1577,7 +1589,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to create new lesson:", error);
-      alert("Error creating lesson: " + String(error));
+      alertT("alerts.createLesson", { error: String(error) });
     }
   },
 
@@ -1611,7 +1623,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().openLesson(duplicatedFileName);
     } catch (error) {
       console.error("Failed to duplicate lesson:", error);
-      alert("Error duplicating lesson: " + String(error));
+      alertT("alerts.duplicateLesson", { error: String(error) });
     }
   },
 
@@ -1710,7 +1722,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return finalFileName;
     } catch (error) {
       console.error("Failed to reschedule lesson:", error);
-      alert("Error rescheduling lesson: " + String(error));
+      alertT("alerts.rescheduleLesson", { error: String(error) });
       return null;
     }
   },
@@ -1737,7 +1749,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete lesson:", error);
-      alert("Error deleting lesson: " + String(error));
+      alertT("alerts.deleteLesson", { error: String(error) });
     }
   },
 
@@ -1749,7 +1761,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rawName = newName.trim();
       if (!rawName) return;
       if (rawName.includes("/") || rawName.includes("\\")) {
-        alert("Name cannot contain path separators.");
+        alertT("alerts.namePathSeparators");
         return;
       }
 
@@ -1761,7 +1773,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newPath = await join(lessonPlansFolder, nextFileName);
 
       if (await exists(newPath)) {
-        alert("A lesson plan with this name already exists.");
+        alertT("alerts.lessonNameExists");
         return;
       }
 
@@ -1774,7 +1786,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename lesson:", error);
-      alert("Error renaming lesson: " + String(error));
+      alertT("alerts.renameLesson", { error: String(error) });
     }
   },
 
@@ -1893,7 +1905,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (error) {
       console.error("Failed to save lesson:", error);
-      alert("Error saving lesson: " + String(error));
+      alertT("alerts.saveLesson", { error: String(error) });
       return false;
     }
   },
@@ -1932,7 +1944,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (error) {
       console.error("Failed to flush lesson save:", error);
-      alert("Error saving lesson: " + String(error));
+      alertT("alerts.saveLesson", { error: String(error) });
       return false;
     }
   },
@@ -2017,7 +2029,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to create mindmap:", error);
-      alert("Error creating mindmap: " + String(error));
+      alertT("alerts.createMindmap", { error: String(error) });
     }
   },
 
@@ -2039,7 +2051,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete mindmap:", error);
-      alert("Error deleting mindmap: " + String(error));
+      alertT("alerts.deleteMindmap", { error: String(error) });
     }
   },
 
@@ -2051,7 +2063,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const rawName = newName.trim();
       if (!rawName) return;
       if (rawName.includes("/") || rawName.includes("\\")) {
-        alert("Name cannot contain path separators.");
+        alertT("alerts.namePathSeparators");
         return;
       }
 
@@ -2063,7 +2075,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newPath = await join(mindmapsFolder, nextFileName);
 
       if (await exists(newPath)) {
-        alert("A mindmap with this name already exists.");
+        alertT("alerts.mindmapNameExists");
         return;
       }
 
@@ -2076,7 +2088,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename mindmap:", error);
-      alert("Error renaming mindmap: " + String(error));
+      alertT("alerts.renameMindmap", { error: String(error) });
     }
   },
 
@@ -2102,7 +2114,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ lastSavedAt: Date.now() });
     } catch (error) {
       console.error("Failed to save mindmap:", error);
-      alert("Error saving mindmap: " + String(error));
+      alertT("alerts.saveMindmap", { error: String(error) });
     }
   },
 
@@ -2133,7 +2145,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const selected = await open({
         multiple: true,
         directory: false,
-        title: "Select Material Files",
+        title: tr("dialogs.selectMaterialFiles"),
       });
 
       if (!selected) {
@@ -2162,7 +2174,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return importedRelativePaths;
     } catch (error) {
       console.error("Failed to import material files:", error);
-      alert("Error importing files: " + String(error));
+      alertT("alerts.importFiles", { error: String(error) });
       return [];
     }
   },
@@ -2176,7 +2188,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         multiple: false,
         directory: true,
         recursive: true,
-        title: "Select Material Folder",
+        title: tr("dialogs.selectMaterialFolder"),
       });
 
       if (!selected || typeof selected !== "string") {
@@ -2199,7 +2211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       return extractBaseName(destinationPath);
     } catch (error) {
       console.error("Failed to import material directory:", error);
-      alert("Error importing folder: " + String(error));
+      alertT("alerts.importFolder", { error: String(error) });
       return null;
     }
   },
@@ -2217,7 +2229,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete material entry:", error);
-      alert("Error deleting material entry: " + String(error));
+      alertT("alerts.deleteMaterial", { error: String(error) });
     }
   },
 
@@ -2229,7 +2241,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const trimmed = newName.trim();
       if (!trimmed) return;
       if (trimmed.includes("/") || trimmed.includes("\\")) {
-        alert("Name cannot contain path separators.");
+        alertT("alerts.namePathSeparators");
         return;
       }
 
@@ -2244,7 +2256,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const targetPath = await join(vaultPath, "Materials", ...parentSegments, trimmed);
 
       if (await exists(targetPath)) {
-        alert("A material item with this name already exists in this folder.");
+        alertT("alerts.materialNameExists");
         return;
       }
 
@@ -2252,7 +2264,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename material entry:", error);
-      alert("Error renaming material entry: " + String(error));
+      alertT("alerts.renameMaterial", { error: String(error) });
     }
   },
 
@@ -2263,13 +2275,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const pathSegments = relativePath.split("/").filter(Boolean);
       if (pathSegments.length < 2) {
-        alert("Could not restore this trash entry.");
+        alertT("alerts.restoreTrash");
         return;
       }
 
       const section = pathSegments[0] as "Lesson Plans" | "Mindmaps" | "Materials";
       if (!["Lesson Plans", "Mindmaps", "Materials"].includes(section)) {
-        alert("Unknown trash section.");
+        alertT("alerts.unknownTrashSection");
         return;
       }
 
@@ -2283,7 +2295,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to restore trash entry:", error);
-      alert("Error restoring trash entry: " + String(error));
+      alertT("alerts.restoreTrashError", { error: String(error) });
     }
   },
 
@@ -2298,7 +2310,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to permanently delete trash entry:", error);
-      alert("Error deleting trash entry: " + String(error));
+      alertT("alerts.deleteTrashError", { error: String(error) });
     }
   },
 
@@ -2309,7 +2321,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const trimmed = newName.trim();
       if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
-        alert("Name cannot be empty or contain path separators.");
+        alertT("alerts.nameEmptyOrSeparators");
         return;
       }
       const segs = relativePath.split("/").filter(Boolean);
@@ -2321,7 +2333,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const newPath = await join(vaultPath, root, ...parentSegs, finalName);
       if (oldPath === newPath) return;
       if (await exists(newPath)) {
-        alert("An item with that name already exists here.");
+        alertT("alerts.itemNameExists");
         return;
       }
       await rename(oldPath, newPath);
@@ -2329,7 +2341,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename vault path:", error);
-      alert("Error renaming: " + String(error));
+      alertT("alerts.renameError", { error: String(error) });
     }
   },
 
@@ -2350,7 +2362,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const sourcePrefix = srcSegs.join("/");
       const targetJoined = targetSegs.join("/");
       if (targetJoined === sourcePrefix || targetJoined.startsWith(sourcePrefix + "/")) {
-        alert("Cannot move a folder into itself.");
+        alertT("alerts.moveIntoItself");
         return;
       }
       // No-op if already in target folder
@@ -2365,7 +2377,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to move vault path:", error);
-      alert("Error moving: " + String(error));
+      alertT("alerts.moveError", { error: String(error) });
     }
   },
 
@@ -2389,7 +2401,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete vault path:", error);
-      alert("Error deleting: " + String(error));
+      alertT("alerts.deleteError", { error: String(error) });
     }
   },
 
@@ -2418,7 +2430,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to duplicate vault path:", error);
-      alert("Error duplicating: " + String(error));
+      alertT("alerts.duplicateError", { error: String(error) });
     }
   },
 

@@ -7,6 +7,19 @@ import { jsPDF } from "jspdf";
 
 type PdfOrientation = "portrait" | "landscape";
 
+/**
+ * Error carrying an i18n key so callers can show a localized message
+ * (they interpolate `String(error)` into already-translated alert texts).
+ */
+export class PdfExportError extends Error {
+  messageKey: string;
+  constructor(messageKey: string) {
+    super(messageKey);
+    this.name = "PdfExportError";
+    this.messageKey = messageKey;
+  }
+}
+
 interface RenderPdfOptions {
   orientation?: PdfOrientation;
   marginMm?: number;
@@ -177,7 +190,7 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
     };
 
     const timeoutTimer = window.setTimeout(
-      () => complete(new Error("Timed out while opening the print dialog.")),
+      () => complete(new PdfExportError("pdfExport.printDialogTimeout")),
       30000,
     );
 
@@ -199,7 +212,7 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
       try {
         const frameWindow = iframe.contentWindow;
         if (!frameWindow) {
-          finishWithError(new Error("Could not access PDF print window."));
+          finishWithError(new PdfExportError("pdfExport.printWindowAccess"));
           return;
         }
 
@@ -212,7 +225,7 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
     };
 
     iframe.onerror = () => {
-      finishWithError(new Error("Could not load PDF for printing."));
+      finishWithError(new PdfExportError("pdfExport.printLoad"));
     };
 
     document.body.appendChild(iframe);

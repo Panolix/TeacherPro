@@ -43,6 +43,7 @@ const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
   "low-latency": "settings.aiCapabilities.lowLatency",
   "long-context": "settings.aiCapabilities.longContext",
   "english-focused": "settings.aiCapabilities.englishFocused",
+  "apple-silicon": "settings.aiCapabilities.appleSilicon",
 };
 
 interface AiModelInstallProgress {
@@ -189,10 +190,10 @@ export function SettingsModal({ open, onClose }: Props) {
       } catch (error) {
         clearInstallPoller(modelId);
         setAiModelInstallState(modelId, "error");
-        setAiErrorMessage(`Could not track install progress for ${modelId}: ${String(error)}`);
+        setAiErrorMessage(t("settings.ai.installProgressError", { model: modelId, error: String(error) }));
       }
     },
-    [clearInstallPoller, handleInstallProgressUpdate, setAiModelInstallState],
+    [clearInstallPoller, handleInstallProgressUpdate, setAiModelInstallState, t],
   );
 
   const startInstallPolling = useCallback(
@@ -226,7 +227,7 @@ export function SettingsModal({ open, onClose }: Props) {
       if (corrected && !installed.has(currentState.aiRewriteTranslateModelId))
         setAiRewriteTranslateModelId(corrected);
     } catch (error) {
-      setAiErrorMessage(`Could not refresh models: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.refreshModelsError", { error: String(error) }));
     } finally {
       setAiActionBusy(null);
     }
@@ -246,7 +247,7 @@ export function SettingsModal({ open, onClose }: Props) {
       if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) startInstallPolling(modelId);
     } catch (error) {
       setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(`Failed to install ${modelId}: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.installError", { model: modelId, error: String(error) }));
     }
   };
 
@@ -259,7 +260,7 @@ export function SettingsModal({ open, onClose }: Props) {
       handleInstallProgressUpdate(progress);
       clearInstallPoller(modelId);
     } catch (error) {
-      setAiErrorMessage(`Failed to cancel install for ${modelId}: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.cancelInstallError", { model: modelId, error: String(error) }));
     } finally {
       setAiActionBusy(null);
     }
@@ -278,7 +279,7 @@ export function SettingsModal({ open, onClose }: Props) {
       void syncInstalledModels();
     } catch (error) {
       setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(`Failed to remove ${modelId}: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.removeError", { model: modelId, error: String(error) }));
     } finally {
       setAiActionBusy(null);
     }
@@ -292,7 +293,7 @@ export function SettingsModal({ open, onClose }: Props) {
       const result = await invoke<string>("ai_ensure_runtime");
       setAiInfoMessage(result || t("settings.ai.localRuntimeReady"));
     } catch (error) {
-      setAiErrorMessage(`Automatic runtime setup failed: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.runtimeSetupError", { error: String(error) }));
     } finally {
       setAiActionBusy(null);
     }
@@ -304,7 +305,7 @@ export function SettingsModal({ open, onClose }: Props) {
     let selected: string | null = null;
     try {
       const result = await openFileDialog({
-        title: "Select a .gguf model file",
+        title: t("settings.ai.selectGgufTitle"),
         filters: [{ name: "GGUF Model", extensions: ["gguf"] }],
         multiple: false,
         directory: false,
@@ -328,7 +329,7 @@ export function SettingsModal({ open, onClose }: Props) {
       if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) startInstallPolling(modelId);
     } catch (error) {
       setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(`Failed to import ${modelId}: ${String(error)}`);
+      setAiErrorMessage(t("settings.ai.importError", { model: modelId, error: String(error) }));
     }
   };
 
@@ -771,7 +772,7 @@ export function SettingsModal({ open, onClose }: Props) {
                                 ))}
                               </div>
                               <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                                {model.description}
+                                {language === "de" && model.descriptionDe ? model.descriptionDe : model.description}
                               </div>
                               <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
                                 <span className="inline-flex items-center gap-1">

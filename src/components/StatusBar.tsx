@@ -26,12 +26,9 @@ export function StatusBar() {
 
   const { t } = useTranslation();
 
-  const count =
-    currentView === "editor"
-      ? `${lessonPlans?.length ?? 0} lesson${(lessonPlans?.length ?? 0) === 1 ? "" : "s"}`
-      : currentView === "mindmap"
-        ? `${mindmaps?.length ?? 0} mindmap${(mindmaps?.length ?? 0) === 1 ? "" : "s"}`
-        : null;
+  const lessonCount = lessonPlans?.length ?? 0;
+  const mindmapCount = mindmaps?.length ?? 0;
+  const countLabel = `${lessonCount === 1 ? t('statusBar.lessonCountOne') : t('statusBar.lessonCountMany', { count: lessonCount })} · ${mindmapCount === 1 ? t('statusBar.mindmapCountOne') : t('statusBar.mindmapCountMany', { count: mindmapCount })}`;
 
   const zoomControlsVisible =
     currentView === "editor" && !!activeFilePath && !!vaultPath;
@@ -83,9 +80,9 @@ export function StatusBar() {
         <span>{t('statusBar.noVault')}</span>
       )}
 
-      {count && <span>{count}</span>}
+      <span>{countLabel}</span>
 
-      {activeFilePath && currentView === "editor" && (
+      {activeFilePath && (currentView === "editor" || currentView === "mindmap") && (
         <span className="truncate">{t('statusBar.editing')}</span>
       )}
 
