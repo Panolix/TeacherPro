@@ -1036,7 +1036,8 @@ export function Editor() {
     }
   }, [aiEnabled]);
 
-  // Compute fit-to-width zoom: available width / paper width, clamped to [0.5, 1.5].
+  // Compute fit-to-width zoom: available width / paper width, clamped to [0.5, 2.0]
+  // (ceiling 2.0 lets ultrawide windows fill the paper instead of leaving margins).
   useEffect(() => {
     const scroll = paperScrollRef.current;
     if (!scroll) return;
@@ -1053,7 +1054,7 @@ export function Editor() {
       const available = Math.max(0, scroll.clientWidth - 48);
       if (available <= 0) return;
       const raw = available / paperW;
-      const clamped = Math.max(0.5, Math.min(1.5, raw));
+      const clamped = Math.max(0.5, Math.min(2, raw));
       setFitZoom((prev) => (Math.abs(prev - clamped) < 0.001 ? prev : clamped));
     };
 

@@ -86,9 +86,6 @@
   --tp-t-slow:    300ms var(--tp-ease);
 
   /* App layout dimensions — MUST preserve current app sizes */
-  --tp-sidebar-w:   18rem;   /* 288px = Tailwind w-72 */
-  --tp-sidebar-cw:  4rem;    /* 64px  = Tailwind w-16 (collapsed) */
-  --tp-panel-w:     18rem;   /* 288px = side panels match sidebar width */
   --tp-topbar-h:    3rem;    /* 48px */
   --tp-statusbar-h: 1.625rem;/* 26px */
   --tp-rail-w:      3.5rem;  /* 56px */

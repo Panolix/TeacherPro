@@ -51,7 +51,7 @@ export function TopBar() {
 
   return (
     <div
-      className="tp-topbar flex items-center gap-2 px-2 print:hidden"
+      className="tp-topbar @container flex items-center gap-2 px-2 print:hidden min-w-0 overflow-hidden"
       style={{
         height: "var(--tp-topbar-h)",
         background: "var(--tp-bg-1)",
@@ -240,7 +240,9 @@ function TopAct({
       }}
     >
       {icon}
-      {!iconOnly && label && <span>{label}</span>}
+      {!iconOnly && label && (
+        <span className="hidden @min-[1000px]:inline">{label}</span>
+      )}
     </button>
   );
 }

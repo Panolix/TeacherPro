@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-10-11
+
+### Improved
+- **Smarter minimum window size** — window can no longer be resized below
+  960 × 540 (was 800 × 600); guarantees the lesson paper fits at Fit zoom
+  with the sidebar open while still allowing Windows half-screen snapping.
+- **Top bar buttons collapse on narrow windows** — labeled actions shrink
+  to icon-only when the bar runs out of room and restore their labels when
+  space returns; fixes button overflow on small windows.
+- **Lesson paper fills very wide screens** — Fit zoom ceiling raised from
+  150 % to 200 % so large/ultrawide monitors use the available width.
+
+### Removed
+- **Unused layout CSS variables** — dropped the never-referenced
+  `--tp-sidebar-w`, `--tp-sidebar-cw` and `--tp-panel-w` tokens.
+
 ## [2.5.1] - 2026-10-04
 
 ### Removed
