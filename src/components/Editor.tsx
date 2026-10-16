@@ -8,6 +8,15 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import UnderlineExtension from "@tiptap/extension-underline";
+import Link from "@tiptap/extension-link";
+import Subscript from "@tiptap/extension-subscript";
+import Superscript from "@tiptap/extension-superscript";
+import TaskItem from "@tiptap/extension-task-item";
+import TaskList from "@tiptap/extension-task-list";
+import TextAlign from "@tiptap/extension-text-align";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { readText, writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { DOMSerializer } from "@tiptap/pm/model";
 import {
   addMonths,
   eachDayOfInterval,
@@ -24,12 +33,13 @@ import { de as deLocale } from "date-fns/locale";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { ChatContextBar } from "./ChatContextBar";
 import type { ScoredChunk, ChatMessage, SubjectDbInfo, LessonMetadata, LessonData } from "../store";
 import { MaterialLink } from "./extensions/MaterialLink";
-import { TextStyle } from "@tiptap/extension-text-style";
+import { TextStyle, FontFamily } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
 import {
@@ -38,6 +48,7 @@ import {
   printPdfBlobUrl,
   renderElementToPdfBytes,
   PdfExportError,
+  PRINT_PDF_PIXEL_RATIO,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
@@ -73,6 +84,20 @@ import {
   Eraser,
   Database,
   Folder,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  ListChecks,
+  Quote,
+  Link2,
+  ExternalLink,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
+  Highlighter,
+  Scissors,
+  Copy as CopyIcon,
+  ClipboardPaste,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -120,6 +145,8 @@ interface TableContextMenuState {
   x: number;
   y: number;
   showTableActions: boolean;
+  showFormatActions: boolean;
+  showInsertActions: boolean;
   aiSelection: SelectedTextRange | null;
 }
 
@@ -557,18 +584,88 @@ function normalizeAiFragmentOutput(rawOutput: string, originalSelection: string)
   return normalized;
 }
 
+const IS_MAC =
+  typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
+const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
+const UNDO_LABEL = `${MOD_LABEL}+Z`;
+const REDO_LABEL = IS_MAC ? `${MOD_LABEL}+Shift+Z` : `${MOD_LABEL}+Y`;
+
+/**
+ * TextAlign with Word-compatible keyboard shortcuts:
+ * Mod+E centre, Mod+L left, Mod+R right, Mod+J justify.
+ */
+const WordStyleTextAlign = TextAlign.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-e": () => this.editor.commands.setTextAlign("center"),
+      "Mod-l": () => this.editor.commands.setTextAlign("left"),
+      "Mod-r": () => this.editor.commands.setTextAlign("right"),
+      "Mod-j": () => this.editor.commands.setTextAlign("justify"),
+    };
+  },
+});
+
+/**
+ * Link mark whose Mod+K shortcut opens the app's link popover.
+ * (Default Link behaviour must never let the webview navigate away.)
+ */
+const AppLink = Link.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-k": () => {
+        window.dispatchEvent(new CustomEvent("tp:open-link-popover"));
+        return true;
+      },
+    };
+  },
+});
+
+/**
+ * Clicks in the whitespace above/below the text resolve to a position
+ * *between* blocks. Inserting at such a position implicitly wraps inline
+ * content in a fresh paragraph (appearing one line away from the click), so
+ * snap the selection into the nearest text block first.
+ */
+const snapSelectionInsideTextblock = (instance: any) => {
+  const { selection } = instance.state;
+  if (selection.$from.parent.isTextblock) {
+    return;
+  }
+  const doc = instance.state.doc;
+  const isTextblockAt = (p: number) =>
+    p >= 0 && p <= doc.content.size && doc.resolve(p).parent.isTextblock;
+  let target: number | null = null;
+  if (isTextblockAt(selection.from - 1)) {
+    target = selection.from - 1;
+  } else if (isTextblockAt(selection.from + 1)) {
+    target = selection.from + 1;
+  }
+  if (target !== null) {
+    instance.commands.setTextSelection(target);
+  }
+};
+
 const MenuBar = ({
   editor,
   onInsertCustomTable,
+  onHighlightColorChange,
 }: {
   editor: any;
   onInsertCustomTable: () => void;
+  onHighlightColorChange: (color: string) => void;
 }) => {
   const { t } = useTranslation();
   // Force a re-render when the editor state changes so active buttons update
   const [, setForceUpdate] = useState(0);
   const [fontSizeOpen, setFontSizeOpen] = useState(false);
   const fontSizeWrapRef = useRef<HTMLDivElement>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const linkWrapRef = useRef<HTMLDivElement>(null);
+  const [fontFamilyOpen, setFontFamilyOpen] = useState(false);
+  const fontFamilyWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!editor) return;
@@ -605,12 +702,117 @@ const MenuBar = ({
     };
   }, [fontSizeOpen]);
 
+  // Close link popover on outside click / Escape
+  useEffect(() => {
+    if (!linkOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (linkWrapRef.current && !linkWrapRef.current.contains(e.target as Node)) {
+        setLinkOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLinkOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [linkOpen]);
+
+  // Close font-family popover on outside click / Escape
+  useEffect(() => {
+    if (!fontFamilyOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (fontFamilyWrapRef.current && !fontFamilyWrapRef.current.contains(e.target as Node)) {
+        setFontFamilyOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFontFamilyOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [fontFamilyOpen]);
+
+  const openLinkPopover = useCallback(() => {
+    if (!editor) {
+      return;
+    }
+    setLinkUrl(editor.getAttributes("link").href || "");
+    setLinkOpen(true);
+  }, [editor]);
+
+  // Mod+K (dispatched from the link extension shortcut) opens the popover.
+  useEffect(() => {
+    const handleOpen = () => openLinkPopover();
+    window.addEventListener("tp:open-link-popover", handleOpen);
+    return () => window.removeEventListener("tp:open-link-popover", handleOpen);
+  }, [openLinkPopover]);
+
   if (!editor) {
     return null;
   }
 
+  const applyLink = () => {
+    const raw = linkUrl.trim();
+    if (!raw) {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      setLinkOpen(false);
+      return;
+    }
+
+    const href = /^(https?:|mailto:|tel:)/i.test(raw) ? raw : `https://${raw}`;
+    const { empty } = editor.state.selection;
+
+    if (empty) {
+      editor
+        .chain()
+        .focus()
+        .insertContent({ type: "text", text: href, marks: [{ type: "link", attrs: { href } }] })
+        .run();
+    } else {
+      editor.chain().focus().extendMarkRange("link").setLink({ href }).run();
+    }
+
+    setLinkOpen(false);
+  };
+
+  const removeLink = () => {
+    editor.chain().focus().extendMarkRange("link").unsetLink().run();
+    setLinkOpen(false);
+  };
+
   const FONT_SIZES = ["8pt", "10pt", "11pt", "12pt", "14pt", "16pt", "18pt", "24pt"];
   const currentFontSize = editor.getAttributes("textStyle").fontSize || "11pt";
+  const FONT_FAMILIES: { label: string; value: string | null; group?: string }[] = [
+    { label: t("editor.toolbar.fontFamilyDefault"), value: null },
+    { label: "Inter", value: "'Inter', 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSans") },
+    { label: "Lato", value: "'Lato', 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSans") },
+    { label: "Nunito", value: "'Nunito', 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSans") },
+    { label: "Lexend", value: "'Lexend', 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSans") },
+    { label: "Atkinson Hyperlegible", value: "'Atkinson Hyperlegible', 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSans") },
+    { label: "Merriweather", value: "'Merriweather', Georgia, serif", group: t("editor.toolbar.fontGroupSerif") },
+    { label: "Lora", value: "'Lora', Georgia, serif", group: t("editor.toolbar.fontGroupSerif") },
+    { label: "Playfair Display", value: "'Playfair Display', Georgia, serif", group: t("editor.toolbar.fontGroupSerif") },
+    { label: "EB Garamond", value: "'EB Garamond', Georgia, serif", group: t("editor.toolbar.fontGroupSerif") },
+    { label: "Caveat", value: "'Caveat', 'Comic Sans MS', cursive", group: t("editor.toolbar.fontGroupHandwriting") },
+    { label: "Patrick Hand", value: "'Patrick Hand', 'Comic Sans MS', cursive", group: t("editor.toolbar.fontGroupHandwriting") },
+    { label: "Shadows Into Light", value: "'Shadows Into Light', 'Comic Sans MS', cursive", group: t("editor.toolbar.fontGroupHandwriting") },
+    { label: "Arial", value: "Arial, Helvetica, sans-serif", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Calibri", value: "Calibri, Candara, 'Segoe UI', sans-serif", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Georgia", value: "Georgia, 'Times New Roman', serif", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Times New Roman", value: "'Times New Roman', Times, serif", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Courier New", value: "'Courier New', Courier, monospace", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Verdana", value: "Verdana, Geneva, sans-serif", group: t("editor.toolbar.fontGroupSystem") },
+    { label: "Trebuchet MS", value: "'Trebuchet MS', Tahoma, Geneva, sans-serif", group: t("editor.toolbar.fontGroupSystem") },
+  ];
+  const currentFontFamily = editor.getAttributes("textStyle").fontFamily || "";
   const isLightTheme =
     typeof document !== "undefined" &&
     document.documentElement.getAttribute("data-tp-lesson-paper") === "light";
@@ -630,7 +832,11 @@ const MenuBar = ({
 
   // --- Vertical Right Rail (v3 design) ---
   const railBtn = (isActive?: boolean) =>
-    `h-8 w-9 inline-flex items-center justify-center rounded-md transition-colors ${
+    `h-8 w-10 inline-flex items-center justify-center rounded-md transition-colors ${
+      isActive ? "tp-rail-btn-active" : "tp-rail-btn"
+    }`;
+  const compactBtn = (isActive?: boolean) =>
+    `h-6 w-6 inline-flex items-center justify-center rounded ${
       isActive ? "tp-rail-btn-active" : "tp-rail-btn"
     }`;
   const railDivider = (
@@ -644,6 +850,9 @@ const MenuBar = ({
   return (
     <div
       className="tp-editor-rail print:hidden self-stretch flex flex-col items-center py-2 gap-0.5 overflow-y-auto shrink-0"
+      role="toolbar"
+      aria-orientation="vertical"
+      aria-label={t("editor.toolbar.railLabel")}
       style={{
         width: "var(--tp-rail-w)",
         background: "var(--tp-bg-1)",
@@ -655,13 +864,13 @@ const MenuBar = ({
         <button
           type="button"
           onClick={() => setFontSizeOpen((v) => !v)}
-          className="h-7 w-9 inline-flex items-center justify-center gap-0.5 rounded text-[10.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          className="h-10 w-10 inline-flex items-center justify-center gap-0.5 rounded text-[12.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontSize")}
           aria-haspopup="listbox"
           aria-expanded={fontSizeOpen}
         >
           <span>{currentFontSize.replace("pt", "")}</span>
-          <ChevronDown className="w-2.5 h-2.5 opacity-60" />
+          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
         </button>
         {fontSizeOpen && (() => {
           const rect = fontSizeWrapRef.current?.getBoundingClientRect();
@@ -707,6 +916,77 @@ const MenuBar = ({
           );
         })()}
       </div>
+      {/* Font family — custom popover dropdown */}
+      <div ref={fontFamilyWrapRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setFontFamilyOpen((v) => !v)}
+          className="h-10 w-10 inline-flex items-center justify-center gap-0.5 rounded text-[12.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          title={t("editor.toolbar.fontFamily")}
+          aria-haspopup="listbox"
+          aria-expanded={fontFamilyOpen}
+        >
+          <span>Aa</span>
+          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+        </button>
+        {fontFamilyOpen && (() => {
+          const rect = fontFamilyWrapRef.current?.getBoundingClientRect();
+          const top = rect ? rect.top : 0;
+          const left = rect ? rect.left - 180 : 0; // 172px width + 8px gap
+          return (
+            <div
+              className="py-1 rounded-lg shadow-2xl"
+              style={{
+                position: "fixed",
+                top,
+                left,
+                zIndex: 1000,
+                background: "#222222",
+                border: "1px solid #333333",
+                minWidth: "172px",
+              }}
+              role="listbox"
+            >
+              {FONT_FAMILIES.map((option, index) => {
+                const isSelected = (option.value || "") === currentFontFamily;
+                const showGroup =
+                  option.group && option.group !== FONT_FAMILIES[index - 1]?.group;
+                return (
+                  <Fragment key={option.label}>
+                    {showGroup && (
+                      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
+                        {option.group}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (option.value) {
+                          editor.chain().focus().setFontFamily(option.value).run();
+                        } else {
+                          editor.chain().focus().unsetFontFamily().run();
+                        }
+                        setFontFamilyOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
+                        isSelected
+                          ? "bg-[rgba(45,134,165,0.12)] text-[var(--tp-accent)]"
+                          : "text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                      }`}
+                      style={{ fontFamily: option.value ?? undefined }}
+                      role="option"
+                      aria-selected={isSelected}
+                    >
+                      <span>{option.label}</span>
+                      {isSelected && <span className="text-[10px]">●</span>}
+                    </button>
+                  </Fragment>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
+
       {railDivider}
 
       {/* Bold / Italic / Strike / Underline */}
@@ -714,7 +994,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleBold().run()}
         disabled={!editor.can().chain().focus().toggleBold().run()}
         className={railBtn(editor.isActive("bold"))}
-        title={t("editor.toolbar.bold")}
+        title={`${t("editor.toolbar.bold")} (${MOD_LABEL}+B)`}
       >
         <Bold className="w-4 h-4" />
       </button>
@@ -722,7 +1002,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleItalic().run()}
         disabled={!editor.can().chain().focus().toggleItalic().run()}
         className={railBtn(editor.isActive("italic"))}
-        title={t("editor.toolbar.italic")}
+        title={`${t("editor.toolbar.italic")} (${MOD_LABEL}+I)`}
       >
         <Italic className="w-4 h-4" />
       </button>
@@ -730,7 +1010,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         disabled={!editor.can().chain().focus().toggleUnderline().run()}
         className={railBtn(editor.isActive("underline"))}
-        title={t("editor.toolbar.underline")}
+        title={`${t("editor.toolbar.underline")} (${MOD_LABEL}+U)`}
       >
         <Underline className="w-4 h-4" />
       </button>
@@ -738,7 +1018,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().toggleStrike().run()}
         disabled={!editor.can().chain().focus().toggleStrike().run()}
         className={railBtn(editor.isActive("strike"))}
-        title={t("editor.toolbar.strikethrough")}
+        title={`${t("editor.toolbar.strikethrough")} (${MOD_LABEL}+Shift+S)`}
       >
         <Strikethrough className="w-4 h-4" />
       </button>
@@ -747,7 +1027,7 @@ const MenuBar = ({
 
       {/* Colors A / U / H (each with hidden color picker + reset below) */}
       <div
-        className="flex flex-col p-1 rounded gap-0.5"
+        className="flex flex-col p-0.5 rounded gap-0.5"
         style={{
           background: "var(--tp-bg-2)",
           border: "1px solid var(--tp-b-2)",
@@ -755,7 +1035,7 @@ const MenuBar = ({
       >
         <div className="flex gap-0.5">
           <label
-            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
             title={t("editor.toolbar.textColor")}
             style={{ color: "var(--tp-t-1)" }}
           >
@@ -773,7 +1053,7 @@ const MenuBar = ({
           </label>
           <button
             onClick={() => editor.chain().focus().unsetColor().run()}
-            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetTextColor")}
           >
             A-
@@ -781,7 +1061,7 @@ const MenuBar = ({
         </div>
         <div className="flex gap-0.5">
           <label
-            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
             title={t("editor.toolbar.underlineColor")}
             style={{ color: "var(--tp-t-1)" }}
           >
@@ -812,7 +1092,7 @@ const MenuBar = ({
                 .removeEmptyTextStyle()
                 .run()
             }
-            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetUnderlineColor")}
           >
             U-
@@ -820,7 +1100,7 @@ const MenuBar = ({
         </div>
         <div className="flex gap-0.5">
           <label
-            className="tp-rail-color-btn inline-flex items-center justify-center h-5 w-5 rounded cursor-pointer relative text-[10px] font-bold hover:brightness-125"
+            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold hover:brightness-125"
             title={t("editor.toolbar.highlightColor")}
             style={{ background: currentHighlightColor, color: "#1a1a1a" }}
           >
@@ -828,15 +1108,16 @@ const MenuBar = ({
             <input
               type="color"
               value={currentHighlightColor}
-              onChange={(event) =>
-                editor.chain().focus().setHighlight({ color: event.target.value }).run()
-              }
+              onChange={(event) => {
+                onHighlightColorChange(event.target.value);
+                editor.chain().focus().setHighlight({ color: event.target.value }).run();
+              }}
               className="absolute opacity-0 pointer-events-none"
             />
           </label>
           <button
             onClick={() => editor.chain().focus().unsetHighlight().run()}
-            className="h-5 w-5 rounded text-[9px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.clearHighlight")}
           >
             H-
@@ -875,21 +1156,95 @@ const MenuBar = ({
       <button
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         className={railBtn(editor.isActive("bulletList"))}
-        title={t("editor.toolbar.bulletList")}
+        title={`${t("editor.toolbar.bulletList")} (${MOD_LABEL}+Shift+8)`}
       >
         <List className="w-4 h-4" />
       </button>
       <button
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         className={railBtn(editor.isActive("orderedList"))}
-        title={t("editor.toolbar.orderedList")}
+        title={`${t("editor.toolbar.orderedList")} (${MOD_LABEL}+Shift+7)`}
       >
         <ListOrdered className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().toggleTaskList().run()}
+        className={railBtn(editor.isActive("taskList"))}
+        title={`${t("editor.toolbar.taskList")} (${MOD_LABEL}+Shift+9)`}
+      >
+        <ListChecks className="w-4 h-4" />
       </button>
 
       {railDivider}
 
-      {/* Block formats: Horizontal rule, Clear */}
+      {/* Text alignment */}
+      <div
+        className="grid grid-cols-2 p-0.5 gap-0.5 rounded"
+        style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)" }}
+      >
+        <button
+          onClick={() => editor.chain().focus().setTextAlign("left").run()}
+          className={compactBtn(editor.isActive({ textAlign: "left" }))}
+          title={`${t("editor.toolbar.alignLeft")} (${MOD_LABEL}+L)`}
+        >
+          <AlignLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().setTextAlign("center").run()}
+          className={compactBtn(editor.isActive({ textAlign: "center" }))}
+          title={`${t("editor.toolbar.alignCenter")} (${MOD_LABEL}+E)`}
+        >
+          <AlignCenter className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().setTextAlign("right").run()}
+          className={compactBtn(editor.isActive({ textAlign: "right" }))}
+          title={`${t("editor.toolbar.alignRight")} (${MOD_LABEL}+R)`}
+        >
+          <AlignRight className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+          className={compactBtn(editor.isActive({ textAlign: "justify" }))}
+          title={`${t("editor.toolbar.alignJustify")} (${MOD_LABEL}+J)`}
+        >
+          <AlignJustify className="w-4 h-4" />
+        </button>
+      </div>
+
+      {railDivider}
+
+      {/* Subscript / Superscript */}
+      <div
+        className="grid grid-cols-2 p-0.5 gap-0.5 rounded"
+        style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)" }}
+      >
+        <button
+          onClick={() => editor.chain().focus().toggleSubscript().run()}
+          className={compactBtn(editor.isActive("subscript"))}
+          title={t("editor.toolbar.subscript")}
+        >
+          <SubscriptIcon className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().toggleSuperscript().run()}
+          className={compactBtn(editor.isActive("superscript"))}
+          title={t("editor.toolbar.superscript")}
+        >
+          <SuperscriptIcon className="w-4 h-4" />
+        </button>
+      </div>
+
+      {railDivider}
+
+      {/* Block formats: Quote, Horizontal rule, Clear */}
+      <button
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        className={railBtn(editor.isActive("blockquote"))}
+        title={`${t("editor.toolbar.blockquote")} (${MOD_LABEL}+Shift+B)`}
+      >
+        <Quote className="w-4 h-4" />
+      </button>
       <button
         onClick={() => editor.chain().focus().setHorizontalRule().run()}
         className={railBtn(false)}
@@ -921,12 +1276,89 @@ const MenuBar = ({
 
       {railDivider}
 
+      {/* Insert / edit link */}
+      <div ref={linkWrapRef} className="relative">
+        <button
+          onClick={openLinkPopover}
+        className={railBtn(editor.isActive("link"))}
+        title={`${t("editor.toolbar.link")} (${MOD_LABEL}+K)`}
+        >
+          <Link2 className="w-4 h-4" />
+        </button>
+        {linkOpen && (() => {
+          const rect = linkWrapRef.current?.getBoundingClientRect();
+          const top = rect ? rect.top : 0;
+          const left = rect ? rect.left - 264 : 0; // 256px width + 8px gap
+          return (
+            <div
+              className="p-2 rounded-lg shadow-2xl flex flex-col gap-1.5"
+              style={{
+                position: "fixed",
+                top,
+                left,
+                zIndex: 1000,
+                width: "256px",
+                background: "#222222",
+                border: "1px solid #333333",
+              }}
+            >
+              <input
+                autoFocus
+                value={linkUrl}
+                onChange={(event) => setLinkUrl(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    applyLink();
+                  }
+                }}
+                placeholder={t("editor.toolbar.linkUrlPlaceholder")}
+                className="w-full px-2 py-1.5 rounded bg-black/25 border border-[#3a3a3a] text-[12.5px] text-[#e5e5e5] outline-none focus:border-[#2d86a5]"
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={applyLink}
+                  className="tp-accent-btn text-white flex-1 h-7 rounded text-[12px] font-medium"
+                >
+                  {t("editor.toolbar.linkApply")}
+                </button>
+                {editor.isActive("link") && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const href = editor.getAttributes("link").href;
+                        if (href) {
+                          void openUrl(href);
+                        }
+                      }}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                      title={t("editor.toolbar.linkOpen")}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={removeLink}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                      title={t("editor.toolbar.linkRemove")}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {railDivider}
+
       {/* Undo / Redo */}
       <button
         onClick={() => editor.chain().focus().undo().run()}
         disabled={!editor.can().chain().focus().undo().run()}
         className={`${railBtn(false)} disabled:opacity-40`}
-        title={t("editor.toolbar.undo")}
+        title={`${t("editor.toolbar.undo")} (${UNDO_LABEL})`}
       >
         <Undo className="w-4 h-4" />
       </button>
@@ -934,7 +1366,7 @@ const MenuBar = ({
         onClick={() => editor.chain().focus().redo().run()}
         disabled={!editor.can().chain().focus().redo().run()}
         className={`${railBtn(false)} disabled:opacity-40`}
-        title={t("editor.toolbar.redo")}
+        title={`${t("editor.toolbar.redo")} (${REDO_LABEL})`}
       >
         <Redo className="w-4 h-4" />
       </button>
@@ -1028,6 +1460,12 @@ export function Editor() {
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
+  // Last highlight color picked in the rail — reused by the context menu.
+  const [highlightColor, setHighlightColor] = useState("#fef08a");
+  // Whether the OS clipboard currently holds text (drives Paste visibility).
+  const [clipboardHasText, setClipboardHasText] = useState(false);
+  // Set briefly by the Mod+Shift+V keydown so the next paste inserts plain text.
+  const plainPasteRef = useRef(false);
 
   // Auto-close chat when AI is turned off in settings.
   useEffect(() => {
@@ -1035,6 +1473,24 @@ export function Editor() {
       setChatOpen(false);
     }
   }, [aiEnabled]);
+
+  // Word-style shortcut: Mod+P starts the app print flow instead of the
+  // webview's own print of the raw UI.
+  useEffect(() => {
+    const onPrintShortcut = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "p"
+      ) {
+        event.preventDefault();
+        printRef.current();
+      }
+    };
+    window.addEventListener("keydown", onPrintShortcut);
+    return () => window.removeEventListener("keydown", onPrintShortcut);
+  }, []);
 
   // Compute fit-to-width zoom: available width / paper width, clamped to [0.5, 2.0]
   // (ceiling 2.0 lets ultrawide windows fill the paper instead of leaving margins).
@@ -1396,9 +1852,16 @@ export function Editor() {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // The app registers its own configured Link below (StarterKit's
+        // default navigates on click, which would hijack the webview).
+        link: false,
+      }),
       UnderlineExtension,
       TextStyle,
+      FontFamily.configure({
+        types: ["textStyle"],
+      }),
       Color.configure({
         types: ["textStyle"],
       }),
@@ -1417,9 +1880,84 @@ export function Editor() {
       TableHeader,
       TableCell,
       MaterialLink,
+      WordStyleTextAlign.configure({
+        types: ["heading", "paragraph"],
+      }),
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      AppLink.configure({
+        openOnClick: false,
+        autolink: true,
+        linkOnPaste: true,
+        HTMLAttributes: {
+          rel: "noopener noreferrer nofollow",
+        },
+      }),
+      Subscript,
+      Superscript,
     ],
     content: activeFileContent?.content || `<h2>${language === "de" ? "Neue Stunde" : "New Lesson Plan"}</h2>`,
+    editorProps: {
+      // Mod+Shift+V inserts the clipboard as plain text (paragraphs),
+      // stripping any formatting when pasting from Word/websites.
+      handlePaste: (_view, event) => {
+        if (!plainPasteRef.current) {
+          return false;
+        }
+        plainPasteRef.current = false;
+
+        const text = event.clipboardData?.getData("text/plain") ?? "";
+        const current = editorRef.current;
+        if (!current || !text.trim()) {
+          return false;
+        }
+
+        snapSelectionInsideTextblock(current);
+
+        const lines = text.replace(/\r\n?/g, "\n").split("\n");
+        if (lines.length > 1 && lines[lines.length - 1] === "") {
+          lines.pop();
+        }
+
+        // Single line pastes inline at the cursor; only multi-line content
+        // becomes new paragraphs.
+        if (lines.length <= 1) {
+          current.chain().focus().insertContent({ type: "text", text: lines[0] ?? "" }).run();
+          return true;
+        }
+
+        const blocks = lines.map((line) =>
+          line
+            ? { type: "paragraph", content: [{ type: "text", text: line }] }
+            : { type: "paragraph" },
+        );
+
+        current.chain().focus().insertContent(blocks).run();
+        return true;
+      },
+    },
   });
+
+  // Track Mod+Shift+V so the next paste event is treated as plain text.
+  useEffect(() => {
+    const markPlainPaste = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "v"
+      ) {
+        plainPasteRef.current = true;
+        window.setTimeout(() => {
+          plainPasteRef.current = false;
+        }, 1500);
+      }
+    };
+    window.addEventListener("keydown", markPlainPaste, true);
+    return () => window.removeEventListener("keydown", markPlainPaste, true);
+  }, []);
 
   useEffect(() => {
     if (!editor) {
@@ -1782,31 +2320,31 @@ export function Editor() {
           }
         : null;
 
-      if (!isTableTarget && !aiSelection) {
-        setTableContextMenu(null);
-        return;
-      }
-
-      // If AI is off and there's no table to act on, nothing to show.
-      if (!aiEnabled && !isTableTarget) {
-        setTableContextMenu(null);
-        return;
-      }
-
       event.preventDefault();
       event.stopPropagation();
 
-      // For table-only operations with no text selection, anchor to clicked cell position.
-      if (isTableTarget && !aiSelection) {
+      // Know whether paste should be offered before rendering the menu.
+      void readText()
+        .then((text) => setClipboardHasText(!!text && !!text.trim()))
+        .catch(() => setClipboardHasText(false));
+
+      // With no text selection, anchor to the clicked position so table
+      // commands / inserted blocks land where the user right-clicked.
+      if (!aiSelection) {
         const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
         if (pos?.pos !== undefined) {
           editor.chain().focus().setTextSelection(pos.pos).run();
+          snapSelectionInsideTextblock(editor);
         }
       }
 
-      const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
-        estimatedWidth: 220,
-        estimatedHeight: isTableTarget ? 760 : 200,
+      const showTableActions = isTableTarget;
+      const showFormatActions = !isTableTarget && !!aiSelection;
+      const showInsertActions = !isTableTarget && !aiSelection;
+
+      const { x, y } = clampContextMenuPosition(event.clientX + 6, event.clientY + 6, {
+        estimatedWidth: 240,
+        estimatedHeight: showTableActions ? 760 : showFormatActions ? 480 : 220,
       });
 
       setRewriteSubmenuOpen(false);
@@ -1814,11 +2352,13 @@ export function Editor() {
       setTableContextMenu({
         x,
         y,
-        showTableActions: isTableTarget,
+        showTableActions,
+        showFormatActions,
+        showInsertActions,
         aiSelection,
       });
     },
-    [editor, aiEnabled],
+    [editor],
   );
 
   const handleSave = useCallback(async () => {
@@ -3443,8 +3983,8 @@ export function Editor() {
 
       const pdfBytes = await renderElementToPdfBytes(clonedElement, {
         orientation: "landscape",
-        marginMm: 8,
-        scale: 2,
+        marginMm: 5,
+        scale: PRINT_PDF_PIXEL_RATIO,
         backgroundColor: "#ffffff",
         multiPage: true,
       });
@@ -3526,10 +4066,11 @@ export function Editor() {
       const { pdfBytes, fileName } = await createLessonPdf();
 
       if (osType() === "windows") {
-        const printBlobUrl = createPdfBlobUrl(pdfBytes);
-
+        // printPdfBlobUrl owns the blob URL lifecycle (it keeps it alive
+        // while the print preview is open and revokes it on cleanup), so no
+        // manual revoke here.
         try {
-          await printPdfBlobUrl(printBlobUrl);
+          await printPdfBlobUrl(createPdfBlobUrl(pdfBytes));
           return;
         } catch (printError) {
           console.warn(
@@ -3538,8 +4079,6 @@ export function Editor() {
           );
           await printCurrentWindow(["tp-exporting"]);
           return;
-        } finally {
-          revokePdfBlobUrl(printBlobUrl);
         }
       }
       
@@ -3617,6 +4156,98 @@ export function Editor() {
 
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
   const canRunAiContextActions = !!tableContextMenu?.aiSelection && !isAiBusy && aiEnabled;
+  const contextMenuItemClass = (active = false) =>
+    `w-full inline-flex items-center gap-2 text-left px-2.5 py-1 text-[12.5px] rounded hover:bg-[#2d2d2d] disabled:opacity-40 disabled:cursor-not-allowed ${
+      active ? "text-[var(--tp-accent)]" : "text-gray-200"
+    }`;
+  const contextMenuMiniBtn = (active = false) =>
+    `h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${
+      active
+        ? "text-[var(--tp-accent)] bg-[rgba(45,134,165,0.15)]"
+        : "text-gray-200 hover:bg-[#2d2d2d]"
+    }`;
+
+  const copySelectionToClipboard = async () => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return;
+    const text = editor.state.doc.textBetween(from, to, "\n", "\n");
+
+    // Also put a rich HTML flavour on the clipboard so pasting into Word /
+    // other apps keeps bold, italic, lists, etc. Falls back to text only.
+    try {
+      const slice = editor.state.selection.content();
+      const container = document.createElement("div");
+      container.appendChild(
+        DOMSerializer.fromSchema(editor.schema).serializeFragment(slice.content),
+      );
+      await writeHtml(container.innerHTML, text);
+      setClipboardHasText(true);
+    } catch (error) {
+      console.warn("Clipboard HTML write failed, falling back to text", error);
+      try {
+        await writeText(text);
+        setClipboardHasText(true);
+      } catch (fallbackError) {
+        console.warn("Clipboard write failed", fallbackError);
+      }
+    }
+  };
+
+  const cutSelectionToClipboard = async () => {
+    if (!editor) return;
+    await copySelectionToClipboard();
+    editor.chain().focus().deleteSelection().run();
+  };
+
+  const pastePlainTextFromClipboard = async () => {
+    if (!editor) return;
+    let text = "";
+    try {
+      text = (await readText()) ?? "";
+    } catch (error) {
+      console.warn("Clipboard read failed", error);
+      return;
+    }
+    if (!text.trim()) return;
+
+    snapSelectionInsideTextblock(editor);
+
+    const lines = text.replace(/\r\n?/g, "\n").split("\n");
+    if (lines.length > 1 && lines[lines.length - 1] === "") {
+      lines.pop();
+    }
+
+    // Single line: insert as inline text at the cursor so it lands exactly
+    // where clicked instead of opening a new paragraph (Word behaviour).
+    if (lines.length <= 1) {
+      editor.chain().focus().insertContent({ type: "text", text: lines[0] ?? "" }).run();
+      return;
+    }
+
+    const blocks = lines.map((line) =>
+      line
+        ? { type: "paragraph", content: [{ type: "text", text: line }] }
+        : { type: "paragraph" },
+    );
+
+    // Replace the clicked empty block instead of inserting below it, so the
+    // pasted text lands exactly on the clicked line.
+    const { $from } = editor.state.selection;
+    const parentBlock = $from.parent;
+    const grandParent = $from.depth > 0 ? $from.node($from.depth - 1) : null;
+    const shouldReplaceEmptyBlock =
+      parentBlock.isTextblock &&
+      parentBlock.content.size === 0 &&
+      !!grandParent &&
+      grandParent.childCount > 1;
+
+    const chain = editor.chain().focus();
+    if (shouldReplaceEmptyBlock) {
+      chain.deleteRange({ from: $from.before($from.depth), to: $from.after($from.depth) });
+    }
+    chain.insertContent(blocks).run();
+  };
   const normalizedSubjectName = subject.trim().toLowerCase();
   const selectedSubjectConfig = normalizedSubjectName
     ? subjects.find((entry) => entry.name.trim().toLowerCase() === normalizedSubjectName)
@@ -3849,9 +4480,17 @@ export function Editor() {
             <EditorContent editor={editor} className="h-full" />
           </div>
 
-          {tableContextMenu && (
+          {tableContextMenu && createPortal(
             <div
-              className={buildContextMenuClassName("z-[70] min-w-[220px] print:hidden")}
+              className={buildContextMenuClassName(
+                `z-[70] print:hidden ${
+                  tableContextMenu.showTableActions
+                    ? "min-w-[240px]"
+                    : tableContextMenu.showFormatActions
+                      ? "min-w-[260px]"
+                      : "min-w-[190px]"
+                }`,
+              )}
               style={{
                 top: tableContextMenu.y,
                 left: tableContextMenu.x,
@@ -3859,42 +4498,223 @@ export function Editor() {
               }}
               onClick={(event) => event.stopPropagation()}
             >
+              {tableContextMenu.showFormatActions && (
+                <>
+                  {/* Word-style mini format bar */}
+                  <div className="flex items-center gap-0.5 px-1 py-1">
+                    <button
+                      type="button"
+                      title={t("editor.toolbar.bold")}
+                      onClick={() => editor!.chain().focus().toggleBold().run()}
+                      className={contextMenuMiniBtn(editor!.isActive("bold"))}
+                    >
+                      <Bold className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("editor.toolbar.italic")}
+                      onClick={() => editor!.chain().focus().toggleItalic().run()}
+                      className={contextMenuMiniBtn(editor!.isActive("italic"))}
+                    >
+                      <Italic className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("editor.toolbar.underline")}
+                      onClick={() => editor!.chain().focus().toggleUnderline().run()}
+                      className={contextMenuMiniBtn(editor!.isActive("underline"))}
+                    >
+                      <Underline className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("editor.toolbar.strikethrough")}
+                      onClick={() => editor!.chain().focus().toggleStrike().run()}
+                      className={contextMenuMiniBtn(editor!.isActive("strike"))}
+                    >
+                      <Strikethrough className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("editor.contextMenu.highlight")}
+                      onClick={() => {
+                        if (editor!.isActive("highlight")) {
+                          editor!.chain().focus().unsetHighlight().run();
+                        } else {
+                          editor!.chain().focus().setHighlight({ color: highlightColor }).run();
+                        }
+                      }}
+                      className={contextMenuMiniBtn(editor!.isActive("highlight"))}
+                    >
+                      <Highlighter className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="w-px h-3.5 bg-[#3a3a3a] mx-0.5" aria-hidden="true" />
+
+                    <button
+                      type="button"
+                      title={t("editor.toolbar.link")}
+                      onClick={() => {
+                        setTableContextMenu(null);
+                        window.dispatchEvent(new CustomEvent("tp:open-link-popover"));
+                      }}
+                      className={contextMenuMiniBtn(editor!.isActive("link"))}
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title={t("editor.contextMenu.removeFormatting")}
+                      onClick={() => {
+                        editor!.chain().focus().unsetAllMarks().clearNodes().run();
+                        setTableContextMenu(null);
+                      }}
+                      className={contextMenuMiniBtn(false)}
+                    >
+                      <Eraser className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {tableContextMenu.showFormatActions && <div className="h-px bg-[#333] my-0.5" />}
+
+              {/* Clipboard actions — below the format bar, Word-style */}
+              <button
+                onClick={() => {
+                  void cutSelectionToClipboard();
+                  setTableContextMenu(null);
+                }}
+                disabled={editor!.state.selection.empty}
+                className={contextMenuItemClass(false)}
+              >
+                <Scissors className="w-3.5 h-3.5 shrink-0" />
+                {t("editor.contextMenu.cut")}
+              </button>
+              <button
+                onClick={() => {
+                  void copySelectionToClipboard();
+                  setTableContextMenu(null);
+                }}
+                disabled={editor!.state.selection.empty}
+                className={contextMenuItemClass(false)}
+              >
+                <CopyIcon className="w-3.5 h-3.5 shrink-0" />
+                {t("editor.contextMenu.copy")}
+              </button>
+              {(!tableContextMenu.showInsertActions || clipboardHasText) && (
+                <button
+                  onClick={() => {
+                    void pastePlainTextFromClipboard();
+                    setTableContextMenu(null);
+                  }}
+                  className={contextMenuItemClass(false)}
+                >
+                  <ClipboardPaste className="w-3.5 h-3.5 shrink-0" />
+                  {t("editor.contextMenu.paste")}
+                </button>
+              )}
+
+              {(tableContextMenu.showInsertActions ||
+                tableContextMenu.showTableActions ||
+                (aiEnabled && tableContextMenu.aiSelection)) && (
+                <div className="h-px bg-[#333] my-0.5" />
+              )}
+
+              {tableContextMenu.showInsertActions && (
+                <>
+                  <button
+                    onClick={() => {
+                      setTableContextMenu(null);
+                      insertCustomTable();
+                    }}
+                    className={contextMenuItemClass(false)}
+                  >
+                    <TableIcon className="w-3.5 h-3.5 shrink-0" />
+                    {t("editor.toolbar.insertTable")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTableContextMenu(null);
+                      editor!.chain().focus().toggleTaskList().run();
+                    }}
+                    className={contextMenuItemClass(false)}
+                  >
+                    <ListChecks className="w-3.5 h-3.5 shrink-0" />
+                    {t("editor.toolbar.taskList")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTableContextMenu(null);
+                      editor!.chain().focus().toggleBlockquote().run();
+                    }}
+                    className={contextMenuItemClass(false)}
+                  >
+                    <Quote className="w-3.5 h-3.5 shrink-0" />
+                    {t("editor.toolbar.blockquote")}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setTableContextMenu(null);
+                      editor!.chain().focus().setHorizontalRule().run();
+                    }}
+                    className={contextMenuItemClass(false)}
+                  >
+                    <MinusIcon className="w-3.5 h-3.5 shrink-0" />
+                    {t("editor.toolbar.horizontalRule")}
+                  </button>
+
+                  <div className="h-px bg-[#333] my-0.5" />
+
+                  <button
+                    onClick={() => {
+                      setTableContextMenu(null);
+                      editor!.chain().focus().selectAll().run();
+                    }}
+                    className={contextMenuItemClass(false)}
+                  >
+                    <span className="w-3.5 h-3.5 shrink-0" />
+                    {t("editor.contextMenu.selectAll")}
+                  </button>
+                </>
+              )}
+
               {tableContextMenu.showTableActions && (
                 <>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addRowBefore().run())}
                     disabled={!tableActionsEnabled.addRowBefore}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.insertRowAbove")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addRowAfter().run())}
                     disabled={!tableActionsEnabled.addRowAfter}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.insertRowBelow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addColumnBefore().run())}
                     disabled={!tableActionsEnabled.addColumnBefore}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.insertColumnLeft")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().addColumnAfter().run())}
                     disabled={!tableActionsEnabled.addColumnAfter}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.insertColumnRight")}
                   </button>
 
-                  <div className="h-px bg-[#333] my-1" />
+                  <div className="h-px bg-[#333] my-0.5" />
                 </>
               )}
 
-              {aiEnabled && (
+              {aiEnabled && tableContextMenu.aiSelection && (
                 <>
                   {/* ── Rewrite submenu ─────────────────────────────────── */}
                   <button
@@ -3904,7 +4724,7 @@ export function Editor() {
                       setTranslateSubmenuOpen(false);
                     }}
                     disabled={!canRunAiContextActions}
-                    className="w-full inline-flex items-center justify-between gap-2 text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full inline-flex items-center justify-between gap-2 text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span className="inline-flex items-center gap-2">
                       <Sparkles className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
@@ -3932,7 +4752,7 @@ export function Editor() {
                             void runAiSelectionAction("rewrite", tableContextMenu!.aiSelection, { tone });
                           }}
                           disabled={!canRunAiContextActions}
-                          className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {label}
                         </button>
@@ -3948,7 +4768,7 @@ export function Editor() {
                       setRewriteSubmenuOpen(false);
                     }}
                     disabled={!canRunAiContextActions}
-                    className="w-full inline-flex items-center justify-between gap-2 text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full inline-flex items-center justify-between gap-2 text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <span className="inline-flex items-center gap-2">
                       <Languages className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
@@ -3967,7 +4787,7 @@ export function Editor() {
                             void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: aiTranslateTargetLanguage });
                           }}
                           disabled={!canRunAiContextActions}
-                          className="w-full text-left px-3 py-1.5 text-sm text-[var(--tp-accent)] hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="w-full text-left px-2.5 py-1 text-[12.5px] text-[var(--tp-accent)] hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           {aiTranslateTargetLanguage} ★
                         </button>
@@ -3998,7 +4818,7 @@ export function Editor() {
                               void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: name });
                             }}
                             disabled={!canRunAiContextActions}
-                            className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             {t(`languages.${code}`)}
                           </button>
@@ -4008,65 +4828,66 @@ export function Editor() {
                 </>
               )}
 
-              {tableContextMenu.showTableActions && aiEnabled && <div className="h-px bg-[#333] my-1" />}
+              {tableContextMenu.showTableActions && aiEnabled && <div className="h-px bg-[#333] my-0.5" />}
 
               {tableContextMenu.showTableActions && (
                 <>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().deleteRow().run())}
                     disabled={!tableActionsEnabled.deleteRow}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.deleteRow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().deleteColumn().run())}
                     disabled={!tableActionsEnabled.deleteColumn}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.deleteColumn")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().deleteTable().run())}
                     disabled={!tableActionsEnabled.deleteTable}
-                    className="w-full text-left px-3 py-2 text-sm text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.deleteTable")}
                   </button>
 
-                  <div className="h-px bg-[#333] my-1" />
+                  <div className="h-px bg-[#333] my-0.5" />
 
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().mergeCells().run())}
                     disabled={!tableActionsEnabled.mergeCells}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.mergeCells")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
                     disabled={!tableActionsEnabled.splitCell}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.splitCell")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
                     disabled={!tableActionsEnabled.toggleHeaderRow}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.toggleHeaderRow")}
                   </button>
                   <button
                     onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
                     disabled={!tableActionsEnabled.toggleHeaderColumn}
-                    className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {t("editor.tableContextMenu.toggleHeaderColumn")}
                   </button>
                 </>
               )}
-            </div>
+            </div>,
+            document.body,
           )}
         </div>
       </div>
@@ -4077,6 +4898,7 @@ export function Editor() {
       <MenuBar
         editor={editor}
         onInsertCustomTable={insertCustomTable}
+        onHighlightColorChange={setHighlightColor}
       />
 
       {/* Notes Panel - Left Side */}

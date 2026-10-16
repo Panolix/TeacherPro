@@ -340,7 +340,7 @@ export function useContextMenu() {
   const open = (e: React.MouseEvent, items: ContextMenuEntry[]) => {
     e.preventDefault();
     e.stopPropagation();
-    setMenu({ x: e.clientX, y: e.clientY, items });
+    setMenu({ x: e.clientX + 6, y: e.clientY + 6, items });
   };
   const close = () => setMenu(null);
   return { menu, open, close };

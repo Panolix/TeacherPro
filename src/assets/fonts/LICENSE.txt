@@ -1,0 +1,28 @@
+Bundled fonts for TeacherPro
+============================
+
+All fonts below are licensed under the SIL Open Font License, Version 1.1.
+Full license text: https://openfontlicense.org
+
+Sans:
+  Inter              - Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter)
+  Lato               - Copyright 2010-2014 Lukasz Dziedzic (tyPoland)
+  Nunito             - Copyright 2014 The Nunito Project Authors (Vernon Adams, Cyreal, Jacques Le Bailly)
+  Lexend             - Copyright 2019 The Lexend Project Authors (Bonnie Shaver-Troup, Thomas Jockin)
+  Atkinson Hyperlegible - Copyright 2020 Braille Institute of America
+
+Serif:
+  Merriweather       - Copyright 2016 The Merriweather Project Authors (Sorkin Type Co.)
+  Lora               - Copyright 2011 The Lora Project Authors (Cyreal)
+  Playfair Display   - Copyright 2017 The Playfair Display Project Authors (Claus Eggers Sorensen)
+  EB Garamond        - Copyright 2017 The EB Garamond Project Authors (Georg Duffner, Octavio Pardo)
+
+Handwriting:
+  Caveat             - Copyright 2014 The Caveat Project Authors (Impallari Type)
+  Patrick Hand       - Copyright 2011 Patrick Wagesreiter
+  Shadows Into Light - Copyright 2010 Kimberly Geswein
+
+Files are "latin"-subset woff2 builds served by Google Fonts.
+Variable-width families (Inter, Merriweather, EB Garamond, Caveat, Nunito,
+Lexend, Lora, Playfair Display) ship a single file per style covering the
+400-700 weight range.

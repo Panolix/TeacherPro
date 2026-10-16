@@ -88,9 +88,9 @@ const en = {
 
   editor: {
     toolbar: {
-      bold: "Bold (⌘B)",
-      italic: "Italic (⌘I)",
-      underline: "Underline (⌘U)",
+      bold: "Bold",
+      italic: "Italic",
+      underline: "Underline",
       strikethrough: "Strikethrough",
       heading1: "Heading 1",
       heading2: "Heading 2",
@@ -109,6 +109,26 @@ const en = {
       undo: "Undo",
       redo: "Redo",
       fontSize: "Font size",
+      fontFamily: "Font",
+      fontFamilyDefault: "Default font",
+      fontGroupSans: "Sans-serif",
+      fontGroupSerif: "Serif",
+      fontGroupHandwriting: "Handwriting",
+      fontGroupSystem: "System fonts",
+      railLabel: "Formatting toolbar",
+      taskList: "Checklist",
+      alignLeft: "Align left",
+      alignCenter: "Align center",
+      alignRight: "Align right",
+      alignJustify: "Justify",
+      subscript: "Subscript",
+      superscript: "Superscript",
+      blockquote: "Quote",
+      link: "Link",
+      linkUrlPlaceholder: "Enter URL…",
+      linkApply: "Apply",
+      linkOpen: "Open in browser",
+      linkRemove: "Remove link",
     },
 
     table: {
@@ -220,6 +240,15 @@ const en = {
       splitCell: "Split Cell",
       toggleHeaderRow: "Toggle Header Row",
       toggleHeaderColumn: "Toggle Header Column",
+    },
+
+    contextMenu: {
+      highlight: "Highlight",
+      removeFormatting: "Remove Formatting",
+      selectAll: "Select All Text",
+      cut: "Cut",
+      copy: "Copy",
+      paste: "Paste",
     },
 
     aiMenu: {

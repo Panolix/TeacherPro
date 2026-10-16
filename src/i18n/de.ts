@@ -88,9 +88,9 @@ const de = {
 
   editor: {
     toolbar: {
-      bold: "Fett (⌘B)",
-      italic: "Kursiv (⌘I)",
-      underline: "Unterstrichen (⌘U)",
+      bold: "Fett",
+      italic: "Kursiv",
+      underline: "Unterstrichen",
       strikethrough: "Durchgestrichen",
       heading1: "Überschrift 1",
       heading2: "Überschrift 2",
@@ -109,6 +109,26 @@ const de = {
       undo: "Rückgängig",
       redo: "Wiederholen",
       fontSize: "Schriftgröße",
+      fontFamily: "Schriftart",
+      fontFamilyDefault: "Standardschrift",
+      fontGroupSans: "Serifenlos",
+      fontGroupSerif: "Serif",
+      fontGroupHandwriting: "Handschrift",
+      fontGroupSystem: "Systemschriften",
+      railLabel: "Formatierungsleiste",
+      taskList: "Checkliste",
+      alignLeft: "Linksbündig",
+      alignCenter: "Zentriert",
+      alignRight: "Rechtsbündig",
+      alignJustify: "Blocksatz",
+      subscript: "Tiefgestellt",
+      superscript: "Hochgestellt",
+      blockquote: "Zitat",
+      link: "Link",
+      linkUrlPlaceholder: "URL eingeben…",
+      linkApply: "Anwenden",
+      linkOpen: "Im Browser öffnen",
+      linkRemove: "Link entfernen",
     },
 
     table: {
@@ -220,6 +240,15 @@ const de = {
       splitCell: "Zelle teilen",
       toggleHeaderRow: "Kopfzeile umschalten",
       toggleHeaderColumn: "Kopfspalte umschalten",
+    },
+
+    contextMenu: {
+      highlight: "Markieren",
+      removeFormatting: "Formatierung entfernen",
+      selectAll: "Gesamten Text auswählen",
+      cut: "Ausschneiden",
+      copy: "Kopieren",
+      paste: "Einfügen",
     },
 
     aiMenu: {

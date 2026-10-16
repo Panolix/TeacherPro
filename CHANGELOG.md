@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.6.0] - 2026-10-16
+
+### Added
+- **Twelve bundled fonts** — Inter, Lato, Nunito, Lexend, Atkinson Hyperlegible,
+  Merriweather, Lora, Playfair Display, EB Garamond, Caveat, Patrick Hand and
+  Shadows Into Light, grouped by category in a new font picker. Shipped inside
+  the app (SIL OFL, see `src/assets/fonts/LICENSE.txt`) so documents render
+  identically on every machine and in every export.
+- **Editor features** — text alignment, checklists, subscript/superscript,
+  blockquote and web links (with insert/edit/remove popover and safe browser
+  opening).
+- **Word-style shortcuts** — Ctrl/Cmd+E/L/R/J alignment, Ctrl/Cmd+K link,
+  Ctrl/Cmd+P print, Ctrl/Cmd+Shift+V paste-as-plain-text; tooltips display the
+  correct modifier key per platform.
+- **Clipboard in context menus** — Cut/Copy/Paste backed by the native OS
+  clipboard (Tauri clipboard-manager plugin). Copy writes formatted HTML for
+  pasting into Word/Docs; menu Paste inserts clean plain text and only shows
+  when the clipboard has content.
+- **Context-aware right-click menus** — format bar + clipboard on selections,
+  insert menu on empty space, table operations inside tables, AI entries when
+  local AI is enabled; menus appear at the click point on all zoom levels.
+
+### Fixed
+- **Windows printing** — closing the print preview no longer leaves the
+  toolbar greyed out, and the phantom second print dialog no longer appears
+  (WebView2 does not reliably fire `afterprint` for PDF previews).
+- **Print quality** — exports now render at ~300 DPI (was ~192), drawn at true
+  physical size (no 2% stretch), with 5 mm top/bottom page margins (was 8 mm).
+- **Paste position** — single-line pastes land inline exactly where clicked,
+  including whitespace above/below content; multi-line content becomes
+  paragraphs.
+- **Context menu scaling** — menus were scaled/displaced by the page zoom;
+  now rendered outside the zoom container at intended size and position.
+
+### Changed
+- **Toolbar rail** — consistent control sizing and larger hit areas.
+- **Accessibility** — keyboard focus rings, reduced-motion support, toolbar
+  semantics.
+
 ## [2.5.3] - 2026-10-16
 
 ### Fixed

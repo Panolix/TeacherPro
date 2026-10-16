@@ -29,6 +29,17 @@ interface RenderPdfOptions {
   autoFormat?: boolean;
 }
 
+/**
+ * Pixel ratio used when rasterizing lesson/mindmap exports.
+ *
+ * The export layouts are sized so CSS pixels map 1:1 to print millimetres at
+ * 96 DPI, which means the effective print resolution is `ratio × 96` DPI.
+ * 3.125 therefore yields the ~300 DPI expected of print-quality documents
+ * (the previous value of 2 only produced ~192 DPI and looked soft when
+ * printed).
+ */
+export const PRINT_PDF_PIXEL_RATIO = 3.125;
+
 interface SavePdfOptions {
   pdfBytes: Uint8Array;
   fileName: string;
@@ -49,6 +60,12 @@ export async function renderElementToPdfBytes(
     autoFormat = false,
 
   } = options;
+
+  // Rendering races pending webfont loads: a font applied just before
+  // exporting could otherwise rasterize with a fallback font.
+  if (typeof document !== "undefined" && document.fonts?.ready) {
+    await document.fonts.ready;
+  }
 
   const canvas = await toCanvas(element, {
     pixelRatio: scale,
@@ -84,11 +101,18 @@ export async function renderElementToPdfBytes(
   const printableWidth = pageWidth - marginMm * 2;
   const printableHeight = pageHeight - marginMm * 2;
 
-  const imageWidth = printableWidth;
+  // Draw at the element's true physical size (CSS px → mm at 96 DPI) rather
+  // than stretching to the printable width: the export layouts are locked to
+  // fixed mm dimensions, so 1:1 keeps 12pt print = 12pt CSS. A narrower
+  // printable area simply gets centered (e.g. A4 landscape with 5mm page
+  // margins still prints the 281mm-wide lesson content at real size).
+  const naturalWidthMm = (canvas.width / scale) * pxToMm;
+  const imageWidth = Math.min(naturalWidthMm, printableWidth);
   const imageHeight = (canvas.height * imageWidth) / canvas.width;
+  const imageX = marginMm + Math.max(0, (printableWidth - imageWidth) / 2);
   const imageData = canvas.toDataURL("image/png", 1.0);
 
-  pdf.addImage(imageData, "PNG", marginMm, marginMm, imageWidth, imageHeight);
+  pdf.addImage(imageData, "PNG", imageX, marginMm, imageWidth, imageHeight);
 
   if (multiPage && imageHeight > printableHeight) {
     let remainingHeight = imageHeight - printableHeight;
@@ -96,7 +120,7 @@ export async function renderElementToPdfBytes(
     while (remainingHeight > 0) {
       pdf.addPage();
       const yOffset = marginMm - (imageHeight - remainingHeight);
-      pdf.addImage(imageData, "PNG", marginMm, yOffset, imageWidth, imageHeight);
+      pdf.addImage(imageData, "PNG", imageX, yOffset, imageWidth, imageHeight);
       remainingHeight -= printableHeight;
     }
   }
@@ -159,29 +183,63 @@ export function revokePdfBlobUrl(url: string | null): void {
   URL.revokeObjectURL(url);
 }
 
+const PRINT_PDF_LOAD_TIMEOUT_MS = 15000;
+// The print preview can stay open as long as the user likes; the hidden
+// iframe and the blob URL must survive until it is gone. After this safety
+// window they are dropped even if `afterprint` never fired at all.
+const PRINT_PDF_CLEANUP_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Opens the platform print dialog for a PDF served from a blob URL.
+ *
+ * Takes ownership of `blobUrl`: it is revoked when the hidden iframe is
+ * cleaned up, so callers must not revoke it themselves.
+ *
+ * On Windows (WebView2) the PDF print preview does not reliably dispatch
+ * `afterprint` when the user closes it (long-standing Chromium regression),
+ * so the returned promise settles as soon as the preview has been handed
+ * off to the platform. Waiting for `afterprint` previously left the UI in a
+ * permanent "busy" state and, after an artificial timeout, opened a bogus
+ * second print of the whole app. Cleanup is deferred: the iframe and blob
+ * URL are removed on `afterprint` (best effort) or after a generous safety
+ * timeout.
+ */
 export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.left = "-10000px";
+  iframe.style.top = "0";
+  iframe.style.width = "1px";
+  iframe.style.height = "1px";
+  iframe.style.border = "0";
+  iframe.style.opacity = "0";
+  iframe.src = blobUrl;
+
   await new Promise<void>((resolve, reject) => {
-    const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.left = "-10000px";
-    iframe.style.top = "0";
-    iframe.style.width = "1px";
-    iframe.style.height = "1px";
-    iframe.style.border = "0";
-    iframe.style.opacity = "0";
-    iframe.src = blobUrl;
+    let settled = false;
+    let removed = false;
+    let loadTimer = 0;
 
-    let finished = false;
-
-    const complete = (error?: Error) => {
-      if (finished) {
+    const cleanup = () => {
+      if (removed) {
         return;
       }
-
-      finished = true;
+      removed = true;
+      window.clearTimeout(loadTimer);
+      window.removeEventListener("afterprint", cleanup);
+      iframe.contentWindow?.removeEventListener("afterprint", cleanup);
       iframe.remove();
+      revokePdfBlobUrl(blobUrl);
+    };
+
+    const settle = (error?: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
 
       if (error) {
+        cleanup();
         reject(error);
         return;
       }
@@ -189,43 +247,40 @@ export async function printPdfBlobUrl(blobUrl: string): Promise<void> {
       resolve();
     };
 
-    const timeoutTimer = window.setTimeout(
-      () => complete(new PdfExportError("pdfExport.printDialogTimeout")),
-      30000,
+    loadTimer = window.setTimeout(
+      () => settle(new PdfExportError("pdfExport.printDialogTimeout")),
+      PRINT_PDF_LOAD_TIMEOUT_MS,
     );
 
-    const finishWithoutError = () => {
-      window.clearTimeout(timeoutTimer);
-      complete();
-    };
-
-    const finishWithError = (error: unknown) => {
-      window.clearTimeout(timeoutTimer);
-      if (error instanceof Error) {
-        complete(error);
+    iframe.onload = () => {
+      if (settled) {
         return;
       }
-      complete(new Error(String(error)));
-    };
+      window.clearTimeout(loadTimer);
 
-    iframe.onload = () => {
       try {
         const frameWindow = iframe.contentWindow;
         if (!frameWindow) {
-          finishWithError(new PdfExportError("pdfExport.printWindowAccess"));
+          settle(new PdfExportError("pdfExport.printWindowAccess"));
           return;
         }
 
-        frameWindow.addEventListener("afterprint", finishWithoutError, { once: true });
+        // Register cleanup hooks before printing: some environments fire
+        // `afterprint` on the main window instead of inside the iframe.
+        frameWindow.addEventListener("afterprint", cleanup, { once: true });
+        window.addEventListener("afterprint", cleanup, { once: true });
+        window.setTimeout(cleanup, PRINT_PDF_CLEANUP_TIMEOUT_MS);
+
         frameWindow.focus();
         frameWindow.print();
+        settle();
       } catch (error) {
-        finishWithError(error);
+        settle(error instanceof Error ? error : new Error(String(error)));
       }
     };
 
     iframe.onerror = () => {
-      finishWithError(new PdfExportError("pdfExport.printLoad"));
+      settle(new PdfExportError("pdfExport.printLoad"));
     };
 
     document.body.appendChild(iframe);

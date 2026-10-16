@@ -16,7 +16,7 @@ export function clampContextMenuPosition(
 }
 
 const CONTEXT_MENU_BASE_CLASS =
-  "tp-context-menu tp-context-menu--legacy fixed max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto";
+  "tp-context-menu tp-context-menu--legacy fixed max-w-[calc(100vw-16px)] max-h-[calc(100vh-16px)] overflow-y-auto overflow-x-hidden";
 
 export function buildContextMenuClassName(extraClasses = ""): string {
   return extraClasses ? `${CONTEXT_MENU_BASE_CLASS} ${extraClasses}` : CONTEXT_MENU_BASE_CLASS;

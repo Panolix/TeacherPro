@@ -1,5 +1,177 @@
 @import "tailwindcss";
 
+/* ===== Bundled fonts =====
+   SIL Open Font License 1.1 — see src/assets/fonts/LICENSE.txt.
+   Bundled so lessons look identical on every machine and in exports. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./assets/fonts/inter/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/lato/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/lato/normal-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/lato/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lato";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/lato/italic-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Merriweather";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("./assets/fonts/merriweather/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Merriweather";
+  font-style: italic;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("./assets/fonts/merriweather/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./assets/fonts/eb-garamond/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "EB Garamond";
+  font-style: italic;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./assets/fonts/eb-garamond/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Caveat";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/caveat/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/nunito/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Nunito";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/nunito/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lexend";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/lexend/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/atkinson-hyperlegible/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/atkinson-hyperlegible/normal-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/atkinson-hyperlegible/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/atkinson-hyperlegible/italic-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/lora/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/lora/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/playfair-display/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Playfair Display";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("./assets/fonts/playfair-display/italic-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Patrick Hand";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/patrick-hand/normal-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Shadows Into Light";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/shadows-into-light/normal-400.woff2") format("woff2");
+}
+
 @theme {
   --color-background: #121212;
   --color-foreground: #f8f8f8;
@@ -88,7 +260,7 @@
   /* App layout dimensions — MUST preserve current app sizes */
   --tp-topbar-h:    3rem;    /* 48px */
   --tp-statusbar-h: 1.625rem;/* 26px */
-  --tp-rail-w:      3.5rem;  /* 56px */
+  --tp-rail-w:      4rem;    /* 64px */
 
   /* Lesson paper — canonical A4 landscape dimensions (px-locked to PDF export) */
   --tp-export-content-w: 1062px;                                /* 281mm @ 96dpi — matches PDF export clone width */
@@ -127,6 +299,29 @@
 
 *::-webkit-scrollbar-corner {
   background-color: var(--tp-scrollbar-track);
+}
+
+/* ===== Accessibility ===== */
+
+/* Visible focus ring for keyboard users, including buttons that
+   suppress the default outline for mouse/touch users. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--tp-accent) !important;
+  outline-offset: 2px;
+}
+
+/* Respect the OS "reduce motion" preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Force-override for Tauri WKWebView which sometimes ignores the * rule */
@@ -616,6 +811,77 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   margin-bottom: 0.5rem;
 }
 
+/* Links */
+.ProseMirror a {
+  color: var(--tp-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+html[data-tp-lesson-paper="light"] .ProseMirror a,
+.tp-export-light-clone .ProseMirror a {
+  color: #1a6fa8;
+}
+
+/* Blockquote */
+.ProseMirror blockquote {
+  border-left: 3px solid var(--tp-b-2);
+  padding-left: 12px;
+  margin: 0.5rem 0;
+  font-style: italic;
+}
+
+html[data-tp-lesson-paper="light"] .ProseMirror blockquote,
+.tp-export-light-clone .ProseMirror blockquote {
+  border-left-color: #d1d5db;
+}
+
+/* Task list (checklist) */
+.ProseMirror ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.ProseMirror ul[data-type="taskList"] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 0.25rem;
+}
+
+.ProseMirror ul[data-type="taskList"] > li > label {
+  flex: 0 0 auto;
+  margin-top: 0.3em;
+  user-select: none;
+}
+
+.ProseMirror ul[data-type="taskList"] > li > label input[type="checkbox"] {
+  accent-color: #2d86a5;
+  width: 13px;
+  height: 13px;
+  cursor: pointer;
+}
+
+.ProseMirror ul[data-type="taskList"] > li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ProseMirror ul[data-type="taskList"] > li > div > p {
+  margin: 0.25rem 0;
+}
+
+.ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
+  margin-top: 0.25rem;
+}
+
+/* Sub / superscript */
+.ProseMirror sub,
+.ProseMirror sup {
+  font-size: 0.72em;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   color: var(--color-muted);
   content: attr(data-placeholder);
@@ -1086,12 +1352,12 @@ button:where(:active):not(:disabled) {
 
 /* ===== Craft-style v2 Context Menu ===== */
 .tp-context-menu {
-  min-width: 200px;
+  min-width: 176px;
   max-width: 280px;
   background: #222222;
   border: 1px solid #333333;
-  border-radius: 10px;
-  padding: 6px;
+  border-radius: 8px;
+  padding: 4px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   font-family: inherit;
   user-select: none;

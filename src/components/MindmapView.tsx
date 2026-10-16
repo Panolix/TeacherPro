@@ -27,6 +27,7 @@ import {
   printPdfBlobUrl,
   renderElementToPdfBytes,
   PdfExportError,
+  PRINT_PDF_PIXEL_RATIO,
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
@@ -846,7 +847,7 @@ export function MindmapView() {
         y: event.clientY,
       });
 
-      const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+      const { x, y } = clampContextMenuPosition(event.clientX + 6, event.clientY + 6, {
         estimatedWidth: 220,
         estimatedHeight: 60,
       });
@@ -866,7 +867,7 @@ export function MindmapView() {
 
     const isMaterialNode = Boolean(getMaterialMetaFromNode(node));
     const estimatedHeight = isMaterialNode ? 230 : 390;
-    const { x, y } = clampContextMenuPosition(event.clientX, event.clientY, {
+    const { x, y } = clampContextMenuPosition(event.clientX + 6, event.clientY + 6, {
       estimatedWidth: 280,
       estimatedHeight,
     });
@@ -1106,8 +1107,8 @@ export function MindmapView() {
 
       const pdfBytes = await renderElementToPdfBytes(clonedElement, {
         orientation: "landscape",
-        marginMm: 8,
-        scale: 2,
+        marginMm: 5,
+        scale: PRINT_PDF_PIXEL_RATIO,
         backgroundColor: "#ffffff",
         multiPage: false,
         autoFormat: true,
@@ -1189,10 +1190,11 @@ export function MindmapView() {
       const { pdfBytes, fileName } = await createMindmapPdf();
 
       if (osType() === "windows") {
-        const printBlobUrl = createPdfBlobUrl(pdfBytes);
-
+        // printPdfBlobUrl owns the blob URL lifecycle (it keeps it alive
+        // while the print preview is open and revokes it on cleanup), so no
+        // manual revoke here.
         try {
-          await printPdfBlobUrl(printBlobUrl);
+          await printPdfBlobUrl(createPdfBlobUrl(pdfBytes));
           return;
         } catch (printError) {
           console.warn(
@@ -1201,8 +1203,6 @@ export function MindmapView() {
           );
           await printCurrentWindow();
           return;
-        } finally {
-          revokePdfBlobUrl(printBlobUrl);
         }
       }
       
