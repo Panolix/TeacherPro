@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1] - 2026-10-16
+
+### Fixed
+- **Context menu "Select All Text" alignment** — the row now carries a
+  leading icon like its siblings, so it aligns flush-left instead of
+  appearing shifted toward the middle of the menu.
+
 ## [2.6.0] - 2026-10-16
 
 ### Added
