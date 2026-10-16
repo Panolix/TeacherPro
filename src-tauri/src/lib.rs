@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread;
+use tauri::Manager;
 use tauri_plugin_fs::FsExt;
 
 #[derive(Serialize)]
@@ -1141,16 +1142,46 @@ fn print_pdf_file(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "macos")]
     {
-        // The path is passed as an osascript argument (argv), never
-        // interpolated into the AppleScript source, to prevent script injection.
-        let script = "on run argv\n\
-             tell application \"Preview\"\n\
-             activate\n\
-             print (POSIX file (item 1 of argv)) with print dialog\n\
-             end tell\n\
-             end run";
+        // Preview is sandboxed and cannot read print spool files handed to
+        // it through a raw print AppleEvent: the handler fails with error
+        // -10000 and Preview reports "couldn't be opened because you don't
+        // have permission to view it". Opening the file through
+        // LaunchServices (`open -a`) instead hands Preview a sandbox
+        // extension for it, after which printing the document works.
+        // Spool a copy into /private/tmp first so the path given to Preview
+        // is always a stable file; the copy is left in place because
+        // Preview reads it while the print dialog is open (macOS cleans up
+        // /private/tmp on its own).
+        let spool_path = PathBuf::from("/private/tmp").join(format!(
+            "teacherpro-print-{}.pdf",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::copy(&target, &spool_path)
+            .map_err(|error| format!("Failed to spool print file: {error}"))?;
+        let spool_target = spool_path.to_string_lossy().to_string();
 
-        spawn_detached(command_for("osascript").arg("-e").arg(script).arg(&target))?;
+        command_for("open")
+            .args(["-a", "Preview"])
+            .arg(&spool_target)
+            .status()
+            .map_err(|error| format!("Failed to open print preview: {error}"))?;
+
+        // Print the spooled document once Preview has it frontmost. The
+        // script waits up to ~10 s for the document to appear. The only
+        // string in the AppleScript source is the fixed spool file name
+        // prefix, so there is nothing to inject.
+        let script = "tell application \"Preview\"\n\
+             activate\n\
+             repeat 40 times\n\
+             if (count of documents) > 0 then\n\
+             if (name of front document) contains \"teacherpro-print-\" then exit repeat\n\
+             end if\n\
+             delay 0.25\n\
+             end repeat\n\
+             print front document with print dialog\n\
+             end tell";
+
+        spawn_detached(command_for("osascript").arg("-e").arg(script))?;
     }
 
     #[cfg(target_os = "windows")]
@@ -1900,6 +1931,38 @@ async fn ai_generate_chat(
     .map_err(|error| format!("AI generation task failed: {error}"))?
 }
 
+/// One-time migration for the app identifier change (`com.pano.temp-app` ->
+/// `com.pano.teacherpro`). Earlier releases stored the settings file in a
+/// sibling app-data directory, so copy it into the new location on the first
+/// launch after the rename. Never overwrites an existing file, which makes it
+/// safe to run on every start.
+fn migrate_legacy_app_data(app: &tauri::App) {
+    const LEGACY_IDENTIFIER: &str = "com.pano.temp-app";
+    const SETTINGS_FILE: &str = "teacherpro-settings.json";
+
+    let Ok(new_dir) = app.path().app_data_dir() else {
+        return;
+    };
+    let Some(parent) = new_dir.parent() else {
+        return;
+    };
+    let legacy_dir = parent.join(LEGACY_IDENTIFIER);
+    if legacy_dir == new_dir {
+        return;
+    }
+
+    let legacy_settings = legacy_dir.join(SETTINGS_FILE);
+    let new_settings = new_dir.join(SETTINGS_FILE);
+
+    if !legacy_settings.is_file() || new_settings.exists() {
+        return;
+    }
+
+    if std::fs::create_dir_all(&new_dir).is_ok() {
+        let _ = std::fs::copy(&legacy_settings, &new_settings);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1935,7 +1998,9 @@ pub fn run() {
             subject_db::subject_db_diagnose,
             ai_generate_chat
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            migrate_legacy_app_data(app);
+
             // Start Ollama at app launch so AI features work immediately
             std::thread::spawn(|| {
                 std::thread::sleep(std::time::Duration::from_millis(1500));

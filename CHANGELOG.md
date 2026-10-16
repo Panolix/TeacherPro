@@ -1,6 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [2.5.3] - 2026-10-16
+
+### Fixed
+- **macOS printing** — print spool PDFs are now handed to Preview through
+  LaunchServices so the sandboxed Preview app can actually read them;
+  printing previously failed with "couldn't be opened because you don't have
+  permission to view it" (AppleEvent error -10000).
+
+### Security
+- **Dependency security refresh** — `npm audit` and `cargo audit` now report
+  zero known vulnerabilities: TipTap updated 3.22 → 3.32 (fixes a ProseMirror
+  paste XSS and a `mergeAttributes` prototype-pollution advisory), plus
+  patched prosemirror-view, markdown-it, nanoid, postcss, vite, esbuild,
+  rustls, quick-xml and rustls-webpki.
+
+### Changed
+- **App identifier** — Tauri identifier changed from `com.pano.temp-app` to
+  `com.pano.teacherpro`. On first launch the settings store is copied from the
+  legacy app-data directory, so existing local settings are preserved.
+
+### Removed
+- **Unused dependencies** — dropped `docx` and `html2pdf.js`; no code
+  referenced them.
 
 ## [2.5.2] - 2026-10-11
 

@@ -341,7 +341,7 @@ Primary implementation:
 - AI diagnostics command: `ai_runtime_diagnostics` (backend/processor visibility).
 - Rust process launcher helper `command_for(...)` applies hidden process flags on Windows to suppress terminal flashes for GUI-triggered commands.
 - Tauri capabilities include opener, dialog, fs, os, and store permissions with broad fs scope.
-- Runtime app branding uses `TeacherPro` (window/product title), while the Tauri identifier remains `com.pano.temp-app` for profile/store compatibility with existing local data.
+- Runtime app branding uses `TeacherPro` (window/product title) with Tauri identifier `com.pano.teacherpro`. On startup the backend copies `teacherpro-settings.json` from the legacy `com.pano.temp-app` app-data directory (copy-once, never overwrites) so existing local data stays compatible.
 
 Primary implementation:
 
