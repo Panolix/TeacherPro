@@ -98,6 +98,7 @@ import {
   Scissors,
   Copy as CopyIcon,
   ClipboardPaste,
+  TextSelect,
 } from "lucide-react";
 
 interface MaterialDropPayload {
@@ -4157,7 +4158,7 @@ export function Editor() {
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
   const canRunAiContextActions = !!tableContextMenu?.aiSelection && !isAiBusy && aiEnabled;
   const contextMenuItemClass = (active = false) =>
-    `w-full inline-flex items-center gap-2 text-left px-2.5 py-1 text-[12.5px] rounded hover:bg-[#2d2d2d] disabled:opacity-40 disabled:cursor-not-allowed ${
+    `w-full inline-flex items-center justify-start gap-2 text-left px-2.5 py-1 text-[12.5px] rounded hover:bg-[#2d2d2d] disabled:opacity-40 disabled:cursor-not-allowed ${
       active ? "text-[var(--tp-accent)]" : "text-gray-200"
     }`;
   const contextMenuMiniBtn = (active = false) =>
@@ -4673,7 +4674,7 @@ export function Editor() {
                     }}
                     className={contextMenuItemClass(false)}
                   >
-                    <span className="w-3.5 h-3.5 shrink-0" />
+                    <TextSelect className="w-3.5 h-3.5 shrink-0" />
                     {t("editor.contextMenu.selectAll")}
                   </button>
                 </>
