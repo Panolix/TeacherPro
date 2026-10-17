@@ -8,12 +8,10 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import Color from "@tiptap/extension-color";
 import Highlight from "@tiptap/extension-highlight";
 import UnderlineExtension from "@tiptap/extension-underline";
-import Link from "@tiptap/extension-link";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
-import TextAlign from "@tiptap/extension-text-align";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { readText, writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { DOMSerializer } from "@tiptap/pm/model";
@@ -52,6 +50,11 @@ import {
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../utils/pdfExport";
+import { formatIsoToEuropeanDate, parseEuropeanDateToDate, parseEuropeanDateToIso } from "../utils/dates";
+import { normalizeColorForPicker } from "../utils/colors";
+import { snapSelectionInsideTextblock } from "../utils/editorSelection";
+import { MOD_LABEL, REDO_LABEL, UNDO_LABEL } from "./editor/editorKeys";
+import { AppLink, WordStyleTextAlign } from "./editor/editorExtensions";
 import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
 import { type as osType } from "@tauri-apps/plugin-os";
 import {
@@ -457,103 +460,6 @@ function hasMaterialDropData(dataTransfer: DataTransfer): boolean {
   );
 }
 
-function formatIsoToEuropeanDate(isoString?: string | null): string {
-  if (!isoString) return "";
-
-  const date = new Date(isoString);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear());
-
-  return `${day}/${month}/${year}`;
-}
-
-function parseEuropeanDateToIso(value: string): string | null | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const match = trimmed.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
-  if (!match) return undefined;
-
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return undefined;
-  }
-
-  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
-  if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== month - 1 ||
-    parsed.getDate() !== day
-  ) {
-    return undefined;
-  }
-
-  return parsed.toISOString();
-}
-
-function parseEuropeanDateToDate(value: string): Date | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-
-  const match = trimmed.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
-  if (!match) return null;
-
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return null;
-  }
-
-  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
-  if (
-    parsed.getFullYear() !== year ||
-    parsed.getMonth() !== month - 1 ||
-    parsed.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
-
-function normalizeColorForPicker(colorValue: unknown, fallback: string): string {
-  if (typeof colorValue !== "string") {
-    return fallback;
-  }
-
-  const trimmed = colorValue.trim();
-  const shortHex = trimmed.match(/^#([0-9a-fA-F]{3})$/);
-  if (shortHex) {
-    const [r, g, b] = shortHex[1].split("");
-    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
-  }
-
-  if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-
-  const rgbMatch = trimmed.match(
-    /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*[0-9.]+)?\s*\)$/i,
-  );
-  if (rgbMatch) {
-    const rgb = rgbMatch
-      .slice(1, 4)
-      .map((chunk) => Math.max(0, Math.min(255, Number(chunk))));
-    return `#${rgb.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-  }
-
-  return fallback;
-}
 
 function normalizeAiFragmentOutput(rawOutput: string, originalSelection: string): string {
   let normalized = rawOutput.trim();
@@ -585,68 +491,6 @@ function normalizeAiFragmentOutput(rawOutput: string, originalSelection: string)
   return normalized;
 }
 
-const IS_MAC =
-  typeof navigator !== "undefined" && /Mac|iPhone|iPad/i.test(navigator.platform);
-const MOD_LABEL = IS_MAC ? "⌘" : "Ctrl";
-const UNDO_LABEL = `${MOD_LABEL}+Z`;
-const REDO_LABEL = IS_MAC ? `${MOD_LABEL}+Shift+Z` : `${MOD_LABEL}+Y`;
-
-/**
- * TextAlign with Word-compatible keyboard shortcuts:
- * Mod+E centre, Mod+L left, Mod+R right, Mod+J justify.
- */
-const WordStyleTextAlign = TextAlign.extend({
-  addKeyboardShortcuts() {
-    return {
-      ...this.parent?.(),
-      "Mod-e": () => this.editor.commands.setTextAlign("center"),
-      "Mod-l": () => this.editor.commands.setTextAlign("left"),
-      "Mod-r": () => this.editor.commands.setTextAlign("right"),
-      "Mod-j": () => this.editor.commands.setTextAlign("justify"),
-    };
-  },
-});
-
-/**
- * Link mark whose Mod+K shortcut opens the app's link popover.
- * (Default Link behaviour must never let the webview navigate away.)
- */
-const AppLink = Link.extend({
-  addKeyboardShortcuts() {
-    return {
-      ...this.parent?.(),
-      "Mod-k": () => {
-        window.dispatchEvent(new CustomEvent("tp:open-link-popover"));
-        return true;
-      },
-    };
-  },
-});
-
-/**
- * Clicks in the whitespace above/below the text resolve to a position
- * *between* blocks. Inserting at such a position implicitly wraps inline
- * content in a fresh paragraph (appearing one line away from the click), so
- * snap the selection into the nearest text block first.
- */
-const snapSelectionInsideTextblock = (instance: any) => {
-  const { selection } = instance.state;
-  if (selection.$from.parent.isTextblock) {
-    return;
-  }
-  const doc = instance.state.doc;
-  const isTextblockAt = (p: number) =>
-    p >= 0 && p <= doc.content.size && doc.resolve(p).parent.isTextblock;
-  let target: number | null = null;
-  if (isTextblockAt(selection.from - 1)) {
-    target = selection.from - 1;
-  } else if (isTextblockAt(selection.from + 1)) {
-    target = selection.from + 1;
-  }
-  if (target !== null) {
-    instance.commands.setTextSelection(target);
-  }
-};
 
 const MenuBar = ({
   editor,
