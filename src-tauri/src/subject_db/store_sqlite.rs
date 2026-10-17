@@ -11,7 +11,6 @@
 use rusqlite::{params, Connection, OpenFlags};
 use serde::Serialize;
 
-
 #[derive(Debug, Clone, Serialize)]
 pub struct StoredChunkRow {
     pub chunk_id: i64,
@@ -47,6 +46,9 @@ pub fn open(vault_path: &str) -> Result<Connection, String> {
     .map_err(|e| format!("Failed to open SubjectDB index: {e}"))?;
     conn.pragma_update(None, "journal_mode", "WAL").ok();
     conn.pragma_update(None, "synchronous", "NORMAL").ok();
+    // Required for the vecs ON DELETE CASCADE to fire (SQLite defaults FK off);
+    // without it, replaced/deleted docs leave orphan vec blobs behind.
+    conn.pragma_update(None, "foreign_keys", "ON").ok();
     create_schema(&conn)?;
     Ok(conn)
 }
@@ -98,11 +100,9 @@ pub fn replace_document(
 ) -> Result<usize, String> {
     let doc_key = format!("{subject}/{grade}/{topic}/{source_file}");
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-    // Delete old doc rows (fts handled by trigger)
+    // Old rows deleted; the fts_del trigger removes their FTS entries and the
+    // vecs FK cascade removes their vectors.
     tx.execute("DELETE FROM chunks WHERE doc_key = ?1", params![doc_key])
-        .map_err(|e| e.to_string())?;
-    // FTS 'delete' trigger does not fire for plain DELETE; clear via special command
-    tx.execute("INSERT INTO fts(fts) VALUES('rebuild')", [])
         .map_err(|e| e.to_string())?;
     for (text, page, lang, vec) in rows {
         tx.execute(
@@ -132,20 +132,34 @@ pub fn replace_document(
     Ok(rows.len())
 }
 
-/// Remove all chunks of a document (used by delete_file).
-pub fn delete_document(
+/// Remove all chunks for a source file under a hierarchy prefix.
+///
+/// `topic = None` matches every topic under the grade (covers loose grade-level
+/// PDFs, which are stored with topic = filename stem); `grade = None` matches
+/// the whole subject (subject-level files).
+pub fn delete_document_by_source(
     conn: &Connection,
     subject: &str,
-    grade: &str,
-    topic: &str,
+    grade: Option<&str>,
+    topic: Option<&str>,
     source_file: &str,
 ) -> Result<(), String> {
-    let doc_key = format!("{subject}/{grade}/{topic}/{source_file}");
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
-    tx.execute("DELETE FROM chunks WHERE doc_key = ?1", params![doc_key])
-        .map_err(|e| e.to_string())?;
-    tx.execute("INSERT INTO fts(fts) VALUES('rebuild')", [])
-        .map_err(|e| e.to_string())?;
+    match (grade, topic) {
+        (Some(g), Some(t)) => tx.execute(
+            "DELETE FROM chunks WHERE subject=?1 AND grade=?2 AND topic=?3 AND source_file=?4",
+            params![subject, g, t, source_file],
+        ),
+        (Some(g), None) => tx.execute(
+            "DELETE FROM chunks WHERE subject=?1 AND grade=?2 AND source_file=?3",
+            params![subject, g, source_file],
+        ),
+        (None, _) => tx.execute(
+            "DELETE FROM chunks WHERE subject=?1 AND source_file=?2",
+            params![subject, source_file],
+        ),
+    }
+    .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -176,8 +190,6 @@ pub fn delete_hierarchy(
         tx.execute("DELETE FROM chunks WHERE subject=?1", params![subject])
             .map_err(|e| e.to_string())?;
     }
-    tx.execute("INSERT INTO fts(fts) VALUES('rebuild')", [])
-        .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -299,8 +311,11 @@ pub fn fts_search(
     let mut scored: Vec<ScoredRow> = Vec::new();
     for row in rows.flatten() {
         let (row, bm25) = row;
-        // bm25() returns lower=better; convert to a positive score (higher=better).
-        let score = 1.0 / (1.0 + (-bm25) as f32).max(1e-6);
+        // bm25() returns lower=better (matches are ≤ 0, strong matches more
+        // negative). Flip the sign so the exposed score is higher=better and
+        // monotonic with the bm25 ranking. RRF only consumes ranks, this just
+        // keeps the legacy `ScoredChunk.score` field honest.
+        let score = 1.0 - bm25 as f32;
         scored.push(ScoredRow { row, score });
     }
     Ok(scored)

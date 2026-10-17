@@ -594,10 +594,16 @@ pub fn ai_structured(
         .map_err(|e| format!("Model output was not valid JSON: {e}"))?;
     Ok(value)
 }
-/// Run a blocking closure on Tauri's blocking pool (shared helper for embeddings).
-pub(crate) fn run_blocking<T: Send + 'static>(
+/// Run a blocking closure on Tauri's blocking pool and await its result.
+/// MUST be `.await`ed (never `block_on`'d): callers are async Tauri commands
+/// already running inside the tokio runtime — blocking the worker thread there
+/// panics with "Cannot start a runtime from within a runtime" and detaches
+/// the spawned task (two detached callers would race on shared files).
+pub(crate) async fn run_blocking<T: Send + 'static>(
     f: impl FnOnce() -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
-    let handle = tauri::async_runtime::spawn_blocking(f);
-    tauri::async_runtime::block_on(handle).map_err(|e| format!("Blocking task failed: {e}"))?
+    match tauri::async_runtime::spawn_blocking(f).await {
+        Ok(inner) => inner,
+        Err(e) => Err(format!("Blocking task failed: {e}")),
+    }
 }

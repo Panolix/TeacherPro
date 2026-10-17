@@ -217,6 +217,7 @@ const en = {
       contextSystem: "System",
       contextFree: "Free",
       searchingKnowledge: "Searching knowledge database...",
+      sources: "Sources",
     },
 
     aiDraft: {

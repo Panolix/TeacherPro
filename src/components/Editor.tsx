@@ -1375,6 +1375,7 @@ export function Editor() {
       let ragContext = "";
       let ragTokens = 0;
       let ragStatus = "";
+      let ragResults: ScoredChunk[] = [];
       if (activeChatDb && vaultPath) {
         setAiStatusMessage(t("editor.chat.searchingKnowledge"));
         try {
@@ -1392,6 +1393,7 @@ export function Editor() {
               topK: topK,
             });
             ragChunksRef.current = results;
+            ragResults = results;
 
             if (results.length > 0) {
               const parts: string[] = [];
@@ -1506,12 +1508,20 @@ export function Editor() {
       let streamText = "";
       let streamThinking = "";
 
+      // Dedupe chunk hits into per-source/per-page citation chips for the answer.
+      const ragCitations = Array.from(
+        new Map(
+          ragResults.map((r) => [`${r.source}:${r.page}`, { source: r.source, page: r.page }]),
+        ).values(),
+      );
+
       setChatMessages((previous) => [
         ...previous,
         {
           id: assistantId,
           role: "assistant",
           text: "",
+          citations: ragCitations.length > 0 ? ragCitations : undefined,
           timestamp: Date.now(),
         },
       ]);

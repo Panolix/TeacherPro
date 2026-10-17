@@ -22,13 +22,6 @@ pub struct Chunk {
     pub language: String,
 }
 
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // legacy chunks.json store still uses it
-pub struct ChunkWithEmbedding {
-    pub chunk: Chunk,
-    pub embedding: Vec<f32>,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ScoredChunk {
     pub id: String,
@@ -491,9 +484,13 @@ async fn process_and_embed_pdf(
     let app = APP_HANDLE
         .get()
         .ok_or("App handle not initialized")?;
-    embeddings::ensure_embedder(app)?;
+    // First call may download ~570 MB + build the ONNX session — must not
+    // block the async runtime, so run it on the blocking pool.
+    crate::ai::client::run_blocking(|| {
+        embeddings::ensure_embedder(app)
+    }).await?;
 
-    let vectors = crate::ai::client::run_blocking(move || embeddings::embed_texts(&texts))?;
+    let vectors = crate::ai::client::run_blocking(move || embeddings::embed_texts(&texts)).await?;
 
     // L2-normalize for pure dot-product cosine
     let rows: Vec<(String, i64, String, Vec<f32>)> = chunks
@@ -601,12 +598,20 @@ pub async fn subject_db_delete_file(
     if file_path.exists() {
         std::fs::remove_file(&file_path)
             .map_err(|e| format!("Failed to delete file: {e}"))?;
+    }
 
-        // Remove associated chunks from the SQLite index
-        if let (Some(g), Some(t)) = (grade, topic) {
-            let conn = store_sqlite::open(&vault_path)?;
-            store_sqlite::delete_document(&conn, &subject, &g, &t, &filename)?;
-        }
+    // Purge index rows for this source file. topic=None intentionally matches
+    // every topic under the grade: loose grade-level PDFs are stored with
+    // topic = filename stem, and subject-level files with grade = topic = stem.
+    {
+        let conn = store_sqlite::open(&vault_path)?;
+        store_sqlite::delete_document_by_source(
+            &conn,
+            &subject,
+            grade.as_deref(),
+            topic.as_deref(),
+            &filename,
+        )?;
     }
 
     Ok(())
@@ -635,10 +640,13 @@ pub async fn subject_db_query(
     }
 
     let app = APP_HANDLE.get().ok_or("App handle not initialized")?;
-    embeddings::ensure_embedder(app)?;
+    // First call may download ~570 MB + build the ONNX session — must not
+    // block the async runtime, so run it on the blocking pool.
+    crate::ai::client::run_blocking(|| embeddings::ensure_embedder(app)).await?;
 
     let q = query.clone();
-    let query_emb = crate::ai::client::run_blocking(move || embeddings::embed_texts(&[q]))?
+    let query_emb = crate::ai::client::run_blocking(move || embeddings::embed_texts(&[q]))
+        .await?
         .into_iter()
         .next()
         .ok_or("Embedding returned empty result".to_string())?;

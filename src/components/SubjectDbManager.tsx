@@ -30,6 +30,14 @@ interface ProgressEvent {
   subject?: string;
 }
 
+interface EmbedModelEvent {
+  file: string;
+  state: string;
+  received: number;
+  total: number;
+  error?: string | null;
+}
+
 export function SubjectDbManager() {
   const { t } = useTranslation();
   const { vaultPath, subjectDatabases, setSubjectDatabases } = useAppStore();
@@ -66,6 +74,7 @@ export function SubjectDbManager() {
 
   // ── Progress listener ──
   useEffect(() => {
+    let unlistenEmbed: UnlistenFn | null = null;
     const setup = async () => {
       unlistenRef.current = await listen<ProgressEvent>("subject-db-progress", (event) => {
         const p = event.payload;
@@ -75,9 +84,23 @@ export function SubjectDbManager() {
           setProgressMsg(`📄 ${p.filename}  (${p.subject || ""})`);
         }
       });
+      // First RAG use auto-downloads the bge-m3 ONNX weights (~570 MB).
+      unlistenEmbed = await listen<EmbedModelEvent>("embed-model-download", (event) => {
+        const p = event.payload;
+        if (p.state === "downloading") {
+          const pct = p.total > 0 ? ` ${Math.round((p.received / p.total) * 100)}%` : "";
+          setProgressMsg(`⬇️ ${p.file}${pct}`);
+        } else if (p.state === "verifying") {
+          setProgressMsg(`✓ ${p.file}`);
+        } else if (p.state === "completed") {
+          setProgressMsg(null);
+        } else if (p.state === "failed") {
+          setProgressMsg(`⚠️ ${p.file}${p.error ? `: ${p.error}` : ""}`);
+        }
+      });
     };
     setup();
-    return () => { unlistenRef.current?.(); };
+    return () => { unlistenRef.current?.(); unlistenEmbed?.(); };
   }, []);
 
   // ── Scan & Import ──

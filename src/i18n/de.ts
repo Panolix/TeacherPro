@@ -218,6 +218,7 @@ const de = {
       contextSystem: "System",
       contextFree: "Frei",
       searchingKnowledge: "Durchsuche Wissensdatenbank...",
+      sources: "Quellen",
     },
 
     aiDraft: {

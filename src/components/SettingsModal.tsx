@@ -135,7 +135,7 @@ export function SettingsModal({ open, onClose }: Props) {
 
   // ===== AI runtime / model management state =====
 
-  // P0 debug engine card (temporary â€” replaced by the P1 engine UI)
+  // P0 debug engine card (temporary — replaced by the P1 engine UI)
   const [engineStatus, setEngineStatus] = useState<EngineStatusDto | null>(null);
   const [catalog, setCatalog] = useState<CatalogInfoDto | null>(null);
   const [v3Downloads, setV3Downloads] = useState<Record<string, DownloadProgressDto>>({});
@@ -285,14 +285,14 @@ export function SettingsModal({ open, onClose }: Props) {
                       className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "en" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
                       title={t("languages.en")}
                     >
-                      ðŸ‡¬ðŸ‡§ {t("languages.en")}
+                      🇬🇧 {t("languages.en")}
                     </button>
                     <button
                       onClick={() => setLanguage("de")}
                       className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "de" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
                       title={t("languages.de")}
                     >
-                      ðŸ‡©ðŸ‡ª {t("languages.de")}
+                      🇩🇪 {t("languages.de")}
                     </button>
                   </div>
                 </Section>

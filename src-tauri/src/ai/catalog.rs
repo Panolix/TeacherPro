@@ -430,6 +430,9 @@ pub fn ai_catalog_info(app: tauri::AppHandle) -> Result<CatalogInfo, String> {
     let engine_installed = engine_dir(&app).is_ok();
     let dir = models_dir(&app)?;
     let models = all_models()
+        // Smoke-test model stays available to scripts (`find_model`), but is
+        // not offered in the user-facing catalog list.
+        .filter(|m| m.tier != "smoke")
         .map(|m| CatalogModelDto {
             id: m.id,
             name: m.name,

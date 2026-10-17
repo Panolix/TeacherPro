@@ -22,6 +22,7 @@ export interface AiChatMessage {
   role: "user" | "assistant";
   text: string;
   thinking?: string;
+  citations?: { source: string; page: number }[];
   timestamp: number;
 }
 
@@ -323,6 +324,22 @@ export function AiChatPanel({
                       <div className="w-full text-[13px] leading-relaxed text-[var(--tp-text-primary)]">
                         <AiMarkdown text={message.text} />
                       </div>
+                      {message.citations && message.citations.length > 0 && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] font-medium text-[var(--tp-text-muted)]">
+                            {t("editor.chat.sources")}:
+                          </span>
+                          {message.citations.map((c, i) => (
+                            <span
+                              key={`${c.source}-${c.page}-${i}`}
+                              title={c.source}
+                              className="inline-flex max-w-full items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--tp-text-secondary)]"
+                            >
+                              {c.source}, S.{c.page}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {message.thinking != null && (
                         <div className="mt-2">
                           <button
