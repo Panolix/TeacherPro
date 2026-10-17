@@ -7,6 +7,7 @@ pub mod client;
 pub mod downloader;
 pub mod embeddings;
 pub mod engine;
+pub mod hardware;
 
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;

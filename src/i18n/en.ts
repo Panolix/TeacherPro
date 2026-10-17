@@ -592,6 +592,18 @@ const en = {
       autoModel: "Auto (recommended)",
       routingHint:
         "Auto uses your selected model, or the best downloaded one. Switching models restarts the engine.",
+      systemTitle: "Your system",
+      gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
+      gpuNone: "No NVIDIA GPU detected — using the Vulkan/CPU engine",
+      ramDetected: "System RAM: {{ram}} GB",
+      cudaPack: "CUDA acceleration pack",
+      cudaPackDesc:
+        "Recommended for your NVIDIA GPU — enables GPU inference and MTP speculative decoding ({{size}} GB download).",
+      cudaPackInstalled: "Installed — the engine uses CUDA for the next request",
+      installPack: "Install",
+      removePack: "Remove",
+      fitsVram: "GPU-fit",
+      fitsVramHint: "This model fits into your GPU's VRAM",
     },
     tabs: {
       appearance: "Appearance",

@@ -593,6 +593,18 @@ const de = {
       autoModel: "Automatisch (empfohlen)",
       routingHint:
         "Automatisch nutzt dein gewähltes Modell oder das beste heruntergeladene. Ein Modellwechsel startet die Engine neu.",
+      systemTitle: "Dein System",
+      gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
+      gpuNone: "Keine NVIDIA-GPU erkannt — Vulkan/CPU-Engine wird verwendet",
+      ramDetected: "Arbeitsspeicher: {{ram}} GB",
+      cudaPack: "CUDA-Beschleunigungspaket",
+      cudaPackDesc:
+        "Empfohlen für deine NVIDIA-GPU — aktiviert GPU-Inferenz und MTP-Speculative-Decoding ({{size}} GB Download).",
+      cudaPackInstalled: "Installiert — die Engine nutzt CUDA ab der nächsten Anfrage",
+      installPack: "Installieren",
+      removePack: "Entfernen",
+      fitsVram: "GPU-passend",
+      fitsVramHint: "Dieses Modell passt in den VRAM deiner GPU",
     },
     tabs: {
       appearance: "Erscheinungsbild",

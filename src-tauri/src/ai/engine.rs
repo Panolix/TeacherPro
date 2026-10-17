@@ -4,6 +4,7 @@
 //! Loopback-only, ephemeral port, per-spawn API key, killed on app exit.
 
 use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::time::{Duration, Instant};
 
@@ -33,6 +34,10 @@ pub struct EngineState {
     pub variant: Option<&'static str>,
     pub error: Option<String>,
     pub child: Option<Child>,
+    /// Index into the resolved attempt list (0 = preferred backend).
+    pub attempt_index: usize,
+    /// Whether the current spawn included MTP speculative decoding.
+    pub used_mtp: bool,
 }
 
 impl EngineState {
@@ -46,8 +51,67 @@ impl EngineState {
             variant: None,
             error: None,
             child: None,
+            attempt_index: 0,
+            used_mtp: false,
         }
     }
+}
+
+/// One candidate engine backend in fallback order.
+#[derive(Clone)]
+struct EngineAttempt {
+    dir: PathBuf,
+    entry: &'static str,
+    label: &'static str, // cuda | metal | vulkan | cpu
+    mtp_capable: bool,
+}
+
+/// Preferred backend first: an installed & detected CUDA pack, then the
+/// bundled variant for this platform. Any failure falls through to the next.
+fn engine_attempts(app: &AppHandle) -> Vec<EngineAttempt> {
+    let mut attempts = Vec::new();
+    if let Some(pack) = catalog::CUDA_PACK.as_ref() {
+        if super::hardware::probe().gpu.is_some() {
+            if let Ok(dir) = catalog::engine_pack_dir(app) {
+                if dir.join(pack.entry).is_file() {
+                    attempts.push(EngineAttempt {
+                        dir,
+                        entry: pack.entry,
+                        label: "cuda",
+                        mtp_capable: true,
+                    });
+                }
+            }
+        }
+    }
+    if let (Some(variant), Ok(dir)) = (catalog::current_variant(), catalog::engine_dir(app)) {
+        let label = if variant.dir.contains("metal") {
+            "metal"
+        } else if variant.dir.contains("vulkan") {
+            "vulkan"
+        } else {
+            "cpu"
+        };
+        attempts.push(EngineAttempt {
+            dir,
+            entry: variant.entry,
+            label,
+            mtp_capable: label == "metal",
+        });
+    }
+    attempts
+}
+
+fn mtp_usable(app: &AppHandle, model: &ModelEntry, attempt: &EngineAttempt) -> bool {
+    let Some(mtp_file) = model.mtp_file else {
+        return false;
+    };
+    if !attempt.mtp_capable {
+        return false;
+    }
+    catalog::models_dir(app)
+        .map(|dir| dir.join(mtp_file).is_file())
+        .unwrap_or(false)
 }
 
 #[derive(Serialize, Clone)]
@@ -168,11 +232,12 @@ pub fn start_engine(
         shutdown(app);
     }
 
-    let engine_dir = catalog::engine_dir(app)?;
-    let variant = catalog::current_variant().ok_or("No engine variant for this platform")?;
-    let entry = engine_dir.join(variant.entry);
-    if !entry.is_file() {
-        return Err(format!("Engine binary missing: {}", entry.display()));
+    let attempts = engine_attempts(app);
+    if attempts.is_empty() {
+        return Err(
+            "Engine not installed. Run `npm run fetch:engines` or download the acceleration pack."
+                .into(),
+        );
     }
 
     let model_path = catalog::model_file_path(app, model)?;
@@ -185,6 +250,51 @@ pub fn start_engine(
 
     let ctx = num_ctx.unwrap_or(model.num_ctx).clamp(512, 262_144);
 
+    let attempt = &attempts[0];
+    let use_mtp = mtp_usable(app, model, attempt);
+    let spawned = spawn_engine(app, model, &model_path, ctx, attempt, use_mtp)?;
+
+    with_state(&ai, |e| {
+        e.status = STATUS_STARTING.to_string();
+        e.error = None;
+        e.model_id = Some(model.id.to_string());
+        e.port = Some(spawned.port);
+        e.ctx = Some(ctx);
+        e.api_key = Some(spawned.api_key);
+        e.variant = Some(attempt.label);
+        e.attempt_index = 0;
+        e.used_mtp = use_mtp;
+        e.child = Some(spawned.child);
+    });
+
+    let app_handle = app.clone();
+    let id_for_thread = model.id.to_string();
+    std::thread::spawn(move || {
+        poll_until_ready(app_handle, &id_for_thread);
+    });
+
+    Ok(with_state(&ai, |e| snapshot(e)))
+}
+
+struct SpawnedEngine {
+    port: u16,
+    api_key: String,
+    child: Child,
+}
+
+fn spawn_engine(
+    app: &AppHandle,
+    model: &'static ModelEntry,
+    model_path: &Path,
+    ctx: u32,
+    attempt: &EngineAttempt,
+    use_mtp: bool,
+) -> Result<SpawnedEngine, String> {
+    let entry = attempt.dir.join(attempt.entry);
+    if !entry.is_file() {
+        return Err(format!("Engine binary missing: {}", entry.display()));
+    }
+
     let port = {
         let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
         listener.local_addr().map_err(|e| e.to_string())?.port()
@@ -196,7 +306,7 @@ pub fn start_engine(
         .arg("--jinja")
         .arg("--no-webui")
         .arg("-m")
-        .arg(&model_path)
+        .arg(model_path)
         .arg("-c")
         .arg(ctx.to_string())
         .arg("-np")
@@ -215,28 +325,30 @@ pub fn start_engine(
         .arg(&api_key)
         .stdin(std::process::Stdio::null());
 
+    if use_mtp {
+        if let Some(mtp_file) = model.mtp_file {
+            let mtp_path = catalog::models_dir(app)?.join(mtp_file);
+            if mtp_path.is_file() {
+                command
+                    .arg("--spec-draft-model")
+                    .arg(&mtp_path)
+                    .arg("--spec-type")
+                    .arg("draft-mtp")
+                    .arg("--spec-draft-n-max")
+                    .arg("2");
+            }
+        }
+    }
+
     let child = command
         .spawn()
         .map_err(|e| format!("Failed to spawn engine: {e}"))?;
 
-    with_state(&ai, |e| {
-        e.status = STATUS_STARTING.to_string();
-        e.error = None;
-        e.model_id = Some(model.id.to_string());
-        e.port = Some(port);
-        e.ctx = Some(ctx);
-        e.api_key = Some(api_key);
-        e.variant = Some(variant.dir);
-        e.child = Some(child);
-    });
-
-    let app_handle = app.clone();
-    let id_for_thread = model.id.to_string();
-    std::thread::spawn(move || {
-        poll_until_ready(app_handle, &id_for_thread);
-    });
-
-    Ok(with_state(&ai, |e| snapshot(e)))
+    Ok(SpawnedEngine {
+        port,
+        api_key,
+        child,
+    })
 }
 
 fn poll_until_ready(app: AppHandle, model_id: &str) {
@@ -255,6 +367,23 @@ fn poll_until_ready(app: AppHandle, model_id: &str) {
         if superseded {
             return;
         }
+
+        // A startup crash (bad DLL, unsupported flag, failed draft load) shows
+        // up as the child exiting long before the health timeout.
+        let child_exit = with_app_state(&app, |e| {
+            e.child.as_mut().and_then(|c| c.try_wait().ok().flatten())
+        });
+        if let Some(status) = child_exit {
+            with_app_state(&app, |e| {
+                if e.model_id.as_deref() == Some(model_id) {
+                    kill_child(e);
+                    e.error = Some(format!("Engine exited during startup ({status})."));
+                }
+            });
+            attempt_retry(&app, model_id);
+            return;
+        }
+
         let Some(port) = port else { return };
         let key = key.unwrap_or_default();
 
@@ -262,10 +391,10 @@ fn poll_until_ready(app: AppHandle, model_id: &str) {
             with_app_state(&app, |e| {
                 if e.model_id.as_deref() == Some(model_id) {
                     kill_child(e);
-                    e.status = STATUS_FAILED.to_string();
                     e.error = Some("Engine did not become ready in time.".into());
                 }
             });
+            attempt_retry(&app, model_id);
             return;
         }
 
@@ -303,6 +432,81 @@ fn poll_until_ready(app: AppHandle, model_id: &str) {
                     }
                 });
             }
+        }
+    }
+}
+
+/// Retry policy: MTP failure → same backend without MTP; then next backend
+/// (CUDA pack → bundled Vulkan/Metal/CPU). Exhausted → Failed.
+fn attempt_retry(app: &AppHandle, model_id: &str) {
+    let ai = app.state::<AiState>();
+    let (idx, used_mtp) = with_state(&ai, |e| (e.attempt_index, e.used_mtp));
+    let Some(model) = catalog::find_model(model_id) else {
+        return;
+    };
+    let attempts = engine_attempts(app);
+    let (next_idx, retry_same_without_mtp) = if used_mtp {
+        (idx, true)
+    } else {
+        (idx + 1, false)
+    };
+    if next_idx >= attempts.len() {
+        with_state(&ai, |e| {
+            kill_child(e);
+            e.status = STATUS_FAILED.to_string();
+            if e.error.is_none() {
+                e.error = Some("Engine failed to start (all backends tried).".into());
+            }
+        });
+        return;
+    }
+    let attempt = &attempts[next_idx];
+    let use_mtp = if retry_same_without_mtp {
+        false
+    } else {
+        mtp_usable(app, model, attempt)
+    };
+
+    let model_path = match catalog::model_file_path(app, model) {
+        Ok(path) => path,
+        Err(e) => {
+            with_state(&ai, |s| {
+                s.status = STATUS_FAILED.to_string();
+                s.error = Some(e);
+            });
+            return;
+        }
+    };
+    let ctx = with_state(&ai, |e| e.ctx.unwrap_or(model.num_ctx));
+    with_state(&ai, kill_child);
+
+    match spawn_engine(app, model, &model_path, ctx, attempt, use_mtp) {
+        Ok(spawned) => {
+            with_state(&ai, |e| {
+                e.status = STATUS_STARTING.to_string();
+                e.error = None;
+                e.port = Some(spawned.port);
+                e.api_key = Some(spawned.api_key);
+                e.variant = Some(attempt.label);
+                e.attempt_index = next_idx;
+                e.used_mtp = use_mtp;
+                e.child = Some(spawned.child);
+            });
+            let app_handle = app.clone();
+            let id_for_thread = model_id.to_string();
+            std::thread::spawn(move || {
+                poll_until_ready(app_handle, &id_for_thread);
+            });
+        }
+        Err(e) => {
+            // Spawn itself failed — advance to the next candidate. Bounded by
+            // the attempt list length because each call advances idx or clears MTP.
+            with_state(&ai, |s| {
+                s.attempt_index = next_idx;
+                s.used_mtp = use_mtp;
+                s.error = Some(e);
+            });
+            attempt_retry(app, model_id);
         }
     }
 }

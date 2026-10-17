@@ -422,6 +422,66 @@ pub struct CatalogInfo {
     pub engine_installed: bool,
     pub models_dir: String,
     pub models: Vec<CatalogModelDto>,
+    pub cuda_pack_available: bool,
+    pub cuda_pack_installed: bool,
+    pub cuda_pack_size: u64,
+}
+
+/// Optional on-demand CUDA acceleration pack (Windows x64, NVIDIA dGPUs).
+/// Pinned to the same llama.cpp tag as the bundled engine (ENGINE_PIN).
+pub struct EnginePack {
+    pub id: &'static str,
+    pub main_url: &'static str,
+    pub main_sha256: &'static str,
+    pub main_size: u64,
+    pub cudart_url: &'static str,
+    pub cudart_sha256: &'static str,
+    pub cudart_size: u64,
+    pub entry: &'static str,
+}
+
+#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+pub const CUDA_PACK: Option<EnginePack> = Some(EnginePack {
+    id: "cuda-win-x64",
+    main_url: "https://github.com/ggml-org/llama.cpp/releases/download/b11669/llama-b11669-bin-win-cuda-12.4-x64.zip",
+    main_sha256: "c2da1f73ed176ae093ac5aceb978a7b167a16113f6d74c6789eeaee2135cb8dc",
+    main_size: 266_582_698,
+    cudart_url: "https://github.com/ggml-org/llama.cpp/releases/download/b11669/cudart-llama-bin-win-cuda-12.4-x64.zip",
+    cudart_sha256: "8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6",
+    cudart_size: 391_443_627,
+    entry: "llama-server.exe",
+});
+
+#[cfg(not(all(target_os = "windows", target_arch = "x86_64")))]
+pub const CUDA_PACK: Option<EnginePack> = None;
+
+/// Where an installed engine pack lives: `<app_data>/engines/<pack id>/`.
+pub fn engine_pack_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let pack = CUDA_PACK
+        .as_ref()
+        .ok_or_else(|| "No engine pack available for this platform.".to_string())?;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("engines")
+        .join(pack.id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+pub fn cuda_pack_installed(app: &tauri::AppHandle) -> bool {
+    match (CUDA_PACK.as_ref(), engine_pack_dir(app)) {
+        (Some(pack), Ok(dir)) => dir.join(pack.entry).is_file(),
+        _ => false,
+    }
+}
+
+/// Draft-head (MTP) file URL: same HF repo as the main GGUF, sibling filename.
+pub fn mtp_download_url(model: &ModelEntry) -> Option<String> {
+    let mtp_file = model.mtp_file?;
+    let base = model.url.rsplit_once('/')?.0;
+    Some(format!("{base}/{mtp_file}"))
 }
 
 #[tauri::command]
@@ -457,5 +517,11 @@ pub fn ai_catalog_info(app: tauri::AppHandle) -> Result<CatalogInfo, String> {
         engine_installed,
         models_dir: dir.to_string_lossy().to_string(),
         models,
+        cuda_pack_available: CUDA_PACK.is_some(),
+        cuda_pack_installed: cuda_pack_installed(&app),
+        cuda_pack_size: CUDA_PACK
+            .as_ref()
+            .map(|p| p.main_size + p.cudart_size)
+            .unwrap_or(0),
     })
 }

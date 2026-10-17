@@ -3,7 +3,7 @@
 //! `ai_download_model_progress`; cancellation via `ai_download_model_cancel`.
 
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -117,7 +117,10 @@ pub fn ai_download_model_start(
         }
         guard.insert(
             model.id.to_string(),
-            DownloadJob::new(model.id.to_string(), model.size_bytes),
+            DownloadJob::new(
+                model.id.to_string(),
+                model.size_bytes + model.mtp_size.unwrap_or(0),
+            ),
         );
     }
 
@@ -167,34 +170,85 @@ fn run_download(
     part: PathBuf,
     job: DownloadJob,
 ) {
-    match perform_download(model, &part, &job) {
-        Ok(()) => {
-            set_status(&job, DL_VERIFYING);
-            match verify_sha256(&part, model.sha256) {
-                Ok(()) => {
-                    if let Err(e) = std::fs::rename(&part, &dest) {
-                        fail(&job, format!("Failed to finalize model file: {e}"));
-                    } else {
-                        let mut p = job.progress.lock().unwrap();
-                        p.status = DL_COMPLETED.to_string();
-                        p.received = model.size_bytes;
-                        p.total = model.size_bytes;
-                    }
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_file(&part);
-                    fail(&job, format!("SHA-256 mismatch: {e}"));
+    if let Err(e) = download_verified(
+        model.url,
+        model.size_bytes,
+        &part,
+        &dest,
+        model.sha256,
+        &job,
+        0,
+    ) {
+        fail(&job, e);
+        return;
+    }
+
+    // Optional MTP draft head (Gemma workstation models) — same HF repo,
+    // sibling file. Downloaded as part of the same job (aggregate progress).
+    if let (Some(mtp_file), Some(mtp_sha), Some(mtp_size)) =
+        (model.mtp_file, model.mtp_sha256, model.mtp_size)
+    {
+        if job.cancel.load(Ordering::Relaxed) {
+            fail(&job, "cancelled".into());
+            return;
+        }
+        if let Some(mtp_url) = catalog::mtp_download_url(model) {
+            let mtp_dest = dest.with_file_name(mtp_file);
+            let mut mtp_part_name = mtp_dest.as_os_str().to_os_string();
+            mtp_part_name.push(".part");
+            let mtp_part = PathBuf::from(mtp_part_name);
+            if !mtp_dest.is_file() {
+                if let Err(e) = download_verified(
+                    &mtp_url,
+                    mtp_size,
+                    &mtp_part,
+                    &mtp_dest,
+                    mtp_sha,
+                    &job,
+                    model.size_bytes,
+                ) {
+                    fail(&job, format!("MTP draft download failed: {e}"));
+                    return;
                 }
             }
         }
-        Err(e) => fail(&job, e),
+    }
+
+    let mut p = job.progress.lock().unwrap();
+    p.status = DL_COMPLETED.to_string();
+    p.received = p.total;
+}
+
+/// Download one file (resumable), verify SHA-256, then atomically rename.
+/// `base` is the aggregate byte offset already completed in this job (for
+/// multi-file jobs like model + MTP head or engine + cudart pack).
+fn download_verified(
+    url: &str,
+    size_hint: u64,
+    part: &PathBuf,
+    dest: &PathBuf,
+    sha: &str,
+    job: &DownloadJob,
+    base: u64,
+) -> Result<(), String> {
+    perform_download(url, size_hint, part, job, base)?;
+    set_status(job, DL_VERIFYING);
+    match verify_sha256(part, sha) {
+        Ok(()) => std::fs::rename(part, dest)
+            .map_err(|e| format!("Failed to finalize {}: {e}", dest.display())),
+        Err(e) => {
+            let _ = std::fs::remove_file(part);
+            Err(format!("SHA-256 mismatch: {e}"))
+        }
     }
 }
 
 fn perform_download(
-    model: &'static ModelEntry,
+    url: &str,
+    size_hint: u64,
     part: &PathBuf,
     job: &DownloadJob,
+    base: u64,
 ) -> Result<(), String> {
     set_status(job, DL_DOWNLOADING);
 
@@ -216,7 +270,7 @@ fn perform_download(
             0
         };
 
-        let request = agent.get(model.url).set("User-Agent", "teacherpro-fetch");
+        let request = agent.get(url).set("User-Agent", "teacherpro-fetch");
         let request = if existing > 0 {
             request.set("Range", &format!("bytes={existing}-"))
         } else {
@@ -249,7 +303,7 @@ fn perform_download(
                         }
                     })
             })
-            .unwrap_or(model.size_bytes);
+            .unwrap_or(size_hint);
 
         let mut file = std::fs::OpenOptions::new()
             .create(true)
@@ -262,8 +316,8 @@ fn perform_download(
         let received = if resumed { existing } else { 0 };
         {
             let mut p = job.progress.lock().unwrap();
-            p.total = total;
-            p.received = received;
+            p.total = base + total;
+            p.received = base + received;
         }
 
         let mut reader = response.into_reader();
@@ -283,7 +337,7 @@ fn perform_download(
             file.write_all(&buffer[..read])
                 .map_err(|e| format!("Write failed: {e}"))?;
             received += read as u64;
-            job.progress.lock().unwrap().received = received;
+            job.progress.lock().unwrap().received = base + received;
         }
         drop(reader);
         drop(file);
@@ -338,4 +392,195 @@ fn fail(job: &DownloadJob, message: String) {
         p.status = DL_FAILED.to_string();
         p.error = Some(message);
     }
+}
+
+// ── CUDA acceleration pack (P4) ──────────────────────────────────────────
+
+const ENGINE_PACK_KEY: &str = "engine-cuda";
+
+fn pack_progress(app: &tauri::AppHandle, state: &tauri::State<'_, AiState>) -> DownloadProgress {
+    let installed = catalog::cuda_pack_installed(app);
+    if installed {
+        if let Some(job) = state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+            let snap = snapshot(job);
+            if snap.state != DL_CANCELLED {
+                return snap;
+            }
+        }
+        return DownloadProgress {
+            model_id: ENGINE_PACK_KEY.to_string(),
+            state: DL_COMPLETED.to_string(),
+            received: 0,
+            total: 0,
+            error: None,
+        };
+    }
+    match state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+        Some(job) => snapshot(job),
+        None => DownloadProgress {
+            model_id: ENGINE_PACK_KEY.to_string(),
+            state: "not-installed".to_string(),
+            received: 0,
+            total: 0,
+            error: None,
+        },
+    }
+}
+
+#[tauri::command]
+pub fn ai_engine_pack_status(app: AppHandle, state: tauri::State<'_, AiState>) -> DownloadProgress {
+    pack_progress(&app, &state)
+}
+
+#[tauri::command]
+pub fn ai_engine_pack_start(
+    app: AppHandle,
+    state: tauri::State<'_, AiState>,
+) -> Result<DownloadProgress, String> {
+    let pack = catalog::CUDA_PACK
+        .as_ref()
+        .ok_or("No engine pack available for this platform.")?;
+    if catalog::cuda_pack_installed(&app) {
+        return Ok(pack_progress(&app, &state));
+    }
+    {
+        let mut guard = state.downloads.lock().unwrap();
+        if let Some(job) = guard.get(ENGINE_PACK_KEY) {
+            let snap = snapshot(job);
+            if matches!(
+                snap.state.as_str(),
+                DL_QUEUED | DL_DOWNLOADING | DL_VERIFYING
+            ) {
+                return Ok(snap);
+            }
+        }
+        guard.insert(
+            ENGINE_PACK_KEY.to_string(),
+            DownloadJob::new(
+                ENGINE_PACK_KEY.to_string(),
+                pack.main_size + pack.cudart_size,
+            ),
+        );
+    }
+    let job = {
+        state
+            .downloads
+            .lock()
+            .unwrap()
+            .get(ENGINE_PACK_KEY)
+            .unwrap()
+            .clone()
+    };
+    let job_for_thread = job.clone();
+    let dest_dir = catalog::engine_pack_dir(&app)?;
+    std::thread::spawn(move || {
+        run_engine_pack(dest_dir, pack, job_for_thread);
+    });
+    Ok(snapshot(&job))
+}
+
+#[tauri::command]
+pub fn ai_engine_pack_cancel(
+    app: AppHandle,
+    state: tauri::State<'_, AiState>,
+) -> Result<DownloadProgress, String> {
+    if let Some(job) = state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+        job.cancel.store(true, Ordering::Relaxed);
+    }
+    Ok(pack_progress(&app, &state))
+}
+
+#[tauri::command]
+pub fn ai_engine_pack_remove(app: AppHandle) -> Result<(), String> {
+    let dir = catalog::engine_pack_dir(&app)?;
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(|e| format!("Failed to remove pack: {e}"))?;
+    }
+    // Keep the (now empty) directory for a clean reinstall path.
+    let _ = std::fs::create_dir_all(&dir);
+    Ok(())
+}
+
+fn run_engine_pack(dest_dir: PathBuf, pack: &'static catalog::EnginePack, job: DownloadJob) {
+    if let Err(e) = perform_engine_pack(&dest_dir, pack, &job) {
+        fail(&job, e);
+        return;
+    }
+    let mut p = job.progress.lock().unwrap();
+    p.status = DL_COMPLETED.to_string();
+    p.received = p.total;
+}
+
+fn perform_engine_pack(
+    dest_dir: &Path,
+    pack: &'static catalog::EnginePack,
+    job: &DownloadJob,
+) -> Result<(), String> {
+    set_status(job, DL_DOWNLOADING);
+    let dl_dir = dest_dir.join("_download");
+    std::fs::create_dir_all(&dl_dir).map_err(|e| e.to_string())?;
+
+    let files: [(&str, &str, u64, &str); 2] = [
+        (
+            pack.main_url,
+            pack.main_sha256,
+            pack.main_size,
+            "engine.zip",
+        ),
+        (
+            pack.cudart_url,
+            pack.cudart_sha256,
+            pack.cudart_size,
+            "cudart.zip",
+        ),
+    ];
+    let mut base = 0u64;
+    let mut zips: Vec<PathBuf> = Vec::new();
+    for (url, sha, size, name) in files {
+        if job.cancel.load(Ordering::Relaxed) {
+            return Err("cancelled".into());
+        }
+        let dest = dl_dir.join(name);
+        let mut part_name = dest.as_os_str().to_os_string();
+        part_name.push(".part");
+        let part = PathBuf::from(part_name);
+        download_verified(url, size, &part, &dest, sha, job, base)?;
+        zips.push(dest);
+        base += size;
+    }
+
+    set_status(job, DL_VERIFYING);
+    for zip_path in &zips {
+        extract_zip_flat(zip_path, dest_dir)?;
+    }
+    if !dest_dir.join(pack.entry).is_file() {
+        return Err("CUDA pack extracted but the engine binary is missing.".into());
+    }
+    let _ = std::fs::remove_dir_all(&dl_dir);
+    Ok(())
+}
+
+/// Extract every file in the archive into `dest`, flattened by basename
+/// (llama.cpp Windows zips keep all binaries at the archive root anyway).
+fn extract_zip_flat(zip_path: &Path, dest: &Path) -> Result<(), String> {
+    let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| format!("Invalid zip {}: {e}", zip_path.display()))?;
+    for i in 0..archive.len() {
+        let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
+        if entry.is_dir() {
+            continue;
+        }
+        let Some(name) = entry.name().rsplit('/').next().map(str::to_string) else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        let out_path = dest.join(&name);
+        let mut out =
+            std::fs::File::create(&out_path).map_err(|e| format!("extract {name}: {e}"))?;
+        std::io::copy(&mut entry, &mut out).map_err(|e| format!("extract {name}: {e}"))?;
+    }
+    Ok(())
 }

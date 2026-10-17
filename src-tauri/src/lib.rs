@@ -2013,7 +2013,12 @@ pub fn run() {
             ai::client::ai_count_tokens,
             ai::client::ai_structured,
             ai::engine::ai_select_model,
-            ai::engine::ai_selected_model
+            ai::engine::ai_selected_model,
+            ai::hardware::ai_hardware_info,
+            ai::downloader::ai_engine_pack_status,
+            ai::downloader::ai_engine_pack_start,
+            ai::downloader::ai_engine_pack_cancel,
+            ai::downloader::ai_engine_pack_remove
         ])
         .manage(ai::AiState::new())
         .setup(|app| {

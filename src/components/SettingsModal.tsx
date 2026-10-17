@@ -65,6 +65,14 @@ interface CatalogInfoDto {
   engineInstalled: boolean;
   modelsDir: string;
   models: CatalogModelDto[];
+  cudaPackAvailable: boolean;
+  cudaPackInstalled: boolean;
+  cudaPackSize: number;
+}
+
+interface HardwareInfoDto {
+  gpu: { name: string; vramMb: number } | null;
+  totalRamGb: number;
 }
 
 const TRANSLATE_LANGUAGES = [
@@ -139,6 +147,21 @@ export function SettingsModal({ open, onClose }: Props) {
   const [engineStatus, setEngineStatus] = useState<EngineStatusDto | null>(null);
   const [catalog, setCatalog] = useState<CatalogInfoDto | null>(null);
   const [v3Downloads, setV3Downloads] = useState<Record<string, DownloadProgressDto>>({});
+  const [hardware, setHardware] = useState<HardwareInfoDto | null>(null);
+  const [packProgress, setPackProgress] = useState<DownloadProgressDto | null>(null);
+
+  useEffect(() => {
+    if (tab !== "ai") return;
+    let alive = true;
+    void invoke<HardwareInfoDto>("ai_hardware_info")
+      .then((h) => {
+        if (alive) setHardware(h);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [tab]);
 
 
   useEffect(() => {
@@ -167,6 +190,12 @@ export function SettingsModal({ open, onClose }: Props) {
         }
       } catch {
         /* catalog unavailable */
+      }
+      try {
+        const p = await invoke<DownloadProgressDto>("ai_engine_pack_status");
+        if (alive) setPackProgress(p);
+      } catch {
+        /* pack commands unavailable */
       }
     };
     void tick();
@@ -221,6 +250,56 @@ export function SettingsModal({ open, onClose }: Props) {
       setAiV3RewriteModelId(null);
     } catch (e) {
       console.error("select model failed:", e);
+    }
+  };
+
+  const refreshAfterPackChange = async () => {
+    try {
+      // Restart engine so the next request picks the new backend.
+      await invoke("ai_engine_stop");
+      setEngineStatus(await invoke<EngineStatusDto>("ai_engine_status"));
+      setCatalog(await invoke<CatalogInfoDto>("ai_catalog_info"));
+    } catch {
+      /* engine may not be running */
+    }
+  };
+
+  const startPackInstall = async () => {
+    try {
+      const d = await invoke<DownloadProgressDto>("ai_engine_pack_start");
+      setPackProgress(d);
+      const poll = async () => {
+        try {
+          const p = await invoke<DownloadProgressDto>("ai_engine_pack_status");
+          setPackProgress(p);
+          if (["queued", "downloading", "verifying"].includes(p.state)) {
+            window.setTimeout(() => void poll(), 750);
+          } else if (p.state === "completed") {
+            await refreshAfterPackChange();
+          }
+        } catch (e) {
+          console.error("pack poll failed:", e);
+        }
+      };
+      void poll();
+    } catch (e) {
+      setPackProgress({
+        modelId: "engine-cuda",
+        state: "failed",
+        received: 0,
+        total: 0,
+        error: String(e),
+      });
+    }
+  };
+
+  const removePack = async () => {
+    try {
+      await invoke("ai_engine_pack_remove");
+      setPackProgress(null);
+      await refreshAfterPackChange();
+    } catch (e) {
+      console.error("remove pack failed:", e);
     }
   };
 
@@ -432,9 +511,19 @@ export function SettingsModal({ open, onClose }: Props) {
                                   EU
                                 </span>
                               )}
+                              {hardware?.gpu &&
+                                model.sizeBytes <= hardware.gpu.vramMb * 1024 * 1024 * 0.9 && (
+                                  <span
+                                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]"
+                                    style={{ background: "rgba(34,197,94,0.16)", color: "#4ade80" }}
+                                    title={t("settings.aiV3.fitsVramHint")}
+                                  >
+                                    {t("settings.aiV3.fitsVram")}
+                                  </span>
+                                )}
                             </div>
                             <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
-                              {(model.sizeBytes / 1e9).toFixed(1)} GB Â· RAM {model.minRamGb}+ GB Â· ctx {model.numCtx}
+                              {(model.sizeBytes / 1e9).toFixed(1)} GB · RAM {model.minRamGb}+ GB · ctx {model.numCtx}
                             </div>
                           </div>
                           {model.downloaded ? (
@@ -481,6 +570,84 @@ export function SettingsModal({ open, onClose }: Props) {
                       );
                     })}
                   </div>
+                </Section>
+
+                <Section title={t("settings.aiV3.systemTitle")}>
+                  <div
+                    className="rounded-lg border px-3 py-2 text-[12.5px]"
+                    style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-panel-muted)" }}
+                  >
+                    <div className="text-[var(--tp-text-primary)]">
+                      {hardware?.gpu
+                        ? t("settings.aiV3.gpuDetected", {
+                            name: hardware.gpu.name,
+                            vram: Math.round(hardware.gpu.vramMb / 1024),
+                          })
+                        : t("settings.aiV3.gpuNone")}
+                    </div>
+                    <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                      {t("settings.aiV3.ramDetected", { ram: hardware?.totalRamGb ?? "?" })}
+                    </div>
+                  </div>
+
+                  {catalog?.cudaPackAvailable && (
+                    <div
+                      className="mt-2 flex items-center gap-3 rounded-lg border px-3 py-2"
+                      style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-panel-muted)" }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-medium text-[var(--tp-text-primary)]">
+                          {t("settings.aiV3.cudaPack")}
+                        </div>
+                        <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                          {catalog.cudaPackInstalled
+                            ? t("settings.aiV3.cudaPackInstalled")
+                            : t("settings.aiV3.cudaPackDesc", {
+                                size: (catalog.cudaPackSize / 1e9).toFixed(1),
+                              })}
+                        </div>
+                        {packProgress?.error && (
+                          <div className="text-[11px] text-red-400">{packProgress.error}</div>
+                        )}
+                      </div>
+                      {catalog.cudaPackInstalled ? (
+                        <button className="tp-btn shrink-0" onClick={() => void removePack()}>
+                          {t("settings.aiV3.removePack")}
+                        </button>
+                      ) : packProgress &&
+                        ["queued", "downloading", "verifying"].includes(packProgress.state) ? (
+                        <div className="shrink-0 flex items-center gap-2">
+                          <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--tp-panel-elevated)" }}>
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${packProgress.total > 0 ? Math.round((packProgress.received / packProgress.total) * 100) : 0}%`,
+                                background: "var(--tp-accent)",
+                              }}
+                            />
+                          </div>
+                          <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                            {packProgress.state === "verifying"
+                              ? t("settings.aiV3.verifying")
+                              : `${packProgress.total > 0 ? Math.round((packProgress.received / packProgress.total) * 100) : 0}%`}
+                          </span>
+                          <button
+                            className="tp-btn"
+                            onClick={() => void invoke("ai_engine_pack_cancel")}
+                          >
+                            {t("settings.aiV3.cancel")}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          className="tp-btn shrink-0 inline-flex items-center gap-1.5"
+                          onClick={() => void startPackInstall()}
+                        >
+                          <HardDriveDownload className="w-3.5 h-3.5" /> {t("settings.aiV3.installPack")}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </Section>
 
                 <Section title={t("settings.ai.aiRuntime")}>
