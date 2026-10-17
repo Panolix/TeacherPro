@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * fetch-engines.mjs — downloads the pinned llama.cpp engine for the current
  * platform into src-tauri/resources/engines/<variant>/ and verifies its SHA-256.
@@ -25,7 +25,13 @@ const config = JSON.parse(readFileSync(path.join(root, "scripts", "engine-config
 const enginesRoot = path.join(root, "src-tauri", "resources", "engines");
 
 function sha256(file) {
-  return createHash("sha256").update(createReadStream(file)).digest("hex");
+  return new Promise((resolve, reject) => {
+    const hash = createHash("sha256");
+    createReadStream(file)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("end", () => resolve(hash.digest("hex")))
+      .on("error", reject);
+  });
 }
 
 function download(url, dest) {
@@ -65,7 +71,7 @@ if (args[0] === "--print-hashes") {
     const dest = path.join(tmp, asset);
     process.stdout.write(`fetching ${asset}... `);
     download(`${config.downloadBase}/${config.pin}/${asset}`, dest);
-    console.log(`sha256: ${sha256(dest)}  (${asset})`);
+    console.log(`sha256: ${await sha256(dest)}  (${asset})`);
   }
   process.exit(0);
 }
@@ -93,7 +99,7 @@ const assetPath = path.join(tmp, variant.asset);
 console.log(`fetching engine ${variantKey}: ${config.pin}/${variant.asset}`);
 download(`${config.downloadBase}/${config.pin}/${variant.asset}`, assetPath);
 
-const actual = sha256(assetPath);
+const actual = await sha256(assetPath);
 if (variant.sha256 && actual !== variant.sha256) {
   console.error(`SHA-256 mismatch for ${variant.asset}\n  expected ${variant.sha256}\n  actual   ${actual}`);
   process.exit(1);
