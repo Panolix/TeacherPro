@@ -8,9 +8,9 @@ const root = process.cwd();
 const requiredFiles = [
   "public/method-bank.json",
   "src/components/Editor.tsx",
-  "METHOD_BANK_SPEC.md",
-  "METHOD_BANK_UI_UX.md",
-  "FEATURE_TRACKER.md",
+  "docs/METHOD_BANK_SPEC.md",
+  "docs/METHOD_BANK_UI_UX.md",
+  "docs/FEATURE_TRACKER.md",
 ];
 
 const editorMarkers = [

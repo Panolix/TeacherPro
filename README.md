@@ -220,9 +220,9 @@ The compiled files will appear under `src-tauri/target/release/bundle/`.
 ## 📜 Documentation & Architecture
 
 TeacherPro uses a live documentation system to track design decisions, remaining gaps, and app features. If you are developing or modifying the codebase, please refer to:
-- [FEATURE_TRACKER.md](FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
-- [PROJECT_PLAN.md](PROJECT_PLAN.md) - The initial architectural phase planning map.
-- [AI_IMPLEMENTATION_PLAN.md](AI_IMPLEMENTATION_PLAN.md) - The implementation roadmap and acceptance criteria for local AI features.
+- [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
+- [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) - The initial architectural phase planning map.
+- [docs/AI_IMPLEMENTATION_PLAN.md](docs/AI_IMPLEMENTATION_PLAN.md) - The implementation roadmap and acceptance criteria for local AI features.
 
 ---
 
