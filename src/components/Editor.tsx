@@ -39,22 +39,13 @@ import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle, FontFamily } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
-import {
-  createPdfBlobUrl,
-  printCurrentWindow,
-  printPdfBlobUrl,
-  renderElementToPdfBytes,
-  PdfExportError,
-  describePdfRenderError,
-  PRINT_PDF_PIXEL_RATIO,
-  revokePdfBlobUrl,
-  savePdfToVault,
-} from "../utils/pdfExport";
 import { formatIsoToEuropeanDate, parseEuropeanDateToDate, parseEuropeanDateToIso } from "../utils/dates";
 import { normalizeColorForPicker } from "../utils/colors";
 import { snapSelectionInsideTextblock } from "../utils/editorSelection";
 import { AppLink, WordStyleTextAlign } from "./editor/editorExtensions";
 import { MenuBar } from "./editor/MenuBar";
+import { LessonPdfPreviewModal } from "./editor/LessonPdfPreviewModal";
+import { useLessonPdf } from "./editor/useLessonPdf";
 import { AiMarkdown } from "./editor/AiMarkdown";
 import { normalizeAiFragmentOutput, parseThinkingFromResponse } from "../utils/aiText";
 import type { MaterialDropPayload } from "../utils/editorDnD";
@@ -62,7 +53,6 @@ import { getMaterialDropPayload, hasMaterialDropData, hasMethodDropData } from "
 import type { MethodBankItem, MethodBankType, MethodDropPayload } from "../utils/methodBank";
 import { METHOD_TYPE_ACCENT, getMethodDropPayload, parseMethodBankSeed } from "../utils/methodBank";
 import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
-import { type as osType } from "@tauri-apps/plugin-os";
 import {
   Bold,
   Italic,
@@ -188,10 +178,8 @@ export function Editor() {
   const [plannedForInput, setPlannedForInput] = useState(
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
-  const [isPdfBusy, setIsPdfBusy] = useState(false);
   const [isAiBusy, setIsAiBusy] = useState(false);
   const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [customTableDialog, setCustomTableDialog] = useState<{
     rows: number;
@@ -361,7 +349,6 @@ export function Editor() {
   }, [setActiveChatDb, setActiveChatGrade, setActiveChatTopic]);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
-  const pdfPreviewRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
 
@@ -523,7 +510,6 @@ export function Editor() {
         setTranslateSubmenuOpen(false);
         setSlashMenu(null);
         setPlannedCalendarOpen(false);
-        setPdfPreviewUrl(null);
         closeEditorSidePanels();
       }
     };
@@ -564,51 +550,6 @@ export function Editor() {
     };
   }, [plannedCalendarOpen]);
 
-  useEffect(() => {
-    return () => {
-      revokePdfBlobUrl(pdfPreviewUrl);
-    };
-  }, [pdfPreviewUrl]);
-
-  useEffect(() => {
-    if (!pdfPreviewUrl) {
-      return;
-    }
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setPdfPreviewUrl(null);
-      }
-    };
-
-    // The PDF iframe steals focus on load and after every click inside it,
-    // which prevents the parent window from receiving keydown (so Escape dies).
-    // We work around this by reclaiming focus to the modal whenever the
-    // window blurs (i.e. focus moved to the iframe) — keyboard scrolling
-    // inside the PDF is sacrificed but Esc / standard shortcuts work.
-    const reclaimFocus = () => {
-      // Only reclaim if focus actually went to the iframe, not to another
-      // app/window.
-      requestAnimationFrame(() => {
-        const active = document.activeElement;
-        if (active && active.tagName === "IFRAME") {
-          (active as HTMLIFrameElement).blur();
-          pdfPreviewRef.current?.focus();
-        }
-      });
-    };
-
-    window.addEventListener("keydown", closeOnEscape, true);
-    window.addEventListener("blur", reclaimFocus, true);
-    requestAnimationFrame(() => {
-      pdfPreviewRef.current?.focus();
-    });
-
-    return () => {
-      window.removeEventListener("keydown", closeOnEscape, true);
-      window.removeEventListener("blur", reclaimFocus, true);
-    };
-  }, [pdfPreviewUrl]);
 
   const editor = useEditor({
     extensions: [
@@ -2650,215 +2591,33 @@ export function Editor() {
     setPendingMaterialDrop(null);
   }, [editor, isSelectionInsideLessonTableBodyRow, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
 
-  const createLessonPdf = async (): Promise<{ pdfBytes: Uint8Array; fileName: string }> => {
-    const sourceElement = document.getElementById("lesson-plan-export-content");
-    if (!sourceElement) {
-      throw new Error(t("editor.pdf.noContent"));
-    }
+  // Subject color drives both the on-screen picker and the exported subject dot.
+  const normalizedSubjectName = subject.trim().toLowerCase();
+  const selectedSubjectConfig = normalizedSubjectName
+    ? subjects.find((entry) => entry.name.trim().toLowerCase() === normalizedSubjectName)
+    : undefined;
+  const selectedSubjectColor = selectedSubjectConfig
+    ? normalizeColorForPicker(selectedSubjectConfig.color, "#9ca3af")
+    : null;
 
-    const exportHost = document.createElement("div");
-    exportHost.style.position = "fixed";
-    exportHost.style.left = "-100000px";
-    exportHost.style.top = "0";
-    exportHost.style.pointerEvents = "none";
-    exportHost.style.opacity = "0";
-    exportHost.style.zIndex = "-1";
-
-    const clonedElement = sourceElement.cloneNode(true) as HTMLElement;
-    clonedElement.classList.add("tp-export-light-clone");
-
-    // Force A4 Landscape exact printable inner-width (~1062px at 96 DPI for 281mm printable area).
-    // This physically guarantees 12pt web font equals 12pt print font without responsive container stretching/shrinking.
-    // Read from the same CSS var that drives the on-screen paper — single source of truth.
-    const exportWidth =
-      parseInt(
-        getComputedStyle(document.documentElement)
-          .getPropertyValue("--tp-export-content-w")
-          .trim(),
-        10,
-      ) || 1062;
-    clonedElement.style.width = `${exportWidth}px`;
-    clonedElement.style.maxWidth = `${exportWidth}px`;
-    clonedElement.style.minWidth = `${exportWidth}px`;
-
-    clonedElement
-      .querySelectorAll<HTMLElement>(".lesson-export-input, .lesson-export-planned-input, .lesson-export-calendar-trigger, .lesson-export-calendar-popover")
-      .forEach((node) => {
-        node.style.display = "none";
-      });
-
-    const subjectPicker = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-picker");
-    if (subjectPicker) {
-      subjectPicker.style.display = "none";
-    }
-
-    const subjectText = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-text");
-    if (subjectText) {
-      subjectText.style.display = "inline-flex";
-      subjectText.style.alignItems = "center";
-      subjectText.style.gap = "6px";
-    }
-
-    const subjectName = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-name-print");
-    if (subjectName) {
-      subjectName.textContent = subject.trim() || t("editor.meta.notSet");
-    } else if (subjectText) {
-      subjectText.textContent = subject.trim() || t("editor.meta.notSet");
-    }
-
-    const exportSubjectDot = clonedElement.querySelector<HTMLElement>(".lesson-export-subject-dot-print");
-    if (exportSubjectDot) {
-      if (selectedSubjectColor) {
-        exportSubjectDot.style.display = "inline-block";
-        exportSubjectDot.style.backgroundColor = selectedSubjectColor;
-      } else {
-        exportSubjectDot.style.display = "none";
-      }
-    }
-
-    const teacherText = clonedElement.querySelector<HTMLElement>(".lesson-export-teacher-text");
-    if (teacherText) {
-      teacherText.textContent = teacher.trim() || t("editor.meta.notSet");
-      teacherText.style.display = "inline";
-    }
-
-    const plannedText = clonedElement.querySelector<HTMLElement>(".lesson-export-planned-text");
-    if (plannedText) {
-      plannedText.textContent = plannedForInput.trim() || t("editor.meta.notSet");
-      plannedText.style.display = "inline";
-    }
-
-    exportHost.appendChild(clonedElement);
-    document.body.appendChild(exportHost);
-
-    try {
-      await new Promise<void>((resolve) => {
-        requestAnimationFrame(() => resolve());
-      });
-
-      const normalizedSubject =
-        subject.trim().replace(/[^a-zA-Z0-9\-\s_]/g, "").replace(/\s+/g, "-") || "lesson-plan";
-      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `${normalizedSubject}-${stamp}.pdf`;
-
-      const pdfBytes = await renderElementToPdfBytes(clonedElement, {
-        orientation: "landscape",
-        marginMm: 5,
-        scale: PRINT_PDF_PIXEL_RATIO,
-        backgroundColor: "#ffffff",
-        multiPage: true,
-      });
-
-      return { pdfBytes, fileName };
-    } finally {
-      exportHost.remove();
-    }
-  };
-
-  const handleExportPDF = async () => {
-    if (!vaultPath) {
-      alert(t("editor.pdf.pleaseOpenVault"));
-      return;
-    }
-
-    setIsPdfBusy(true);
-
-    try {
-      const { pdfBytes, fileName } = await createLessonPdf();
-
-      const savedPath = await savePdfToVault({
-        pdfBytes,
-        fileName,
-        vaultPath,
-        dialogTitle: t("editor.pdf.exportDialogTitle"),
-      });
-
-      if (savedPath) {
-        alert(t("editor.pdf.exportedSuccessfully"));
-      }
-    } catch (error) {
-      console.error("Lesson PDF export failed:", error);
-      alert(t("editor.pdf.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
-    } finally {
-      setIsPdfBusy(false);
-    }
-  };
-
-  const handlePreviewPDF = async () => {
-    setIsPdfBusy(true);
-
-    try {
-      const { pdfBytes } = await createLessonPdf();
-      const nextUrl = createPdfBlobUrl(pdfBytes);
-      setPdfPreviewUrl((previous) => {
-        revokePdfBlobUrl(previous);
-        return nextUrl;
-      });
-    } catch (error) {
-      console.error("Lesson PDF preview failed:", error);
-      alert(t("editor.pdf.previewFailed", { error: describePdfRenderError(error) }));
-    } finally {
-      setIsPdfBusy(false);
-    }
-  };
-
-  const handlePdfPreviewBackdropMouseDown = (
-    event: React.MouseEvent<HTMLDivElement>,
-  ) => {
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-    setPdfPreviewUrl(null);
-  };
-
-  const handlePrintPDF = async () => {
-    if (!vaultPath) {
-      alert(t("editor.pdf.pleaseOpenVault"));
-      return;
-    }
-
-    setIsPdfBusy(true);
-
-    try {
+  const {
+    isPdfBusy,
+    pdfPreviewUrl,
+    closePdfPreview,
+    previewPdf,
+    printPdf,
+    exportPdf,
+  } = useLessonPdf({
+    vaultPath,
+    subject,
+    teacher,
+    plannedForInput,
+    selectedSubjectColor,
+    closeTransientUi: () => {
       setTableContextMenu(null);
       setPlannedCalendarOpen(false);
-
-      const { pdfBytes, fileName } = await createLessonPdf();
-
-      if (osType() === "windows") {
-        // printPdfBlobUrl owns the blob URL lifecycle (it keeps it alive
-        // while the print preview is open and revokes it on cleanup), so no
-        // manual revoke here.
-        try {
-          await printPdfBlobUrl(createPdfBlobUrl(pdfBytes));
-          return;
-        } catch (printError) {
-          console.warn(
-            "Lesson PDF blob print failed on Windows, falling back to webview print dialog.",
-            printError,
-          );
-          await printCurrentWindow(["tp-exporting"]);
-          return;
-        }
-      }
-      
-      const { tempDir, join } = await import("@tauri-apps/api/path");
-      const { writeFile } = await import("@tauri-apps/plugin-fs");
-      const { invoke } = await import("@tauri-apps/api/core");
-
-      const sysTempDir = await tempDir();
-      const tempPdfPath = await join(sysTempDir, fileName);
-
-      await writeFile(tempPdfPath, pdfBytes);
-      await invoke("print_pdf_file", { path: tempPdfPath });
-    } catch (error) {
-      console.error("Lesson PDF print failed:", error);
-      alert(t("editor.pdf.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
-    } finally {
-      setIsPdfBusy(false);
-    }
-  };
-
+    },
+  });
   const formatDate = (isoString?: string | null) => {
     if (!isoString) return t("editor.meta.notSet");
     return new Date(isoString).toLocaleDateString("en-GB", {
@@ -2882,13 +2641,13 @@ export function Editor() {
     void handleSave();
   };
   previewRef.current = () => {
-    void handlePreviewPDF();
+    void previewPdf();
   };
   printRef.current = () => {
-    void handlePrintPDF();
+    void printPdf();
   };
   exportRef.current = () => {
-    void handleExportPDF();
+    void exportPdf();
   };
   insertTableRef.current = insertLessonTable;
   toggleChatRef.current = toggleChatPanel;
@@ -3008,13 +2767,6 @@ export function Editor() {
     }
     chain.insertContent(blocks).run();
   };
-  const normalizedSubjectName = subject.trim().toLowerCase();
-  const selectedSubjectConfig = normalizedSubjectName
-    ? subjects.find((entry) => entry.name.trim().toLowerCase() === normalizedSubjectName)
-    : undefined;
-  const selectedSubjectColor = selectedSubjectConfig
-    ? normalizeColorForPicker(selectedSubjectConfig.color, "#9ca3af")
-    : null;
   const monthStart = startOfMonth(plannedCalendarMonth);
   const monthEnd = endOfMonth(monthStart);
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -4278,38 +4030,11 @@ export function Editor() {
         </div>
       )}
 
-      {pdfPreviewUrl && (
-        <div
-          className="fixed inset-0 z-[78] bg-black/65 p-6 flex items-center justify-center print:hidden pdf-preview-modal"
-          onMouseDown={handlePdfPreviewBackdropMouseDown}
-        >
-          <div
-            ref={pdfPreviewRef}
-            tabIndex={-1}
-            className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <div className="h-12 border-b border-[#333] px-4 flex items-center justify-between">
-              <div className="text-sm text-gray-200 font-medium">{t("editor.pdf.lessonPlanPreview")}</div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePrintPDF}
-                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
-                >
-                  {t("editor.pdf.printSavePDF")}
-                </button>
-                <button
-                  onClick={() => setPdfPreviewUrl(null)}
-                  className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            <iframe src={pdfPreviewUrl} title={t("editor.pdf.lessonPlanPreview")} className="w-full h-[calc(88vh-48px)] bg-white" />
-          </div>
-        </div>
-      )}
+      <LessonPdfPreviewModal
+        url={pdfPreviewUrl}
+        onClose={closePdfPreview}
+        onPrint={printPdf}
+      />
 
     </div>
   );
