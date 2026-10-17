@@ -65,7 +65,11 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Smart Breadcrumbs:** The top navigation bar intelligently displays your exact location relative to your Vault.
 
 ### 📝 Lesson Plan Editor
-- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, Underline, Unordered/Ordered lists, text color, underline color, and multicolor highlighting.
+- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, Underline, text color, underline color, multicolor highlighting, text alignment (left / center / right / justify), checklists, subscript / superscript, blockquotes and web links.
+- **Bundled Fonts:** Twelve typefaces ship inside the app (Inter, Lato, Nunito, Lexend, Atkinson Hyperlegible, Merriweather, Lora, Playfair Display, EB Garamond, Caveat, Patrick Hand, Shadows Into Light), grouped by category in the font picker. Documents look identical on every machine and in every export — no font installs needed. System fonts remain available too.
+- **One-Click Colours:** The A / U / H chips in the formatting rail apply your last-used text, underline or highlight colour with a single click. Right-clicking a chip opens a compact preset palette, and the chip always shows the active colour.
+- **Word-Style Context Menus:** Right-clicking selected text shows a compact formatting bar plus Cut / Copy / Paste; right-clicking empty space offers insertion actions (table, checklist, quote, divider, select all); right-clicking inside a lesson table gives row/column and delete operations. AI rewrite / translate appears whenever local AI is enabled.
+- **Native Clipboard:** Cut / Copy / Paste in the context menus use the OS clipboard; copying also writes rich HTML so pasting into Word or Google Docs keeps your formatting.
 - **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, resize them freely, and set the default inserted body-row count in Settings.
 - **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
 - **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
@@ -99,7 +103,8 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 
 ### 🖨️ Native Printing & PDF Export
 - **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
-- **Native OS Print Dialogs:** Built with a custom Rust backend, clicking "Print" seamlessly opens the native Windows, macOS, or Linux print dialogs, avoiding standard webview limitations.
+- **High-Resolution Output:** Exports render at ~300 DPI and are printed at true physical size (12 pt on screen prints as 12 pt on paper).
+- **Native OS Print Dialogs:** Built with a custom Rust backend, clicking "Print" seamlessly opens the native Windows, macOS, or Linux print dialogs, avoiding standard webview limitations. Choose **100% / Actual size** in the system print dialog for margins that match the in-app preview — "Fit to printable area" adds the printer's own margins.
 - **Export to PDF:** Save beautifully formatted PDF versions of your documents directly into your Vault's `Exports` folder.
 
 ### ⚙️ UI & Customization
@@ -112,12 +117,13 @@ TeacherPro is packed with purpose-built tools designed to adapt to your teaching
 - **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
 - **Persistent Sidebar Setup:** Sidebar open/collapsed state, Sidebar Search collapse state, and expanded Material/Trash folders now restore after restarting the app.
 - **Centered Main Welcome Screen:** When no lesson is open, the main content area shows a simple centered welcome with shortcut hints instead of an immediate create button.
-- **Keyboard Shortcuts:** `Cmd/Ctrl+S` saves the active lesson in the editor; `Esc` closes preview overlays, settings, and editor side panels (AI Chat, Notes, Method Bank).
+- **Keyboard Shortcuts:** Word-style shortcuts throughout — `Cmd/Ctrl+S` save, `Esc` closes preview overlays/settings/side panels, `Cmd/Ctrl+B/I/U` bold/italic/underline, `Cmd/Ctrl+Shift+S` strikethrough, `Cmd/Ctrl+E/L/R/J` alignment, `Cmd/Ctrl+K` link, `Cmd/Ctrl+P` print, `Cmd/Ctrl+Shift+V` paste as plain text, `Cmd/Ctrl+Shift+8/7/9` bullet/ordered/checklist, `Cmd/Ctrl+Shift+B` quote. Toolbar tooltips show the correct modifier for your platform (⌘ on macOS, Ctrl elsewhere).
 - **Compact Action Buttons:** AI Chat, Save, Preview, Print, and Export actions are icon-first by default, with an optional setting to show text labels.
 
-### 🤖 Local AI Assistant (Experimental Foundation)
-- **Local-First Runtime:** AI integration is being implemented on top of Tauri with local model execution (no required cloud account).
-- **Model Catalog:** Includes current practical local families (Gemma 4, Qwen 3, Llama 3.2, DeepSeek R1 8B, Mistral Small 3.1, Phi 4) with per-model disk/RAM/VRAM guidance and runtime defaults.
+### 🤖 Local AI Assistant
+- **Local-First Runtime:** AI runs entirely on your machine via a local Ollama runtime managed by the app (no cloud account required; enable it in Settings → AI).
+- **Model Catalog:** Includes current practical local families — Granite 4.2, Qwen 3.5 / 3.6 / 3.8, Gemma 4, LFM 2.5, Ministral 3 and GPT-OSS 20B — with per-model disk/RAM/VRAM guidance and runtime defaults. Apple Silicon users get dedicated MLX builds.
+- **Knowledge Base / RAG:** Import PDFs into subject databases; content is chunked, embedded locally (`bge-m3`) and can be used as chat context.
 - **Capability Chips:** Model cards provide neutral capability hints (`reasoning`, `multilingual`, `low-latency`, `long-context`, `english-focused`) instead of hard recommendations.
 - **Thinking Mode Awareness:** Chat thinking toggle is model-aware and only sends thinking requests for supported models.
 - **No Terminal Popups (Windows):** Runtime setup, model installs, imports, and chat-related runtime calls execute with hidden process flags so random command windows do not flash while using AI features.
@@ -182,8 +188,6 @@ To fix this and run the app safely:
    ```
 4. You can now open TeacherPro normally!
 
-*(Note: Replace the link above with your actual GitHub repository URL once published!)*
-
 ---
 
 ## 🛠 Building from Source
@@ -223,6 +227,7 @@ TeacherPro uses a live documentation system to track design decisions, remaining
 - [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
 - [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) - The initial architectural phase planning map.
 - [docs/AI_IMPLEMENTATION_PLAN.md](docs/AI_IMPLEMENTATION_PLAN.md) - The implementation roadmap and acceptance criteria for local AI features.
+- [release-notes/](release-notes/) - Versioned release notes for every published build.
 
 ---
 
