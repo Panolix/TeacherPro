@@ -47,6 +47,41 @@ interface SavePdfOptions {
   dialogTitle: string;
 }
 
+/**
+ * html-to-image rejects with a raw DOM `Event` (not an Error) when a resource
+ * inside the snapshot fails to load, which stringifies to the useless
+ * "[object Event]". Turn it into something actionable for alerts/logs.
+ */
+export function describePdfRenderError(error: unknown): string {
+  if (typeof Event !== "undefined" && error instanceof Event) {
+    const target = error.target as HTMLImageElement | null;
+    const tag = target?.tagName ? `<${target.tagName.toLowerCase()}>` : "";
+    const src = target?.src ? ` src=${target.src.slice(0, 120)}` : "";
+    return `snapshot resource failed to load (${error.type} ${tag}${src})`;
+  }
+  return String(error);
+}
+
+function collectSnapshotResources(root: HTMLElement): string {
+  const found: string[] = [];
+  root.querySelectorAll("img").forEach((node) => {
+    found.push(`img:${node.currentSrc || node.src || "(empty src)"}`);
+  });
+  root.querySelectorAll("image").forEach((node) => {
+    const href = (node as SVGImageElement).href?.baseVal ?? "(no href)";
+    found.push(`svg-image:${href}`);
+  });
+  root.querySelectorAll("canvas").forEach(() => found.push("canvas"));
+  root.querySelectorAll("video").forEach((node) => {
+    const video = node as HTMLVideoElement;
+    found.push(`video:${video.currentSrc || video.poster || "(no source)"}`);
+  });
+  root.querySelectorAll("iframe").forEach((node) => {
+    found.push(`iframe:${(node as HTMLIFrameElement).src || "(empty src)"}`);
+  });
+  return found.length > 0 ? found.join(" | ") : "none";
+}
+
 export async function renderElementToPdfBytes(
   element: HTMLElement,
   options: RenderPdfOptions = {},
@@ -67,11 +102,19 @@ export async function renderElementToPdfBytes(
     await document.fonts.ready;
   }
 
-  const canvas = await toCanvas(element, {
+  const renderOptions = {
     pixelRatio: scale,
     cacheBust: true,
     backgroundColor,
+    // A broken image must never abort a preview/print/export.
+    onImageErrorHandler: () => undefined,
     filter: (node: HTMLElement) => {
+      // Empty-src <img> elements (stale editor artifacts) make html-to-image
+      // fetch the document URL itself, which returns text/html and aborts
+      // the whole snapshot. They cannot render anyway, so drop them.
+      if (node instanceof HTMLImageElement && !(node.currentSrc || node.getAttribute("src"))) {
+        return false;
+      }
       // Do not include the preview modal or other print-hidden UI elements
       if (node.classList && typeof node.classList.contains === "function") {
         if (node.classList.contains("print:hidden") || node.classList.contains("pdf-preview-modal")) {
@@ -80,7 +123,30 @@ export async function renderElementToPdfBytes(
       }
       return true;
     },
-  });
+  };
+
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await toCanvas(element, renderOptions);
+  } catch (error) {
+    if (typeof Event !== "undefined" && error instanceof Event) {
+      console.warn("PDF snapshot failed while loading a resource, retrying without embedded webfonts", {
+        event: error.type,
+        source: describePdfRenderError(error),
+      });
+      try {
+        // Retry without inlining @font-face rules: a failing font resource
+        // should not take the whole export down.
+        canvas = await toCanvas(element, { ...renderOptions, skipFonts: true });
+      } catch (retryError) {
+        throw new Error(
+          `${describePdfRenderError(retryError)}; snapshot resources in element: ${collectSnapshotResources(element)}`,
+        );
+      }
+    } else {
+      throw error;
+    }
+  }
 
   const pxToMm = 0.2645833333;
   const pdfOptFormat: string | [number, number] = autoFormat

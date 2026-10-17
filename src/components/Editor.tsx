@@ -45,6 +45,7 @@ import {
   printPdfBlobUrl,
   renderElementToPdfBytes,
   PdfExportError,
+  describePdfRenderError,
   PRINT_PDF_PIXEL_RATIO,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -2777,7 +2778,7 @@ export function Editor() {
       }
     } catch (error) {
       console.error("Lesson PDF export failed:", error);
-      alert(t("editor.pdf.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
+      alert(t("editor.pdf.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -2795,7 +2796,7 @@ export function Editor() {
       });
     } catch (error) {
       console.error("Lesson PDF preview failed:", error);
-      alert(t("editor.pdf.previewFailed", { error: String(error) }));
+      alert(t("editor.pdf.previewFailed", { error: describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -2852,7 +2853,7 @@ export function Editor() {
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Lesson PDF print failed:", error);
-      alert(t("editor.pdf.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
+      alert(t("editor.pdf.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }

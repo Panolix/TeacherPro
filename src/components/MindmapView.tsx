@@ -27,6 +27,7 @@ import {
   printPdfBlobUrl,
   renderElementToPdfBytes,
   PdfExportError,
+  describePdfRenderError,
   PRINT_PDF_PIXEL_RATIO,
   revokePdfBlobUrl,
   savePdfToVault,
@@ -1142,7 +1143,7 @@ export function MindmapView() {
       }
     } catch (error) {
       console.error("Mindmap PDF export failed:", error);
-      alert(t("mindmap.alerts.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
+      alert(t("mindmap.alerts.exportFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1160,7 +1161,7 @@ export function MindmapView() {
       });
     } catch (error) {
       console.error("Mindmap PDF preview failed:", error);
-      alert(t("mindmap.alerts.previewFailed", { error: String(error) }));
+      alert(t("mindmap.alerts.previewFailed", { error: describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }
@@ -1217,7 +1218,7 @@ export function MindmapView() {
       await invoke("print_pdf_file", { path: tempPdfPath });
     } catch (error) {
       console.error("Mindmap PDF print failed:", error);
-      alert(t("mindmap.alerts.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : String(error) }));
+      alert(t("mindmap.alerts.printFailed", { error: error instanceof PdfExportError ? t(error.messageKey) : describePdfRenderError(error) }));
     } finally {
       setIsPdfBusy(false);
     }

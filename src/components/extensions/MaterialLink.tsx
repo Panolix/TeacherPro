@@ -284,7 +284,7 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         document.body
       )}
 
-      {previewOpen && (
+      {previewOpen && createPortal(
         <div
           className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-6"
           onClick={() => {
@@ -328,7 +328,8 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </NodeViewWrapper>
   );
