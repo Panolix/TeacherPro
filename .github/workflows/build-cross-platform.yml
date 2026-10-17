@@ -57,13 +57,21 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ github.event.inputs.version }}"
-          NOTES_FILE="RELEASE_NOTES_v${VERSION}.md"
+          NOTES_FILE="release-notes/RELEASE_NOTES_v${VERSION}.md"
+          LEGACY_NOTES_FILE="RELEASE_NOTES_v${VERSION}.md"
 
           if [ -f "$NOTES_FILE" ]; then
             echo "Using release notes from $NOTES_FILE"
             {
               echo "RELEASE_BODY<<EOF"
               cat "$NOTES_FILE"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
+          elif [ -f "$LEGACY_NOTES_FILE" ]; then
+            echo "Using release notes from $LEGACY_NOTES_FILE"
+            {
+              echo "RELEASE_BODY<<EOF"
+              cat "$LEGACY_NOTES_FILE"
               echo "EOF"
             } >> "$GITHUB_ENV"
           else

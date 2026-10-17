@@ -157,7 +157,7 @@ TeacherPro now uses a tag-driven release pipeline with version synchronization a
 
 To publish a new installer release:
 
-1. Prepare notes in `RELEASE_NOTES_vX.Y.Z.md` (for example `RELEASE_NOTES_v1.2.2.md`).
+1. Prepare notes in `release-notes/RELEASE_NOTES_vX.Y.Z.md` (for example `release-notes/RELEASE_NOTES_v1.2.2.md`).
 2. Push your code changes.
 3. Create and push a matching tag:
 
