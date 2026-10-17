@@ -13,7 +13,7 @@
  * Local dev: `npm run fetch:engines` (one-time per app release).
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, createReadStream } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, createReadStream } from "node:fs";
 import { rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -42,7 +42,7 @@ function download(url, dest) {
   if (res.status !== 0) throw new Error(`download failed (${res.status}): ${url}`);
 }
 
-function unpack(assetPath, destDir) {
+function unpack(assetPath, destDir, entry) {
   mkdirSync(destDir, { recursive: true });
   if (assetPath.endsWith(".zip")) {
     const res = spawnSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${
@@ -53,6 +53,43 @@ function unpack(assetPath, destDir) {
     // tar.gz — built-in on macOS/Linux; bsdtar ships with Windows 10+ too.
     const res = spawnSync("tar", ["-xzf", assetPath, "-C", destDir], { stdio: "inherit" });
     if (res.status !== 0) throw new Error(`untar failed: ${assetPath}`);
+  }
+  flattenTopLevel(destDir, entry);
+}
+
+/**
+ * llama.cpp release archives may nest everything under one directory
+ * (`llama-b11669/...`), while the Windows zip keeps files at the root.
+ * Normalize so `<destDir>/<entry>` always exists (dylibs must stay siblings).
+ */
+function flattenTopLevel(destDir, entry) {
+  if (existsSync(path.join(destDir, entry))) return;
+  const findEntry = (dir, depth) => {
+    if (depth > 3) return null;
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isFile() && e.name === entry) return p;
+      if (e.isDirectory()) {
+        const found = findEntry(p, depth + 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const found = findEntry(destDir, 0);
+  if (!found) return;
+  const parent = path.dirname(found);
+  if (parent === destDir) return;
+  // Move every sibling (binary + dylibs + data) up, then drop the nested dir.
+  for (const name of readdirSync(parent)) {
+    renameSync(path.join(parent, name), path.join(destDir, name));
+  }
+  rmSync(parent, { recursive: true, force: true });
+  // Remove the now-empty intermediate wrapper directory if one remains.
+  for (const e of readdirSync(destDir, { withFileTypes: true })) {
+    if (e.isDirectory() && readdirSync(path.join(destDir, e.name)).length === 0) {
+      rmSync(path.join(destDir, e.name), { recursive: true, force: true });
+    }
   }
 }
 
@@ -108,7 +145,7 @@ if (!variant.sha256) {
   console.warn(`NOTE: no pinned sha256 for ${variant.asset}; computed ${actual} — commit it into engine-config.json`);
 }
 
-unpack(assetPath, destDir);
+unpack(assetPath, destDir, variant.entry);
 rmSync(tmp, { recursive: true, force: true });
 chmodExecDeep(destDir);
 
