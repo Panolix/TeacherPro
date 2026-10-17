@@ -16,7 +16,6 @@ import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
 import { t } from "./i18n/translations";
-import { DEFAULT_AI_MODEL_ID } from "./ai/modelCatalog";
 
 export interface LessonMetadata {
   teacher: string;
@@ -77,8 +76,6 @@ export type ThemeMode = "dark" | "light";
 export type AccentColor = string;
 export type PaperTone = "light" | "dark";
 export type SidebarSectionKey = "lessonPlans" | "mindmaps" | "materials" | "trash";
-export type AiProvider = "ollama" | "direct-download";
-export type AiModelInstallState = "not-installed" | "installing" | "installed" | "error";
 
 export interface SubjectConfig {
   name: string;
@@ -158,9 +155,6 @@ interface UISettings {
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
   aiEnabled: boolean;
-  aiProvider: AiProvider;
-  aiDefaultModelId: string;
-  aiRewriteTranslateModelId: string;
   aiV3ChatModelId: string | null;
   aiV3RewriteModelId: string | null;
   aiPersistChats: boolean;
@@ -203,9 +197,6 @@ interface AppState {
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
   aiEnabled: boolean;
-  aiProvider: AiProvider;
-  aiDefaultModelId: string;
-  aiRewriteTranslateModelId: string;
   aiV3ChatModelId: string | null;
   aiV3RewriteModelId: string | null;
   aiPersistChats: boolean;
@@ -216,7 +207,6 @@ interface AppState {
   aiTranslateTargetLanguage: string;
   trashAutoClearDays: number | null;
   language: "en" | "de";
-  aiModelInstallState: Record<string, AiModelInstallState>;
   lessonSubjectIndex: Record<string, string>;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
@@ -290,9 +280,6 @@ interface AppState {
   setShowActionButtonLabels: (enabled: boolean) => void;
   setSubjects: (subjects: SubjectConfig[]) => void;
   setAiEnabled: (enabled: boolean) => void;
-  setAiProvider: (provider: AiProvider) => void;
-  setAiDefaultModelId: (modelId: string) => void;
-  setAiRewriteTranslateModelId: (modelId: string) => void;
   setAiV3ChatModelId: (modelId: string | null) => void;
   setAiV3RewriteModelId: (modelId: string | null) => void;
   setAiPersistChats: (enabled: boolean) => void;
@@ -303,7 +290,6 @@ interface AppState {
   setAiTranslateTargetLanguage: (language: string) => void;
   setTrashAutoClearDays: (days: number | null) => void;
   setLanguage: (language: "en" | "de") => void;
-  setAiModelInstallState: (modelId: string, state: AiModelInstallState) => void;
   logDebug: (source: string, action: string, detail?: string) => void;
   clearDebugEvents: () => void;
   cleanupOldTrashItems: () => Promise<void>;
@@ -472,9 +458,6 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   showActionButtonLabels: false,
   subjects: [],
   aiEnabled: false,
-  aiProvider: "ollama",
-  aiDefaultModelId: DEFAULT_AI_MODEL_ID,
-  aiRewriteTranslateModelId: DEFAULT_AI_MODEL_ID,
   aiV3ChatModelId: null,
   aiV3RewriteModelId: null,
   aiPersistChats: true,
@@ -489,21 +472,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
 
 function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISettings {
   const source = raw || {};
-  const legacySource = source as Partial<UISettings> & {
-    aiRewriteModelId?: string;
-    aiTranslateModelId?: string;
-  };
   const sectionSource: Partial<Record<SidebarSectionKey, boolean>> = source.sectionCollapsed || {};
-  const rewriteTranslateModelCandidate =
-    typeof source.aiRewriteTranslateModelId === "string" && source.aiRewriteTranslateModelId.trim()
-      ? source.aiRewriteTranslateModelId
-      : typeof legacySource.aiRewriteModelId === "string" && legacySource.aiRewriteModelId.trim()
-        ? legacySource.aiRewriteModelId
-        : typeof legacySource.aiTranslateModelId === "string" && legacySource.aiTranslateModelId.trim()
-          ? legacySource.aiTranslateModelId
-          : typeof source.aiDefaultModelId === "string" && source.aiDefaultModelId.trim()
-            ? source.aiDefaultModelId
-            : DEFAULT_UI_SETTINGS.aiRewriteTranslateModelId;
 
   return {
     ...DEFAULT_UI_SETTINGS,
@@ -541,15 +510,6 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
       trash: sectionSource.trash ?? DEFAULT_UI_SETTINGS.sectionCollapsed.trash,
     },
     subjects: Array.isArray(source.subjects) ? source.subjects : DEFAULT_UI_SETTINGS.subjects,
-    aiProvider:
-      source.aiProvider === "direct-download" || source.aiProvider === "ollama"
-        ? source.aiProvider
-        : DEFAULT_UI_SETTINGS.aiProvider,
-    aiDefaultModelId:
-      typeof source.aiDefaultModelId === "string" && source.aiDefaultModelId.trim()
-        ? source.aiDefaultModelId
-        : DEFAULT_UI_SETTINGS.aiDefaultModelId,
-    aiRewriteTranslateModelId: rewriteTranslateModelCandidate,
     aiV3ChatModelId:
       typeof source.aiV3ChatModelId === "string" && source.aiV3ChatModelId.trim()
         ? source.aiV3ChatModelId
@@ -1068,9 +1028,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   showActionButtonLabels: DEFAULT_UI_SETTINGS.showActionButtonLabels,
   subjects: DEFAULT_UI_SETTINGS.subjects,
   aiEnabled: DEFAULT_UI_SETTINGS.aiEnabled,
-  aiProvider: DEFAULT_UI_SETTINGS.aiProvider,
-  aiDefaultModelId: DEFAULT_UI_SETTINGS.aiDefaultModelId,
-  aiRewriteTranslateModelId: DEFAULT_UI_SETTINGS.aiRewriteTranslateModelId,
   aiV3ChatModelId: DEFAULT_UI_SETTINGS.aiV3ChatModelId,
   aiV3RewriteModelId: DEFAULT_UI_SETTINGS.aiV3RewriteModelId,
   aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
@@ -1081,7 +1038,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiTranslateTargetLanguage: DEFAULT_UI_SETTINGS.aiTranslateTargetLanguage,
   trashAutoClearDays: DEFAULT_UI_SETTINGS.trashAutoClearDays,
   language: DEFAULT_UI_SETTINGS.language,
-  aiModelInstallState: {},
   lessonSubjectIndex: {},
   debugEvents: [],
   draggedMaterial: null,
@@ -1141,9 +1097,6 @@ export const useAppStore = create<AppState>((set, get) => ({
         showActionButtonLabels: normalizedSettings.showActionButtonLabels,
         subjects: normalizedSettings.subjects,
         aiEnabled: normalizedSettings.aiEnabled,
-        aiProvider: normalizedSettings.aiProvider,
-        aiDefaultModelId: normalizedSettings.aiDefaultModelId,
-        aiRewriteTranslateModelId: normalizedSettings.aiRewriteTranslateModelId,
         aiV3ChatModelId: normalizedSettings.aiV3ChatModelId,
         aiV3RewriteModelId: normalizedSettings.aiV3RewriteModelId,
         aiPersistChats: normalizedSettings.aiPersistChats,
@@ -1258,18 +1211,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ aiEnabled: enabled });
     void persistUiSettings({ aiEnabled: enabled });
   },
-  setAiProvider: (provider) => {
-    set({ aiProvider: provider });
-    void persistUiSettings({ aiProvider: provider });
-  },
-  setAiDefaultModelId: (modelId) => {
-    set({ aiDefaultModelId: modelId });
-    void persistUiSettings({ aiDefaultModelId: modelId });
-  },
-  setAiRewriteTranslateModelId: (modelId) => {
-    set({ aiRewriteTranslateModelId: modelId });
-    void persistUiSettings({ aiRewriteTranslateModelId: modelId });
-  },
   setAiV3ChatModelId: (modelId) => {
     set({ aiV3ChatModelId: modelId });
     void persistUiSettings({ aiV3ChatModelId: modelId });
@@ -1331,14 +1272,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ chatContextBudget: budget });
   },
 
-  setAiModelInstallState: (modelId, installState) => {
-    set((state) => ({
-      aiModelInstallState: {
-        ...state.aiModelInstallState,
-        [modelId]: installState,
-      },
-    }));
-  },
   logDebug: (source, action, detail) => {
     const { debugMode } = get();
     if (!debugMode) {
@@ -1400,12 +1333,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             // First launch on this device — take portable settings from vault backup,
             // but keep device-specific AI/model settings at defaults
             mergedSettings = { ...vaultBackup };
-            // Device-specific: AI model, provider, and runtime config
-            delete (mergedSettings as any).aiDefaultModelId;
-            delete (mergedSettings as any).aiRewriteTranslateModelId;
+            // Device-specific: AI model routing and runtime config
             delete (mergedSettings as any).aiV3ChatModelId;
             delete (mergedSettings as any).aiV3RewriteModelId;
-            delete (mergedSettings as any).aiProvider;
             delete (mergedSettings as any).aiEnabled;
             delete (mergedSettings as any).aiPersistChats;
             delete (mergedSettings as any).aiChatHistoryLimit;

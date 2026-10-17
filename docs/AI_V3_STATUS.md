@@ -1,5 +1,19 @@
 # AI v3 — Implementation Status & Handoff
 
+> **STATUS (2026-10-17): ALL PHASES P0–P5 COMPLETE.** The sections below are the
+> historical handoff from the P0–P3 work and are kept for context; the remaining
+> P3/P4/P5 items listed further down have since been implemented and committed:
+> - P3 fixes: downloader hardening (`.part`/resume/416/clean-EOF), correct
+>   special-token/config SHA-256 pins, `run_blocking` panic fix, serialized
+>   embedder init, delete-file index purge, citation chips, embedder progress.
+> - P4: CUDA acceleration pack (b11669), MTP speculative decoding for Gemma
+>   workstation models, hardware detection (`ai_hardware_info`), GPU-fit badges.
+> - P5: Ollama backend fully removed from `lib.rs` (~1,600 lines), `AiProvider`
+>   and the old Ollama-era `modelCatalog.ts`/i18n keys deleted, `whatlang`
+>   chunk language detection, `fetch:engines` added to both CI workflows.
+> For the authoritative design read `AI_V3_PLAN.md`; for current code grep the
+> symbols listed in Appendix A (line numbers are stale).
+
 > **For any AI agent (or human) continuing this work.** Read this together with `docs/AI_V3_PLAN.md` (the full design spec). This file says what is DONE, what is BROKEN/OPEN, and what to do next. Line numbers are anchors only — re-locate by symbol name.
 >
 > Last updated: 2026-10-17, after commit `b4ded1f` (P0+P1+P2 pushed to GitHub).

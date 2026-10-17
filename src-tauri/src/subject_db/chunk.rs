@@ -1,8 +1,8 @@
-use super::FolderMeta;
 use super::pdf::PageText;
 use super::Chunk;
+use super::FolderMeta;
 
-const CHUNK_SIZE: usize = 500;   // target characters per chunk
+const CHUNK_SIZE: usize = 500; // target characters per chunk
 const CHUNK_OVERLAP: usize = 100; // overlap between consecutive chunks (in chars)
 
 /// Split pages into chunks, each tagged with folder metadata.
@@ -16,6 +16,7 @@ pub fn chunk_pages(pages: &[PageText], meta: &FolderMeta, source_file: &str) -> 
             if text.len() < 20 {
                 continue;
             }
+            let language = detect_language(&text);
             chunks.push(Chunk {
                 id: uuid::Uuid::new_v4().to_string(),
                 text,
@@ -24,12 +25,20 @@ pub fn chunk_pages(pages: &[PageText], meta: &FolderMeta, source_file: &str) -> 
                 subject: meta.subject.clone(),
                 grade: meta.grade.clone(),
                 topic: meta.topic.clone(),
-                language: "de".to_string(),
+                language,
             });
         }
     }
 
     chunks
+}
+
+/// Detect the chunk language (ISO 639-3 code). Defaults to German when the
+/// text is too short/ambiguous for reliable detection (app default locale).
+fn detect_language(text: &str) -> String {
+    whatlang::detect(text)
+        .map(|info| info.lang().code().to_string())
+        .unwrap_or_else(|| "de".to_string())
 }
 
 /// Split text into overlapping chunks of approximately `size` **characters**.

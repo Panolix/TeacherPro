@@ -1,5 +1,10 @@
 # AI Implementation Plan (TeacherPro)
 
+> **SUPERSEDED (Ollama era).** The current AI architecture is the bundled
+> llama-server sidecar described in [`AI_V3_PLAN.md`](./AI_V3_PLAN.md);
+> implementation status lives in [`AI_V3_STATUS.md`](./AI_V3_STATUS.md).
+> Kept for historical context only — Ollama is no longer used anywhere.
+
 Last updated: 2026-04-15
 
 ## Goals
