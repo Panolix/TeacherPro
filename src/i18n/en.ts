@@ -1,6 +1,8 @@
 const en = {
   common: {
     save: "Save",
+    yes: "Yes",
+    no: "No",
     cancel: "Cancel",
     close: "Close",
     create: "Create",
@@ -462,9 +464,9 @@ const en = {
       deselect: "Deselect",
       select: "Select",
       moveToTrash: "Move to Trash",
+      moveAllForDate: "Move all lessons for this day to Trash",
     },
     confirm: {
-      moveSingle: 'Move "{{title}}" to Trash?',
       moveSelected: "Move {{count}} selected lesson plan(s) to Trash?",
       moveAll: "Move all {{count}} lesson plan(s) for {{date}} to Trash?",
     },
@@ -481,6 +483,7 @@ const en = {
     selectMindmap: "Select a mindmap from the sidebar...",
     createNewMindmap: "Create New Mindmap",
     readyState: "Mindmaps Ready",
+    emptyFile: "Empty file",
     workspaceTitle: "Mindmap Workspace",
     workspaceHint: "Right-click nodes for actions...",
     addNode: "Add Node",

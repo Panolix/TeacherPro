@@ -44,6 +44,9 @@ jobs:
       - name: Verify scrollbar invariants
         run: npm run verify:scrollbars
 
+      - name: Verify i18n key parity
+        run: npm run verify:i18n
+
       - name: Build frontend
         run: npm run build
 

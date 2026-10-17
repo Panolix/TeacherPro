@@ -1,6 +1,8 @@
 const de = {
   common: {
     save: "Speichern",
+    yes: "Ja",
+    no: "Nein",
     cancel: "Abbrechen",
     close: "Schließen",
     create: "Erstellen",
@@ -462,9 +464,9 @@ const de = {
       deselect: "Auswahl aufheben",
       select: "Auswählen",
       moveToTrash: "In Papierkorb",
+      moveAllForDate: "Alle Stunden dieses Tages in den Papierkorb verschieben",
     },
     confirm: {
-      moveSingle: '„{{title}}" in den Papierkorb verschieben?',
       moveSelected: "{{count}} ausgewählte Unterrichtsentwürfe in den Papierkorb verschieben?",
       moveAll: "Alle {{count}} Unterrichtsentwürfe für {{date}} in den Papierkorb verschieben?",
     },
@@ -481,6 +483,7 @@ const de = {
     selectMindmap: "Wähle eine Mindmap aus der Seitenleiste...",
     createNewMindmap: "Neue Mindmap erstellen",
     readyState: "Mindmaps",
+    emptyFile: "Leere Datei",
     workspaceTitle: "Mindmap-Arbeitsfläche",
     workspaceHint: "Rechtsklick auf Knoten für Aktionen...",
     addNode: "Knoten hinzufügen",

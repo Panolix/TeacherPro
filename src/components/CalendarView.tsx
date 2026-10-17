@@ -213,7 +213,10 @@ export function CalendarView() {
     }
 
     const names = Array.from(selectedLessons);
-    const confirmed = await ask(t('calendar.confirm.moveMultiple', { count: names.length }));
+    const confirmed = await ask(t('calendar.confirm.moveSelected', { count: names.length }), {
+      okLabel: t('common.yes'),
+      cancelLabel: t('common.no'),
+    });
     if (!confirmed) {
       return;
     }
@@ -241,7 +244,10 @@ export function CalendarView() {
     }
 
     const dateLabel = format(date, "EEE, MMM d", { locale: dateLocale });
-    const confirmed = await ask(t('calendar.confirm.moveAllForDate', { count: lessons.length, date: dateLabel }));
+    const confirmed = await ask(t('calendar.confirm.moveAll', { count: lessons.length, date: dateLabel }), {
+      okLabel: t('common.yes'),
+      cancelLabel: t('common.no'),
+    });
     if (!confirmed) {
       return;
     }
@@ -469,21 +475,19 @@ export function CalendarView() {
                             <button
                               onClick={async (event) => {
                                 event.stopPropagation();
-                                if (await ask(t('calendar.confirm.moveSingle', { title: cleanTitle }))) {
-                                  setIsDeletingLessons(true);
-                                  try {
-                                    await deleteLesson(lessonName);
-                                    setSelectedLessons((previous) => {
-                                      const next = new Set(previous);
-                                      next.delete(lessonName);
-                                      return next;
-                                    });
-                                  } catch (err) {
-                                    console.error("Failed to delete lesson:", err);
-                                    alert(t("common.deleteError", { detail: String(err) }));
-                                  } finally {
-                                    setIsDeletingLessons(false);
-                                  }
+                                setIsDeletingLessons(true);
+                                try {
+                                  await deleteLesson(lessonName);
+                                  setSelectedLessons((previous) => {
+                                    const next = new Set(previous);
+                                    next.delete(lessonName);
+                                    return next;
+                                  });
+                                } catch (err) {
+                                  console.error("Failed to delete lesson:", err);
+                                  alert(t("common.deleteError", { detail: String(err) }));
+                                } finally {
+                                  setIsDeletingLessons(false);
                                 }
                               }}
                               disabled={isDeletingLessons}
