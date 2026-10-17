@@ -223,7 +223,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
             </div>
             <div className="min-w-0">
               <div className="text-sm text-gray-200 font-medium truncate">{fileName}</div>
-              <div className="text-xs text-gray-500">{typeLabel}</div>
+              <div className="text-[12.5px] text-gray-500">{typeLabel}</div>
             </div>
           </div>
           <button
@@ -261,35 +261,35 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">{t("vaultPreview.teacher")}</div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.teacher")}</div>
                       <div className="text-sm text-gray-200">{lessonData.metadata?.teacher || t("vaultPreview.notSet")}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">{t("vaultPreview.subject")}</div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.subject")}</div>
                       <div className="text-sm text-gray-200">{lessonData.metadata?.subject || t("vaultPreview.notSet")}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">{t("vaultPreview.created")}</div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.created")}</div>
                       <div className="text-sm text-gray-200">{formatDate(lessonData.metadata?.createdAt)}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-xs text-gray-500">{t("vaultPreview.plannedFor")}</div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.plannedFor")}</div>
                       <div className="text-sm text-gray-200">{formatDate(lessonData.metadata?.plannedFor)}</div>
                     </div>
                   </div>
                 </div>
                 {lessonData.notes && (
                   <div className="mt-4 pt-4" style={{ borderTop: "1px solid var(--tp-b-1, #2d2d2d)" }}>
-                    <div className="text-xs text-gray-500 mb-1">{t("vaultPreview.notes")}</div>
+                    <div className="text-[12.5px] text-gray-500 mb-1">{t("vaultPreview.notes")}</div>
                     <div className="text-sm text-gray-300 whitespace-pre-wrap">{lessonData.notes}</div>
                   </div>
                 )}

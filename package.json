@@ -11,6 +11,7 @@
     "sync:version": "node scripts/sync-version.mjs",
     "verify:scrollbars": "node scripts/verify-scrollbars.mjs",
     "verify:i18n": "node scripts/verify-i18n.mjs",
+    "verify:typography": "node scripts/verify-typography.mjs",
     "qa:method-bank": "node scripts/method-bank-qa-checklist.mjs"
   },
   "dependencies": {

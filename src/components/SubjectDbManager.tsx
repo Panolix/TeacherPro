@@ -211,12 +211,12 @@ export function SubjectDbManager() {
     <div key={key} className="flex items-center justify-between px-3 py-1.5 gap-2 hover:bg-[var(--tp-panel-elevated)]">
       <div className="flex items-center gap-2 min-w-0">
         <File className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
-        <span className="text-xs text-[var(--tp-text-primary)] truncate">{file.name}</span>
+        <span className="text-[12.5px] text-[var(--tp-text-primary)] truncate">{file.name}</span>
         {file.is_embedded && (
-          <span className="text-[10px] text-emerald-400 shrink-0">{t("subjectDb.embedded")}</span>
+          <span className="text-[11px] text-emerald-400 shrink-0">{t("subjectDb.embedded")}</span>
         )}
         {!file.is_embedded && (
-          <span className="text-[10px] text-amber-400 shrink-0">{t("subjectDb.pending")}</span>
+          <span className="text-[11px] text-amber-400 shrink-0">{t("subjectDb.pending")}</span>
         )}
       </div>
       <button onClick={onDelete}
@@ -241,11 +241,11 @@ export function SubjectDbManager() {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => startAdding({ type: "subject" })}
-            className="tp-action-btn px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1">
+            className="tp-action-btn px-2.5 py-1.5 rounded-md text-[12.5px] font-medium flex items-center gap-1">
             <Plus className="w-3.5 h-3.5" /> {t("common.create")}
           </button>
           <button onClick={handleScanImport} disabled={importing}
-            className="tp-action-btn px-2.5 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            className="tp-action-btn px-2.5 py-1.5 rounded-md text-[12.5px] font-medium flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
             {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {importing ? t("subjectDb.importing") : t("subjectDb.scanImport")}
           </button>
@@ -259,21 +259,21 @@ export function SubjectDbManager() {
           <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") void confirmAdd(); if (e.key === "Escape") cancelAdding(); }}
             placeholder={t("subjectDb.newSubjectPlaceholder")}
-            className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
+            className="flex-1 min-w-0 bg-transparent text-[12.5px] text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
           <button onClick={confirmAdd} disabled={!inputValue.trim()}
-            className="tp-action-btn px-2 py-1 rounded text-xs font-medium disabled:opacity-40">{t("common.ok")}</button>
-          <button onClick={cancelAdding} className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-xs">✕</button>
+            className="tp-action-btn px-2 py-1 rounded text-[12.5px] font-medium disabled:opacity-40">{t("common.ok")}</button>
+          <button onClick={cancelAdding} className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[12.5px]">✕</button>
         </div>
       )}
 
       {/* Progress bar */}
       {importing && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-xs space-y-1">
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-[12.5px] space-y-1">
           <div className="flex items-center gap-2">
             <Loader2 className="w-3 h-3 animate-spin text-[var(--tp-accent)]" />
             <span className="text-[var(--tp-text-muted)]">{t("subjectDb.importing")}</span>
           </div>
-          {progressMsg && <p className="text-[10px] text-[var(--tp-text-muted)] pl-5 truncate">{progressMsg}</p>}
+          {progressMsg && <p className="text-[11px] text-[var(--tp-text-muted)] pl-5 truncate">{progressMsg}</p>}
           <div className="w-full h-1.5 rounded-full bg-gray-700 overflow-hidden">
             <div className="h-full bg-[var(--tp-accent)] rounded-full animate-pulse" style={{ width: "80%" }} />
           </div>
@@ -282,7 +282,7 @@ export function SubjectDbManager() {
 
       {/* Result/Error */}
       {importResult && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-xs">
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-[12.5px]">
           <p className="text-green-400 flex items-center gap-1.5">
             <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             {t("subjectDb.result.imported", { chunks: importResult.total_chunks, files: importResult.processed_files })}
@@ -297,19 +297,19 @@ export function SubjectDbManager() {
         </div>
       )}
       {error && !importResult && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-red-900/30 text-xs text-red-400 flex items-center gap-1.5">
+        <div className="mb-3 px-3 py-2 rounded-lg bg-red-900/30 text-[12.5px] text-red-400 flex items-center gap-1.5">
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
         </div>
       )}
       {diagnostic && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-xs whitespace-pre-wrap" style={{ color: "var(--tp-text-primary)" }}>
+        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-[12.5px] whitespace-pre-wrap" style={{ color: "var(--tp-text-primary)" }}>
           {diagnostic}
         </div>
       )}
 
       {/* Empty state */}
       {subjectDatabases.length === 0 && !importing && (
-        <div className="flex flex-col items-center justify-center h-32 text-xs text-[var(--tp-text-muted)]">
+        <div className="flex flex-col items-center justify-center h-32 text-[12.5px] text-[var(--tp-text-muted)]">
           <Database className="w-6 h-6 mb-2 opacity-40" />
           <p className="text-center max-w-xs leading-relaxed">{t("subjectDb.noDatabases")}</p>
         </div>
@@ -328,7 +328,7 @@ export function SubjectDbManager() {
                   : <ChevronRight className="w-4 h-4 shrink-0 text-[var(--tp-text-muted)]" />}
                 <Folder className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
                 <span className="text-sm font-medium text-[var(--tp-text-primary)] truncate">{subject.subject}</span>
-                <span className="text-[10px] text-[var(--tp-text-muted)]">
+                <span className="text-[11px] text-[var(--tp-text-muted)]">
                   {subject.grades.reduce((s, g) => s + g.topics.reduce((a, t) => a + t.chunk_count, 0), 0)} chunks
                 </span>
               </button>
@@ -367,11 +367,11 @@ export function SubjectDbManager() {
                     <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") void confirmAdd(); if (e.key === "Escape") cancelAdding(); }}
                       placeholder={t("subjectDb.newGradePlaceholder")}
-                      className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
+                      className="flex-1 min-w-0 bg-transparent text-[12.5px] text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
                     <button onClick={confirmAdd} disabled={!inputValue.trim()}
-                      className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">{t("common.ok")}</button>
+                      className="tp-action-btn px-1.5 py-0.5 rounded text-[11px] font-medium disabled:opacity-40">{t("common.ok")}</button>
                     <button onClick={cancelAdding}
-                      className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[10px]">✕</button>
+                      className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[11px]">✕</button>
                   </div>
                 )}
 
@@ -387,8 +387,8 @@ export function SubjectDbManager() {
                             ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
                             : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />}
                           <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
-                          <span className="text-xs font-medium text-[var(--tp-text-primary)] truncate">{grade.name}</span>
-                          <span className="text-[10px] text-[var(--tp-text-muted)]">
+                          <span className="text-[12.5px] font-medium text-[var(--tp-text-primary)] truncate">{grade.name}</span>
+                          <span className="text-[11px] text-[var(--tp-text-muted)]">
                             {grade.topics.reduce((s, t) => s + t.chunk_count, 0)} chunks
                           </span>
                         </button>
@@ -427,11 +427,11 @@ export function SubjectDbManager() {
                               <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") void confirmAdd(); if (e.key === "Escape") cancelAdding(); }}
                                 placeholder={t("subjectDb.newTopicPlaceholder")}
-                                className="flex-1 min-w-0 bg-transparent text-xs text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
+                                className="flex-1 min-w-0 bg-transparent text-[12.5px] text-[var(--tp-text-primary)] outline-none border-b border-transparent focus:border-[var(--tp-accent)]" autoFocus />
                               <button onClick={confirmAdd} disabled={!inputValue.trim()}
-                                className="tp-action-btn px-1.5 py-0.5 rounded text-[10px] font-medium disabled:opacity-40">{t("common.ok")}</button>
+                                className="tp-action-btn px-1.5 py-0.5 rounded text-[11px] font-medium disabled:opacity-40">{t("common.ok")}</button>
                               <button onClick={cancelAdding}
-                                className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[10px]">✕</button>
+                                className="text-[var(--tp-text-muted)] hover:text-[var(--tp-text-primary)] text-[11px]">✕</button>
                             </div>
                           )}
 
@@ -455,12 +455,12 @@ export function SubjectDbManager() {
                                     <span className="w-3.5 h-3.5 shrink-0" />
                                   )}
                                   <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
-                                  <span className="text-xs font-medium text-[var(--tp-text-primary)] truncate">{topic.name}</span>
-                                  <span className="text-[10px] text-[var(--tp-text-muted)]">
+                                  <span className="text-[12.5px] font-medium text-[var(--tp-text-primary)] truncate">{topic.name}</span>
+                                  <span className="text-[11px] text-[var(--tp-text-muted)]">
                                     {topic.chunk_count > 0 ? `${topic.chunk_count} chunks` : t("subjectDb.notEmbedded")}
                                   </span>
                                   {topic.pending_pdfs > 0 && (
-                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-900/40 text-[10px] text-amber-300">
+                                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-900/40 text-[11px] text-amber-300">
                                       {topic.pending_pdfs}
                                     </span>
                                   )}
@@ -499,7 +499,7 @@ export function SubjectDbManager() {
       </div>
 
       {/* Footer */}
-      <div className="mt-4 pt-3 border-t border-[var(--tp-border-strong)] text-[10px] text-[var(--tp-text-muted)] leading-relaxed">
+      <div className="mt-4 pt-3 border-t border-[var(--tp-border-strong)] text-[11px] text-[var(--tp-text-muted)] leading-relaxed">
         <p className="mb-2"><Database className="w-2.5 h-2.5 inline-block mr-1" />{t("subjectDb.folderHint")}</p>
         <button onClick={async () => {
           if (!vaultPath) return;
@@ -511,7 +511,7 @@ export function SubjectDbManager() {
           } catch (e) {
             setDiagnostic(t("subjectDb.diagErrorPrefix") + String(e));
           }
-        }} className="tp-action-btn px-2 py-0.5 rounded text-[10px] font-medium">
+        }} className="tp-action-btn px-2 py-0.5 rounded text-[11px] font-medium">
           {t("subjectDb.diagnose")}
         </button>
       </div>

@@ -2608,7 +2608,7 @@ export function Editor() {
         <div className="tp-paper-zoom" style={{ zoom: effectiveZoom }}>
         {aiStatusMessage && (
           <div
-            className="mb-3 rounded-md px-3 py-2 text-xs mx-auto"
+            className="mb-3 rounded-md px-3 py-2 text-[12.5px] mx-auto"
             style={{
               background: "var(--tp-bg-2)",
               border: "1px solid var(--tp-b-2)",
@@ -2631,7 +2631,7 @@ export function Editor() {
           <div className="px-6 pt-4 pb-5 lesson-export-meta" style={{ borderBottom: "1px solid var(--tp-paper-line)", marginBottom: "24px" }}>
               <div className="flex justify-around gap-x-4 gap-y-4 items-start [&_input]:text-center [&_select]:text-center [&>div]:flex [&>div]:flex-col [&>div]:items-center [&>div]:text-center [&>div]:w-[200px] [&>div]:max-w-[200px]">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.teacher")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.teacher")}</span>
                   <input
                     type="text"
                     value={teacher}
@@ -2642,11 +2642,11 @@ export function Editor() {
                   <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || t("editor.meta.notSet")}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.created")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.created")}</span>
                   <span className="text-[13px] lesson-export-value" style={{ color: "var(--tp-paper-ink)" }}>{formatDate(activeFileContent?.metadata?.createdAt)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.plannedFor")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.plannedFor")}</span>
                   <div className="flex items-center justify-center gap-1.5 w-full">
                   <input
                     type="text"
@@ -2702,7 +2702,7 @@ export function Editor() {
                           ))}
                         </div>
 
-                        <div className="grid grid-cols-7 gap-1 text-xs">
+                        <div className="grid grid-cols-7 gap-1 text-[12.5px]">
                           {calendarDays.map((day) => {
                             const inCurrentMonth = isSameMonth(day, monthStart);
                             const isSelected = !!selectedPlannedDate && isSameDay(day, selectedPlannedDate);
@@ -2736,7 +2736,7 @@ export function Editor() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.subject")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.subject")}</span>
                   {subjects.length > 0 ? (
                     <div className="flex items-center gap-1.5 lesson-export-subject-picker w-full">
                       {selectedSubjectColor && (
@@ -2893,7 +2893,7 @@ export function Editor() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[12px] font-medium text-[var(--tp-text-primary)]">{entry.title}</span>
-                    <span className={`shrink-0 text-[10px] ${METHOD_TYPE_ACCENT[entry.type]}`}>
+                    <span className={`shrink-0 text-[11px] ${METHOD_TYPE_ACCENT[entry.type]}`}>
                       {entry.duration}
                     </span>
                   </div>
@@ -2983,7 +2983,7 @@ export function Editor() {
                   </div>
                 ))}
                 {customTableDialog.rows > 6 && (
-                  <div className="text-[9px] text-center pt-0.5" style={{ color: "var(--tp-t-4)" }}>
+                  <div className="text-[11px] text-center pt-0.5" style={{ color: "var(--tp-t-4)" }}>
                     +{customTableDialog.rows - 6} more row{customTableDialog.rows - 6 > 1 ? "s" : ""}
                   </div>
                 )}

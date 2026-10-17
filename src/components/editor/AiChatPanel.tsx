@@ -175,14 +175,14 @@ export function AiChatPanel({
                         {/* — Keine — option */}
                         <button
                           onClick={() => { onSelectDb("", "", ""); setDbMenuOpen(false); }}
-                          className="w-full text-left px-3 py-2 text-xs font-medium hover:bg-[var(--tp-bg-4)] transition-colors border-b"
+                          className="w-full text-left px-3 py-2 text-[12.5px] font-medium hover:bg-[var(--tp-bg-4)] transition-colors border-b"
                           style={{ borderColor: "var(--tp-border-strong)", color: "var(--tp-text-secondary)" }}
                         >
                           — {t("subjectDb.noDbSelected")} —
                         </button>
 
                         {/* Tree */}
-                        <div className="py-0.5 text-xs">
+                        <div className="py-0.5 text-[12.5px]">
                           {subjectDatabases.map((s) => {
                             const isExpanded = dbExpandedSubjects[s.subject];
                             return (
@@ -239,7 +239,7 @@ export function AiChatPanel({
                                           >
                                             <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
                                             <span className="truncate">{t.name}</span>
-                                            <span className="text-[10px] text-[var(--tp-text-muted)] shrink-0">({t.chunk_count})</span>
+                                            <span className="text-[11px] text-[var(--tp-text-muted)] shrink-0">({t.chunk_count})</span>
                                           </button>
                                         </div>
                                       ))}
@@ -267,7 +267,7 @@ export function AiChatPanel({
             >
               {messages.length === 0 && (
                 <div className="flex h-full flex-col items-center justify-center gap-4">
-                  <p className="text-xs text-[var(--tp-text-muted)] text-center max-w-xs leading-relaxed">
+                  <p className="text-[12.5px] text-[var(--tp-text-muted)] text-center max-w-xs leading-relaxed">
                     {t("editor.panels.messageAi")}
                   </p>
                   <div className="flex flex-col gap-1.5 w-full">
@@ -282,7 +282,7 @@ export function AiChatPanel({
                         key={label}
                         disabled={busy}
                         onClick={() => void onSend(prompt)}
-                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] text-xs text-gray-300 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="w-full text-left px-3 py-2 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] text-[12.5px] text-gray-300 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {label}
                       </button>
@@ -303,7 +303,7 @@ export function AiChatPanel({
                     <div className="w-full">
                       <div className="mb-1 flex items-center gap-1.5">
                         <MessageSquare className="w-3 h-3 text-[var(--tp-accent)]" />
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
                       </div>
                       <div className="w-full text-[13px] leading-relaxed text-[var(--tp-text-primary)]">
                         <AiMarkdown text={message.text} />
@@ -335,7 +335,7 @@ export function AiChatPanel({
                 <div className="w-full">
                   <div className="mb-1 flex items-center gap-1.5">
                     <MessageSquare className="w-3 h-3 text-[var(--tp-accent)]" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
                   </div>
                   <div className="flex items-center gap-1.5 py-1">
                     <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:0ms]" />
@@ -372,7 +372,7 @@ export function AiChatPanel({
                   <Send className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <p className="mt-1.5 text-center text-[10px] text-[var(--tp-text-muted)]">{t("editor.panels.enterToSend")}</p>
+              <p className="mt-1.5 text-center text-[11px] text-[var(--tp-text-muted)]">{t("editor.panels.enterToSend")}</p>
             </div>
           </div>
       </div>

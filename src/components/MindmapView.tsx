@@ -1250,13 +1250,13 @@ export function MindmapView() {
         <div className="flex items-center gap-4">
           <div>
             <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">{t("mindmap.workspaceTitle")}</h1>
-            <p className="text-gray-400 text-xs pointer-events-auto mt-1">
+            <p className="text-gray-400 text-[12.5px] pointer-events-auto mt-1">
               {t("mindmap.workspaceHint")}
             </p>
           </div>
           <button
             onClick={handleAddNode}
-            className="pointer-events-auto bg-[#2d2d2d] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium flex items-center gap-2 h-fit mt-1"
+            className="pointer-events-auto bg-[#2d2d2d] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium flex items-center gap-2 h-fit mt-1"
           >
             <Plus className="w-4 h-4" /> {t("mindmap.addNode")}
           </button>
@@ -1266,7 +1266,7 @@ export function MindmapView() {
             onClick={handlePreviewPDF}
             title={isPdfBusy ? t("mindmap.actions.previewPdf") + " (busy)" : t("mindmap.actions.previewPdf")}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Eye className="w-4 h-4" />
           </button>
@@ -1274,7 +1274,7 @@ export function MindmapView() {
             onClick={handlePrintPDF}
             title={isPdfBusy ? t("mindmap.actions.printSavePdf") + " (busy)" : t("mindmap.actions.printSavePdf")}
             disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Printer className="w-4 h-4" />
           </button>
@@ -1282,14 +1282,14 @@ export function MindmapView() {
             onClick={handleExportPDF}
             title={isPdfBusy ? t("mindmap.actions.exportPdf") + " (busy)" : t("mindmap.actions.exportPdf")}
             disabled={isPdfBusy}
-            className="bg-[#333] hover:bg-[var(--tp-bg-6)] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+            className="bg-[#333] hover:bg-[var(--tp-bg-6)] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <Download className="w-4 h-4" />
           </button>
           <button
             onClick={handleSave}
             title={t("mindmap.actions.saveMindmap")}
-            className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-xs font-medium inline-flex items-center justify-center gap-2"
+            className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2"
           >
             <Save className="w-4 h-4" />
           </button>
@@ -1401,7 +1401,7 @@ export function MindmapView() {
                       />
                       <button
                         onClick={handleApplyCustomNodeColor}
-                        className="px-2 py-1 text-xs rounded border border-[#3e3e3e] text-gray-200 hover:bg-[var(--tp-bg-4)]"
+                        className="px-2 py-1 text-[12.5px] rounded border border-[#3e3e3e] text-gray-200 hover:bg-[var(--tp-bg-4)]"
                       >
                         {t("mindmap.contextMenu.applyCustom")}
                       </button>
@@ -1491,7 +1491,7 @@ export function MindmapView() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintPDF}
-                  className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)]"
+                  className="px-3 py-1.5 text-[12.5px] rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)]"
                 >
                   {t("editor.pdf.printSavePDF")}
                 </button>

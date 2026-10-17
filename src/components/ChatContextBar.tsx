@@ -36,7 +36,7 @@ export function ChatContextBar() {
   return (
     <div className="px-3 py-1.5 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)/50]">
       {/* Bar */}
-      <div className="flex items-center gap-2 text-[10px] text-[var(--tp-text-muted)]">
+      <div className="flex items-center gap-2 text-[11px] text-[var(--tp-text-muted)]">
         <BarChart3 className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
         <div className="flex-1 h-2 rounded-full bg-gray-700 overflow-hidden flex">
           {segments.map((seg) => (
@@ -63,13 +63,13 @@ export function ChatContextBar() {
       {/* Legend */}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
         {segments.map((seg) => (
-          <span key={seg.key} className="flex items-center gap-1 text-[9px] text-[var(--tp-text-muted)]">
+          <span key={seg.key} className="flex items-center gap-1 text-[11px] text-[var(--tp-text-muted)]">
             <span className={`inline-block w-1.5 h-1.5 rounded-full ${seg.color}`} />
             <span>{seg.label}</span>
           </span>
         ))}
         {freeTokens > 0 && (
-          <span className="flex items-center gap-1 text-[9px] text-[var(--tp-text-muted)]">
+          <span className="flex items-center gap-1 text-[11px] text-[var(--tp-text-muted)]">
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-gray-600" />
             <span>{t("editor.chat.contextFree")}</span>
           </span>

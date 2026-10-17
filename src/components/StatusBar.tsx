@@ -58,8 +58,8 @@ export function StatusBar() {
         height: "var(--tp-statusbar-h)",
         background: "var(--tp-bg-1)",
         borderTop: "1px solid var(--tp-b-1)",
-        color: "var(--tp-t-4)",
-        fontSize: "11px",
+        color: "var(--tp-t-3)",
+        fontSize: "11.5px",
       }}
     >
       {vaultPath ? (

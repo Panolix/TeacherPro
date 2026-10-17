@@ -393,7 +393,7 @@ export const MenuBar = ({
                     aria-selected={isSelected}
                   >
                     <span>{size.replace("pt", "")} pt</span>
-                    {isSelected && <span className="text-[10px]">●</span>}
+                    {isSelected && <span className="text-[11px]">●</span>}
                   </button>
                 );
               })}
@@ -439,7 +439,7 @@ export const MenuBar = ({
                 return (
                   <Fragment key={option.label}>
                     {showGroup && (
-                      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
+                      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#6b7280]">
                         {option.group}
                       </div>
                     )}
@@ -462,7 +462,7 @@ export const MenuBar = ({
                       aria-selected={isSelected}
                     >
                       <span>{option.label}</span>
-                      {isSelected && <span className="text-[10px]">●</span>}
+                      {isSelected && <span className="text-[11px]">●</span>}
                     </button>
                   </Fragment>
                 );
@@ -532,7 +532,7 @@ export const MenuBar = ({
 
           <button
             onClick={() => clearTextStyleAttr("color")}
-            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetTextColor")}
           >
             A-
@@ -552,7 +552,7 @@ export const MenuBar = ({
 
           <button
             onClick={() => clearTextStyleAttr("underlineColor")}
-            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetUnderlineColor")}
           >
             U-
@@ -578,7 +578,7 @@ export const MenuBar = ({
 
           <button
             onClick={() => editor.chain().focus().unsetHighlight().run()}
-            className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
+            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.clearHighlight")}
           >
             H-

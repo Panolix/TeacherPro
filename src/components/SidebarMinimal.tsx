@@ -595,7 +595,7 @@ export function SidebarMinimal() {
             >
               <FolderIcon expanded={isExpanded} />
               <span className="truncate font-medium">{node.name}</span>
-              <span className="ml-auto text-xs text-gray-500">{node.children.length}</span>
+              <span className="ml-auto text-[12.5px] text-gray-500">{node.children.length}</span>
             </div>
           </div>
           {isExpanded && node.children.length > 0 && (
@@ -885,7 +885,7 @@ export function SidebarMinimal() {
             />
             <FolderIcon expanded={isExpanded} />
             <span className="truncate font-medium">{entry.name}</span>
-            <span className="ml-auto text-xs text-gray-500">{entry.children.length}</span>
+            <span className="ml-auto text-[12.5px] text-gray-500">{entry.children.length}</span>
           </div>
           {isExpanded && entry.children.length > 0 && (
             <ul className="space-y-0.5">
@@ -1180,7 +1180,7 @@ export function SidebarMinimal() {
           <Trash className="w-5 h-5" />
           {trashTotalCount > 0 && (
             <span
-              className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-semibold flex items-center justify-center"
+              className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 rounded-full text-[11px] font-semibold flex items-center justify-center"
               style={{ background: "var(--tp-accent)", color: "#fff" }}
             >
               {trashTotalCount}
@@ -1282,7 +1282,7 @@ export function SidebarMinimal() {
                 style={{ borderTop: "1px solid var(--tp-b-1)", flex: "1.5 1 0", maxHeight: "45%" }}
               >
                 <div className="shrink-0 px-3 pt-2 pb-1.5 flex items-center justify-between">
-                  <span className="text-[10.5px] uppercase tracking-wider font-semibold" style={{ color: "var(--tp-t-4)" }}>
+                  <span className="text-[11.5px] uppercase tracking-wider font-semibold" style={{ color: "var(--tp-t-4)" }}>
                     {t('sidebar.sections.materials')}
                     {materials.length > 0 && (
                       <span className="ml-1.5 text-[var(--tp-t-3)] font-normal normal-case">
@@ -1510,7 +1510,7 @@ export function SidebarMinimal() {
                             className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
                           />
                           <span className="font-semibold">{section.name}</span>
-                          <span className="ml-auto text-[10px]">{section.children.length}</span>
+                          <span className="ml-auto text-[11px]">{section.children.length}</span>
                         </div>
                         {open && (
                           <ul className="space-y-0.5">

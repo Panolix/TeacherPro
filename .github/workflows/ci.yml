@@ -47,6 +47,9 @@ jobs:
       - name: Verify i18n key parity
         run: npm run verify:i18n
 
+      - name: Verify typography minimum size
+        run: npm run verify:typography
+
       - name: Build frontend
         run: npm run build
 

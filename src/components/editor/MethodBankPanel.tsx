@@ -89,7 +89,7 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
                 <button
                   key={key}
                   onClick={() => setTypeFilter((previous) => (previous === key ? null : key))}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  className={`rounded-full border px-3 py-1 text-[12.5px] font-medium transition-colors ${
                     typeFilter === key
                       ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/20 text-[var(--tp-accent)]"
                       : "border-[var(--tp-border-strong)] text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
@@ -103,17 +103,17 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--tp-app-bg)] py-3 pl-3 pr-2 [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
             {loading && (
-              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.loading")}</p>
+              <p className="text-[12.5px] text-[var(--tp-text-muted)]">{t("editor.methodBank.loading")}</p>
             )}
 
             {!loading && error && (
-              <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-[12.5px] text-red-200">
                 {error}
               </p>
             )}
 
             {!loading && !error && filtered.length === 0 && (
-              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.noMethodsMatch")}</p>
+              <p className="text-[12.5px] text-[var(--tp-text-muted)]">{t("editor.methodBank.noMethodsMatch")}</p>
             )}
 
             {!loading && !error && filtered.length > 0 && (

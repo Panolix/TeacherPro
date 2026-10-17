@@ -701,7 +701,7 @@ export function SettingsModal({ open, onClose }: Props) {
                       className="mb-3 rounded-md px-3 py-2"
                       style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
                     >
-                      <div className="text-[10px] uppercase tracking-wider mb-1.5 font-semibold" style={{ color: "var(--tp-t-4)" }}>
+                      <div className="text-[11px] uppercase tracking-wider mb-1.5 font-semibold" style={{ color: "var(--tp-t-4)" }}>
                         {t("settings.ai.detectedInstalledModels")}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -1035,7 +1035,7 @@ function NumberInput({ value, min, max, onChange }: { value: number; min: number
 function Badge({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+      className="text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded"
       style={{ border: "1px solid var(--tp-b-2)", color: "var(--tp-t-3)" }}
     >
       {children}
@@ -1046,7 +1046,7 @@ function Badge({ children }: { children: React.ReactNode }) {
 function BadgeAccent({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+      className="text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded"
       style={{ border: "1px solid var(--tp-accent)", color: "var(--tp-accent)" }}
     >
       {children}

@@ -80,7 +80,7 @@ export function LessonPdfPreviewModal({ url, onClose, onPrint }: Props) {
           <div className="flex items-center gap-2">
             <button
               onClick={onPrint}
-              className="px-3 py-1.5 text-xs rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+              className="px-3 py-1.5 text-[12.5px] rounded-md border border-[#444] bg-[#252525] text-gray-200 hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
             >
               {t("editor.pdf.printSavePDF")}
             </button>

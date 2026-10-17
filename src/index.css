@@ -172,6 +172,19 @@
   src: url("./assets/fonts/shadows-into-light/normal-400.woff2") format("woff2");
 }
 
+/* ===== UI typography =====
+   Inter for app chrome (crisper at 11-12px than the system font); the
+   document paper and mindmap canvas keep the previous system stack so
+   existing lessons render and print exactly as before. */
+body {
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
+#lesson-plan-export-content,
+.tp-mindmap {
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+}
+
 @theme {
   --color-background: #121212;
   --color-foreground: #f8f8f8;
@@ -194,7 +207,7 @@
   --tp-border-soft: #3a3a3a;
   --tp-text-primary: #f3f4f6;
   --tp-text-muted: #9ca3af;
-  --tp-text-soft: #6b7280;
+  --tp-text-soft: #8b95a5;
   --tp-scrollbar-size: 6px;
   --tp-scrollbar-track: #161616;
   --tp-scrollbar-thumb: #3a3a3a;
@@ -219,7 +232,7 @@
   --tp-t-1:       #ffffff;  /* primary */
   --tp-t-2:       #b8b8b8;  /* secondary */
   --tp-t-3:       #9a9a9a;  /* tertiary */
-  --tp-t-4:       #777777;  /* quaternary (labels, captions) */
+  --tp-t-4:       #8f8f8f;  /* quaternary (labels, captions) */
 
   /* Accent (unchanged) + soft variants */
   --tp-accent-hover:  #3497b8;
