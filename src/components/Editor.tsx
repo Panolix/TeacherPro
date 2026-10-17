@@ -174,8 +174,10 @@ export function Editor() {
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
-  // Last highlight color picked in the rail — reused by the context menu.
+  // Last colors picked in the rail — reused for one-click re-application.
   const [highlightColor, setHighlightColor] = useState("#fef08a");
+  const [textColor, setTextColor] = useState<string | null>(null);
+  const [underlineColor, setUnderlineColor] = useState<string | null>(null);
   // Set briefly by the Mod+Shift+V keydown so the next paste inserts plain text.
   const plainPasteRef = useRef(false);
 
@@ -513,13 +515,19 @@ export function Editor() {
 
   const editor = useEditor({
     extensions: [
+      // TextStyle must be declared first so it renders OUTSIDE other marks
+      // (e.g. <span style="--tp-underline:…"><u>…</u></span>). The underline
+      // then picks up the colour via CSS variable; otherwise text-decoration
+      // would always be painted with the text colour only.
+      TextStyle,
+      UnderlineExtension,
       StarterKit.configure({
         // The app registers its own configured Link below (StarterKit's
         // default navigates on click, which would hijack the webview).
         link: false,
+        // Registered explicitly above so the mark nests inside TextStyle.
+        underline: false,
       }),
-      UnderlineExtension,
-      TextStyle,
       FontFamily.configure({
         types: ["textStyle"],
       }),
@@ -988,7 +996,7 @@ export function Editor() {
       }
 
       const showTableActions = isTableTarget;
-      const showFormatActions = !isTableTarget && !!aiSelection;
+      const showFormatActions = !!aiSelection;
       const showInsertActions = !isTableTarget && !aiSelection;
 
       const { x, y } = clampContextMenuPosition(event.clientX + 6, event.clientY + 6, {
@@ -2869,7 +2877,12 @@ export function Editor() {
       <MenuBar
         editor={editor}
         onInsertCustomTable={insertCustomTable}
+        lastHighlightColor={highlightColor}
+        lastTextColor={textColor}
+        lastUnderlineColor={underlineColor}
         onHighlightColorChange={setHighlightColor}
+        onTextColorChange={setTextColor}
+        onUnderlineColorChange={setUnderlineColor}
       />
 
       {/* Notes Panel - Left Side */}

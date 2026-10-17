@@ -32,14 +32,30 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { normalizeColorForPicker } from "../../utils/colors";
 import { MOD_LABEL, REDO_LABEL, UNDO_LABEL } from "./editorKeys";
 
+const COLOR_PRESETS = [
+  "#111111", "#475569", "#94a3b8", "#ffffff", "#dc2626",
+  "#ea580c", "#f59e0b", "#fef08a", "#16a34a", "#0d9488",
+  "#2563eb", "#4f46e5", "#9333ea", "#db2777", "#64748b",
+];
+
 export const MenuBar = ({
   editor,
   onInsertCustomTable,
+  lastHighlightColor,
+  lastTextColor,
+  lastUnderlineColor,
   onHighlightColorChange,
+  onTextColorChange,
+  onUnderlineColorChange,
 }: {
   editor: any;
   onInsertCustomTable: () => void;
+  lastHighlightColor: string;
+  lastTextColor: string | null;
+  lastUnderlineColor: string | null;
   onHighlightColorChange: (color: string) => void;
+  onTextColorChange: (color: string) => void;
+  onUnderlineColorChange: (color: string) => void;
 }) => {
   const { t } = useTranslation();
   // Force a re-render when the editor state changes so active buttons update
@@ -50,6 +66,7 @@ export const MenuBar = ({
   const [linkUrl, setLinkUrl] = useState("");
   const linkWrapRef = useRef<HTMLDivElement>(null);
   const [fontFamilyOpen, setFontFamilyOpen] = useState(false);
+  const [palette, setPalette] = useState<{ kind: "text" | "underline" | "highlight"; top: number; left: number } | null>(null);
   const fontFamilyWrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -124,6 +141,26 @@ export const MenuBar = ({
       window.removeEventListener("keydown", onKey);
     };
   }, [fontFamilyOpen]);
+
+  // Close the colour palette on outside click / Escape.
+  useEffect(() => {
+    if (!palette) return;
+    const onDown = (e: MouseEvent) => {
+      const el = document.getElementById("tp-rail-color-palette");
+      if (el && !el.contains(e.target as Node)) {
+        setPalette(null);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPalette(null);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [palette]);
 
   const openLinkPopover = useCallback(() => {
     if (!editor) {
@@ -208,12 +245,75 @@ export const MenuBar = ({
   );
   const currentUnderlineColor = normalizeColorForPicker(
     editor.getAttributes("textStyle").underlineColor,
-    currentTextColor,
+    lastUnderlineColor ?? defaultTextColor,
   );
   const currentHighlightColor = normalizeColorForPicker(
     editor.getAttributes("highlight").color,
-    "#fef08a",
+    lastHighlightColor,
   );
+
+  // Clicking a color button applies the last-used color; right-click opens
+  // the picker. The selection's own color always wins for the swatch.
+  const appliedTextColor = lastTextColor ?? defaultTextColor;
+  const appliedUnderlineColor = lastUnderlineColor ?? defaultTextColor;
+
+  // All typography settings live on the shared 	extStyle mark. A bare
+  // setMark call replaces the mark and wipes its other attributes, so every
+  // change here merges with the current attributes instead.
+  const applyTextStyleAttrs = (attrs: Record<string, unknown>) => {
+    const current = editor.getAttributes("textStyle");
+    editor.chain().focus().setMark("textStyle", { ...current, ...attrs }).run();
+  };
+  const clearTextStyleAttr = (attr: string) => {
+    const current = editor.getAttributes("textStyle");
+    editor.chain().focus().setMark("textStyle", { ...current, [attr]: null }).removeEmptyTextStyle().run();
+  };
+
+  const applyUnderlineColor = (color: string) => {
+    if (!editor.isActive("underline")) {
+      editor.chain().focus().toggleUnderline().run();
+    }
+    applyTextStyleAttrs({ underlineColor: color });
+  };
+
+  const readableInk = (hex: string) => {
+    const match = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!match) return "#f8f8f8";
+    const value = parseInt(match[1], 16);
+    const r = (value >> 16) & 255;
+    const g = (value >> 8) & 255;
+    const b = value & 255;
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? "#111111" : "#f5f5f5";
+  };
+
+  const openPalette = (
+    kind: "text" | "underline" | "highlight",
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPalette({
+      kind,
+      top: Math.min(Math.max(8, rect.top - 8), window.innerHeight - 140),
+      left: Math.max(8, rect.left - 138),
+    });
+  };
+
+  const applyPaletteColor = (color: string) => {
+    if (!palette) return;
+    if (palette.kind === "text") {
+      onTextColorChange(color);
+      applyTextStyleAttrs({ color });
+    } else if (palette.kind === "underline") {
+      onUnderlineColorChange(color);
+      applyUnderlineColor(color);
+    } else {
+      onHighlightColorChange(color);
+      editor.chain().focus().setHighlight({ color }).run();
+    }
+    setPalette(null);
+  };
 
   // --- Vertical Right Rail (v3 design) ---
   const railBtn = (isActive?: boolean) =>
@@ -281,7 +381,7 @@ export const MenuBar = ({
                   <button
                     key={size}
                     onClick={() => {
-                      editor.chain().focus().setFontSize(size).run();
+                      applyTextStyleAttrs({ fontSize: size });
                       setFontSizeOpen(false);
                     }}
                     className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
@@ -346,9 +446,9 @@ export const MenuBar = ({
                     <button
                       onClick={() => {
                         if (option.value) {
-                          editor.chain().focus().setFontFamily(option.value).run();
+                          applyTextStyleAttrs({ fontFamily: option.value });
                         } else {
-                          editor.chain().focus().unsetFontFamily().run();
+                          clearTextStyleAttr("fontFamily");
                         }
                         setFontFamilyOpen(false);
                       }}
@@ -418,65 +518,40 @@ export const MenuBar = ({
           border: "1px solid var(--tp-b-2)",
         }}
       >
-        <div className="flex gap-0.5">
-          <label
+        <div className="flex gap-0.5 relative">
+          <button
+            type="button"
+            onClick={() => applyTextStyleAttrs({ color: appliedTextColor })}
+            onContextMenu={(event) => openPalette("text", event)}
             className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
-            title={t("editor.toolbar.textColor")}
-            style={{ color: "var(--tp-t-1)" }}
+            title={t("editor.toolbar.textColorToggle")}
+            style={{ background: currentTextColor, color: readableInk(currentTextColor) }}
           >
             A
-            <span
-              className="absolute left-0.5 right-0.5 bottom-[2px] h-[2px] rounded-sm"
-              style={{ background: currentTextColor }}
-            />
-            <input
-              type="color"
-              value={currentTextColor}
-              onChange={(event) => editor.chain().focus().setColor(event.target.value).run()}
-              className="absolute opacity-0 pointer-events-none"
-            />
-          </label>
+          </button>
+
           <button
-            onClick={() => editor.chain().focus().unsetColor().run()}
+            onClick={() => clearTextStyleAttr("color")}
             className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetTextColor")}
           >
             A-
           </button>
         </div>
-        <div className="flex gap-0.5">
-          <label
+        <div className="flex gap-0.5 relative">
+          <button
+            type="button"
+            onClick={() => applyUnderlineColor(appliedUnderlineColor)}
+            onContextMenu={(event) => openPalette("underline", event)}
             className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
-            title={t("editor.toolbar.underlineColor")}
-            style={{ color: "var(--tp-t-1)" }}
+            title={t("editor.toolbar.underlineColorToggle")}
+            style={{ background: currentUnderlineColor, color: readableInk(currentUnderlineColor) }}
           >
             U
-            <span
-              className="absolute left-0.5 right-0.5 bottom-[2px] h-[2px] rounded-sm"
-              style={{ background: currentUnderlineColor }}
-            />
-            <input
-              type="color"
-              value={currentUnderlineColor}
-              onChange={(event) => {
-                const chain = editor.chain().focus();
-                if (!editor.isActive("underline")) {
-                  chain.toggleUnderline();
-                }
-                chain.setMark("textStyle", { underlineColor: event.target.value }).run();
-              }}
-              className="absolute opacity-0 pointer-events-none"
-            />
-          </label>
+          </button>
+
           <button
-            onClick={() =>
-              editor
-                .chain()
-                .focus()
-                .setMark("textStyle", { underlineColor: null })
-                .removeEmptyTextStyle()
-                .run()
-            }
+            onClick={() => clearTextStyleAttr("underlineColor")}
             className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
             title={t("editor.toolbar.resetUnderlineColor")}
           >
@@ -484,22 +559,23 @@ export const MenuBar = ({
           </button>
         </div>
         <div className="flex gap-0.5">
-          <label
+          <button
+            type="button"
+            onClick={() => {
+              if (editor.isActive("highlight")) {
+                editor.chain().focus().unsetHighlight().run();
+              } else {
+                editor.chain().focus().setHighlight({ color: lastHighlightColor }).run();
+              }
+            }}
+            onContextMenu={(event) => openPalette("highlight", event)}
             className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold hover:brightness-125"
-            title={t("editor.toolbar.highlightColor")}
-            style={{ background: currentHighlightColor, color: "#1a1a1a" }}
+            title={t("editor.toolbar.highlightToggle")}
+            style={{ background: currentHighlightColor, color: readableInk(currentHighlightColor) }}
           >
             H
-            <input
-              type="color"
-              value={currentHighlightColor}
-              onChange={(event) => {
-                onHighlightColorChange(event.target.value);
-                editor.chain().focus().setHighlight({ color: event.target.value }).run();
-              }}
-              className="absolute opacity-0 pointer-events-none"
-            />
-          </label>
+          </button>
+
           <button
             onClick={() => editor.chain().focus().unsetHighlight().run()}
             className="h-6 w-6 rounded text-[10px] font-semibold tp-rail-btn"
@@ -509,6 +585,33 @@ export const MenuBar = ({
           </button>
         </div>
       </div>
+
+      {palette && (
+        <div
+          id="tp-rail-color-palette"
+          className="fixed z-[1000] p-1.5 rounded-lg shadow-2xl"
+          style={{
+            top: palette.top,
+            left: palette.left,
+            background: "#222222",
+            border: "1px solid #333333",
+            width: "130px",
+          }}
+        >
+          <div className="grid grid-cols-5 gap-1">
+            {COLOR_PRESETS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                title={color}
+                onClick={() => applyPaletteColor(color)}
+                className="h-[20px] w-[20px] rounded border border-[#444] hover:scale-110 transition-transform"
+                style={{ background: color }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {railDivider}
 

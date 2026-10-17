@@ -23,7 +23,7 @@ export const UnderlineColor = Extension.create({
               }
 
               return {
-                style: `text-decoration-color: ${attributes.underlineColor}`,
+                style: `--tp-underline: ${attributes.underlineColor}; text-decoration-color: ${attributes.underlineColor}`,
               };
             },
           },

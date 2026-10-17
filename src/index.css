@@ -811,6 +811,12 @@ html[data-tp-mindmap-paper="dark"] .tp-mindmap .bg-\[\#333\] {
   margin-bottom: 0.5rem;
 }
 
+/* Underline colour: the underline mark paints the line, and it picks up the
+   colour of the wrapping textStyle span through this variable. */
+.ProseMirror u {
+  text-decoration-color: var(--tp-underline, currentColor);
+}
+
 /* Links */
 .ProseMirror a {
   color: var(--tp-accent);
