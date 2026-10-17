@@ -14,7 +14,7 @@ const requiredFiles = [
 ];
 
 const editorMarkers = [
-  "onToggleMethodBank",
+  "toggleMethodBank",
   "toggleMethodBankPanel",
   "insertMethodTextAtSelection",
   "handleInsertMethod",
