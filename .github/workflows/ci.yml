@@ -34,6 +34,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Cache engine artifacts
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/engines
+          key: engines-${{ runner.os }}-${{ hashFiles('scripts/engine-config.json') }}
+
+      - name: Fetch bundled llama-server engine
+        run: npm run fetch:engines
+
       - name: TypeScript check
         run: npx tsc --noEmit
 
