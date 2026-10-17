@@ -106,7 +106,8 @@ pub fn ai_select_model(app: AppHandle, model_id: String) -> Result<EngineStatus,
     if !models_dir.join(model.filename).is_file() {
         return Err("Model not downloaded yet.".into());
     }
-    app.state::<AiState>().set_selected(Some(model.id.to_string()));
+    app.state::<AiState>()
+        .set_selected(Some(model.id.to_string()));
     start_engine(&app, Some(model.id), None)
 }
 

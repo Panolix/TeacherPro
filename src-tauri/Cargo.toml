@@ -32,4 +32,6 @@ uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"
 tempfile = "3"
 tauri-plugin-clipboard-manager = "2.5.0"
+rusqlite = { version = "0.32", features = ["bundled"] }
+fastembed = "4"
 

@@ -21,14 +21,22 @@ pub fn extract_text_from_pdf(path: &Path) -> Result<Vec<PageText>, String> {
         .unwrap_or_default();
 
     // Strategy 1: pdf-extract (handles digital PDFs)
-    match pdf_extract::extract_text(path) {
-        Ok(text) if text.len() >= 50 => {
-            // Split by form feeds or double newlines to approximate pages.
-            // pdf-extract doesn't give page numbers, so we treat it as one page.
-            Ok(vec![PageText {
-                text: text.trim().to_string(),
-                page_num: 1,
-            }])
+    match pdf_extract::extract_text_by_pages(path) {
+        Ok(pages) if pages.join("").len() >= 50 => {
+            let out: Vec<PageText> = pages
+                .into_iter()
+                .enumerate()
+                .filter(|(_, text)| !text.trim().is_empty())
+                .map(|(i, text)| PageText {
+                    text: text.trim().to_string(),
+                    page_num: (i + 1) as u32,
+                })
+                .collect();
+            if out.is_empty() {
+                Err("pdf-extract produced empty pages".to_string())
+            } else {
+                Ok(out)
+            }
         }
         Ok(_) => {
             // Very little text → likely a scanned PDF. Try OCR fallback.
@@ -76,7 +84,7 @@ fn ocr_fallback(path: &Path) -> Result<Vec<PageText>, String> {
 
     // Render PDF pages to PNG using pdftoppm
     // Output: tmp_dir/page-1.png, page-2.png, ...
-    let render_output = std::process::Command::new("pdftoppm")
+    let render_output = crate::command_for("pdftoppm")
         .arg("-png")
         .arg("-r")
         .arg("300") // 300 DPI for good OCR
@@ -110,7 +118,7 @@ fn ocr_fallback(path: &Path) -> Result<Vec<PageText>, String> {
     for (i, entry) in page_images.iter().enumerate() {
         let img_path = entry.path();
 
-        let ocr_output = std::process::Command::new("tesseract")
+        let ocr_output = crate::command_for("tesseract")
             .arg(img_path.to_str().unwrap_or(""))
             .arg("stdout")
             .arg("-l")
@@ -142,7 +150,7 @@ fn ocr_fallback(path: &Path) -> Result<Vec<PageText>, String> {
 }
 
 fn command_exists(cmd: &str) -> bool {
-    std::process::Command::new(if cfg!(windows) { "where" } else { "which" })
+    crate::command_for(if cfg!(windows) { "where" } else { "which" })
         .arg(cmd)
         .output()
         .map(|o| o.status.success())

@@ -594,3 +594,10 @@ pub fn ai_structured(
         .map_err(|e| format!("Model output was not valid JSON: {e}"))?;
     Ok(value)
 }
+/// Run a blocking closure on Tauri's blocking pool (shared helper for embeddings).
+pub(crate) fn run_blocking<T: Send + 'static>(
+    f: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let handle = tauri::async_runtime::spawn_blocking(f);
+    tauri::async_runtime::block_on(handle).map_err(|e| format!("Blocking task failed: {e}"))?
+}

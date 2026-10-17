@@ -5,6 +5,7 @@
 pub mod catalog;
 pub mod client;
 pub mod downloader;
+pub mod embeddings;
 pub mod engine;
 
 use std::collections::HashMap;

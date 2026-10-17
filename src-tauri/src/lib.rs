@@ -2019,8 +2019,9 @@ pub fn run() {
         .setup(|app| {
             migrate_legacy_app_data(app);
 
-            // AI v3: the engine is lazy-started on first use (src-tauri/src/ai/engine.rs);
-            // nothing is spawned at launch anymore.
+            // AI v3: register the app handle for subject_db (fastembed embeddings).
+            subject_db::init_subject_db(app.handle());
+
             Ok(())
         })
         .build(tauri::generate_context!())

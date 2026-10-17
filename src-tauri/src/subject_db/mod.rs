@@ -1,8 +1,8 @@
 pub mod pdf;
 pub mod chunk;
-pub mod embed;
-pub mod store;
+pub mod store_sqlite;
 
+use crate::ai::embeddings;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -23,6 +23,7 @@ pub struct Chunk {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // legacy chunks.json store still uses it
 pub struct ChunkWithEmbedding {
     pub chunk: Chunk,
     pub embedding: Vec<f32>,
@@ -84,15 +85,6 @@ pub struct FolderMeta {
     pub topic: String,
 }
 
-const EMBEDDING_MODEL: &str = "bge-m3";
-
-fn get_ollama_base_url() -> String {
-    std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string())
-        .trim_end_matches('/')
-        .to_string()
-}
-
 fn subject_db_dir(vault_path: &str) -> PathBuf {
     PathBuf::from(vault_path).join("SubjectDBs")
 }
@@ -148,16 +140,24 @@ fn list_pdf_files(dir: &Path, existing_sources: &HashSet<String>) -> Result<Vec<
     Ok(files)
 }
 
-fn read_existing_sources(store_path: &Path) -> HashSet<String> {
-    if store_path.exists() {
-        store::load_chunks_meta(store_path)
-            .ok()
-            .map(|chunks| chunks.into_iter().map(|c| c.source_file).collect())
+fn read_existing_sources(vault_path: &str, subject: &str, grade: &str, topic: &str) -> HashSet<String> {
+    let db_path = store_sqlite::db_path(vault_path);
+    if !db_path.exists() {
+        return HashSet::new();
+    }
+    match rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+    ) {
+        Ok(conn) => store_sqlite::embedded_sources(&conn, subject, grade, topic)
             .unwrap_or_default()
-    } else {
-        HashSet::new()
+            .into_iter()
+            .collect(),
+        Err(_) => HashSet::new(),
     }
 }
+
+
 
 // ── subject_db_list ──────────────────────────────────────────
 
@@ -166,12 +166,40 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
     let db_dir = subject_db_dir(&vault_path);
     if !db_dir.exists() { return Ok(Vec::new()); }
 
+    let sqlite_counts: std::collections::HashMap<(String, String, String), i64> = {
+        let db_path = store_sqlite::db_path(&vault_path);
+        let mut map = std::collections::HashMap::new();
+        if db_path.exists() {
+            if let Ok(conn) = rusqlite::Connection::open_with_flags(
+                &db_path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            ) {
+                if let Ok(mut stmt) = conn.prepare(
+                    "SELECT subject, grade, topic, COUNT(*) FROM chunks GROUP BY subject, grade, topic",
+                ) {
+                    if let Ok(rows) = stmt.query_map([], |r| {
+                        Ok((
+                            r.get::<_, String>(0)?,
+                            r.get::<_, String>(1)?,
+                            r.get::<_, String>(2)?,
+                            r.get::<_, i64>(3)?,
+                        ))
+                    }) {
+                        for row in rows.flatten() {
+                            map.insert((row.0.clone(), row.1.clone(), row.2.clone()), row.3);
+                        }
+                    }
+                }
+            }
+        }
+        map
+    };
+
     let mut subjects = Vec::new();
     for s_entry in collect_dirs(&db_dir)? {
         let subject_name = s_entry.file_name().to_string_lossy().to_string();
         let subject_path = s_entry.path();
 
-        // Files directly in the subject folder
         let subject_pdfs = list_pdf_files_in_dir(&subject_path);
 
         let mut grades = Vec::new();
@@ -179,13 +207,14 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
             let grade_name = g_entry.file_name().to_string_lossy().to_string();
             let grade_path = g_entry.path();
 
-            // Files directly in the grade folder + grade-level chunks.json
-            let grade_store = grade_path.join("chunks.json");
-            let grade_existing = read_existing_sources(&grade_store);
+            // Grade-pdfs live in the DB with topic = stem; check per-topic counts.
             let mut grade_pdfs = list_pdf_files_in_dir(&grade_path);
-            // Mark grade-pdfs that have been embedded
             for pdf in &mut grade_pdfs {
-                if grade_existing.contains(&pdf.name) {
+                let stem = pdf.name.trim_end_matches(".pdf").to_string();
+                let embedded = sqlite_counts
+                    .keys()
+                    .any(|(s, g, t)| s == &subject_name && g == &grade_name && (t == &pdf.name || t == &stem));
+                if embedded {
                     pdf.is_embedded = true;
                     pdf.chunk_count = 1;
                 }
@@ -195,17 +224,17 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
             for t_entry in collect_dirs(&grade_path)? {
                 let topic_name = t_entry.file_name().to_string_lossy().to_string();
                 let topic_path = t_entry.path();
-                let store_path = topic_path.join("chunks.json");
-                let existing = read_existing_sources(&store_path);
 
-                let chunk_count = if store_path.exists() {
-                    store::load_chunks_meta(&store_path).ok().map(|c| c.len()).unwrap_or(0)
-                } else { 0 };
+                let chunk_count = sqlite_counts
+                    .get(&(subject_name.clone(), grade_name.clone(), topic_name.clone()))
+                    .copied()
+                    .unwrap_or(0);
+                let existing = read_existing_sources(&vault_path, &subject_name, &grade_name, &topic_name);
 
                 let files = list_pdf_files(&topic_path, &existing)?;
                 let pending_pdfs = files.iter().filter(|f| !f.is_embedded).count();
 
-                topics.push(SubjectDbTopic { name: topic_name, chunk_count, pending_pdfs, files });
+                topics.push(SubjectDbTopic { name: topic_name, chunk_count: chunk_count as usize, pending_pdfs, files });
             }
 
             grades.push(SubjectDbGrade { name: grade_name, topics, files: grade_pdfs });
@@ -249,9 +278,35 @@ pub async fn subject_db_scan_import(
         std::fs::create_dir_all(&db_dir).map_err(|e| format!("Failed to create SubjectDBs: {e}"))?;
     }
 
+    init_subject_db(&app);
+
     let mut total_chunks = 0usize;
     let mut processed_files = 0usize;
     let mut errors: Vec<String> = Vec::new();
+
+    // Open the DB fresh per usage site; rusqlite::Connection is not Send, so it
+    // must never be held across an await point.
+    let existing_map = {
+        let conn = store_sqlite::open(&vault_path)?;
+        let mut map: std::collections::HashMap<(String, String, String), HashSet<String>> =
+            std::collections::HashMap::new();
+        for s_entry in collect_dirs(&db_dir)? {
+            let subject = s_entry.file_name().to_string_lossy().to_string();
+            for g_entry in collect_dirs(&s_entry.path())? {
+                let grade = g_entry.file_name().to_string_lossy().to_string();
+                for t_entry in collect_dirs(&g_entry.path())? {
+                    let topic = t_entry.file_name().to_string_lossy().to_string();
+                    let sources = store_sqlite::embedded_sources(&conn, &subject, &grade, &topic)
+                        .unwrap_or_default();
+                    map.insert(
+                        (subject.clone(), grade.clone(), topic.clone()),
+                        sources.into_iter().collect(),
+                    );
+                }
+            }
+        }
+        map
+    };
 
     let subject_dirs = collect_dirs(&db_dir)?;
     for s_entry in &subject_dirs {
@@ -270,29 +325,37 @@ pub async fn subject_db_scan_import(
             for t_entry in collect_dirs(&grade_path)? {
                 let topic_name = t_entry.file_name().to_string_lossy().to_string();
                 let topic_path = t_entry.path();
-                let store_path = topic_path.join("chunks.json");
 
                 let meta = FolderMeta {
                     subject: subject_name.clone(),
                     grade: grade_name.clone(),
-                    topic: topic_name,
+                    topic: topic_name.clone(),
                 };
 
-                let result = process_topic_folder(&topic_path, &meta, &store_path, &app).await?;
+                let existing = existing_map
+                    .get(&(subject_name.clone(), grade_name.clone(), topic_name.clone()))
+                    .cloned()
+                    .unwrap_or_default();
+                let result = process_topic_folder(&topic_path, &meta, &app, existing, &vault_path).await?;
                 total_chunks += result.0;
                 processed_files += result.1;
                 errors.extend(result.2);
             }
 
             // 2) Process PDFs directly in the grade folder (not in a topic subfolder)
-            let result = process_loose_pdfs(&grade_path, &subject_name, &grade_name, &app).await?;
+            let existing = existing_map
+                .get(&(subject_name.clone(), grade_name.clone(), String::new()))
+                .cloned()
+                .unwrap_or_default();
+            let result =
+                process_loose_pdfs(&grade_path, &subject_name, &grade_name, &app, existing, &vault_path).await?;
             total_chunks += result.0;
             processed_files += result.1;
             errors.extend(result.2);
         }
 
         // 3) Process PDFs directly in the subject folder
-        let result = process_loose_pdfs(&subject_path, &subject_name, "", &app).await?;
+        let result = process_loose_pdfs(&subject_path, &subject_name, "", &app, HashSet::new(), &vault_path).await?;
         total_chunks += result.0;
         processed_files += result.1;
         errors.extend(result.2);
@@ -305,12 +368,10 @@ pub async fn subject_db_scan_import(
 async fn process_topic_folder(
     topic_path: &Path,
     meta: &FolderMeta,
-    store_path: &Path,
     app: &tauri::AppHandle,
+    existing_sources: HashSet<String>,
+    vault_path: &str,
 ) -> Result<(usize, usize, Vec<String>), String> {
-    let mut store = store::load_or_new(store_path);
-    let existing_sources: HashSet<String> = store.chunks.iter().map(|c| c.chunk.source_file.clone()).collect();
-
     let mut pdf_files: Vec<_> = std::fs::read_dir(topic_path)
         .map_err(|e| format!("read topic dir: {e}"))?
         .filter_map(|e| e.ok())
@@ -331,21 +392,12 @@ async fn process_topic_folder(
             "subject": &meta.subject, "grade": &meta.grade, "topic": &meta.topic,
         }));
 
-        match process_and_embed_pdf(&entry.path(), &filename, meta).await {
-            Ok(chunked) => {
-                let count = chunked.len();
-                store.add_chunks(chunked);
+        match process_and_embed_pdf(&entry.path(), &filename, meta, vault_path).await {
+            Ok(count) => {
                 total_chunks += count;
                 processed += 1;
             }
             Err(e) => errors.push(format!("{filename}: {e}")),
-        }
-    }
-
-    // Save store if anything changed
-    if processed > 0 {
-        if let Err(e) = store::save_store(&store, store_path) {
-            errors.push(format!("Failed to save chunk store: {e}"));
         }
     }
 
@@ -361,6 +413,8 @@ async fn process_loose_pdfs(
     subject: &str,
     grade: &str,
     _app: &tauri::AppHandle,
+    known_sources: HashSet<String>,
+    vault_path: &str,
 ) -> Result<(usize, usize, Vec<String>), String> {
     let mut pdf_files: Vec<_> = std::fs::read_dir(folder_path)
         .map_err(|e| format!("read dir: {e}"))?
@@ -377,8 +431,7 @@ async fn process_loose_pdfs(
         let filename = entry.file_name().to_string_lossy().to_string();
         let stem = entry.path().file_stem().and_then(|s| s.to_str()).unwrap_or(&filename).to_string();
 
-        let (meta, store_path, file_to_process) = if grade.is_empty() {
-            // Subject-level PDF → use stem as both grade and topic
+        let (meta, file_to_process) = if grade.is_empty() {
             let dir = folder_path.join(&stem);
             std::fs::create_dir_all(&dir).ok();
             let dest = dir.join(&filename);
@@ -389,33 +442,23 @@ async fn process_loose_pdfs(
                     grade: stem.clone(),
                     topic: stem.clone(),
                 },
-                dir.join("chunks.json"),
                 dest,
             )
         } else {
-            // Grade-level PDF → save to grade/chunks.json with topic = filename
             (
                 FolderMeta {
                     subject: subject.to_string(),
                     grade: grade.to_string(),
                     topic: stem.clone(),
                 },
-                folder_path.join("chunks.json"),
                 entry.path().to_path_buf(),
             )
         };
 
-        let existing = read_existing_sources(&store_path);
-        if existing.contains(&filename) { continue; }
+        if known_sources.contains(&filename) { continue; }
 
-        match process_and_embed_pdf(&file_to_process, &filename, &meta).await {
-            Ok(chunked) => {
-                let mut store = store::load_or_new(&store_path);
-                let count = chunked.len();
-                store.add_chunks(chunked);
-                if let Err(e) = store::save_store(&store, &store_path) {
-                    errors.push(format!("{filename}: failed to save chunk store: {e}"));
-                }
+        match process_and_embed_pdf(&file_to_process, &filename, &meta, vault_path).await {
+            Ok(count) => {
                 total_chunks += count;
                 processed += 1;
             }
@@ -426,12 +469,13 @@ async fn process_loose_pdfs(
     Ok((total_chunks, processed, errors))
 }
 
-/// Extract text → chunk → embed a single PDF file.
+/// Extract text → chunk → embed a single PDF file (fastembed in-process).
 async fn process_and_embed_pdf(
     path: &Path,
     filename: &str,
     meta: &FolderMeta,
-) -> Result<Vec<ChunkWithEmbedding>, String> {
+    vault_path: &str,
+) -> Result<usize, String> {
     let pages = pdf::extract_text_from_pdf(path)?;
     let total_text: usize = pages.iter().map(|p| p.text.len()).sum();
     if total_text < 10 {
@@ -439,18 +483,51 @@ async fn process_and_embed_pdf(
     }
 
     let chunks = chunk::chunk_pages(&pages, meta, filename);
+    if chunks.is_empty() {
+        return Ok(0);
+    }
     let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
-    let base_url = get_ollama_base_url();
 
-    let embeddings = embed::embed_texts(&texts, EMBEDDING_MODEL, &base_url).await?;
+    let app = APP_HANDLE
+        .get()
+        .ok_or("App handle not initialized")?;
+    embeddings::ensure_embedder(app)?;
 
-    let chunked: Vec<ChunkWithEmbedding> = chunks
-        .into_iter()
-        .zip(embeddings)
-        .map(|(chunk, embedding)| ChunkWithEmbedding { chunk, embedding })
+    let vectors = crate::ai::client::run_blocking(move || embeddings::embed_texts(&texts))?;
+
+    // L2-normalize for pure dot-product cosine
+    let rows: Vec<(String, i64, String, Vec<f32>)> = chunks
+        .iter()
+        .zip(vectors)
+        .map(|(chunk, v)| {
+            let mut v = v;
+            let norm = v.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-12);
+            for x in v.iter_mut() {
+                *x /= norm;
+            }
+            (chunk.text.clone(), chunk.page as i64, chunk.language.clone(), v)
+        })
         .collect();
 
-    Ok(chunked)
+    let count = rows.len();
+    // SQLite write happens here (short, non-async scope — Connection never
+    // crosses an await point).
+    let conn = store_sqlite::open(vault_path)?;
+    store_sqlite::replace_document(
+        &conn,
+        &meta.subject,
+        &meta.grade,
+        &meta.topic,
+        filename,
+        &rows,
+    )?;
+    Ok(count)
+}
+
+static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+
+pub fn init_subject_db(app: &tauri::AppHandle) {
+    let _ = APP_HANDLE.set(app.clone());
 }
 
 // ── subject_db_add_pdfs ──────────────────────────────────────
@@ -525,15 +602,10 @@ pub async fn subject_db_delete_file(
         std::fs::remove_file(&file_path)
             .map_err(|e| format!("Failed to delete file: {e}"))?;
 
-        // Also remove associated chunks from chunks.json if topic level
+        // Remove associated chunks from the SQLite index
         if let (Some(g), Some(t)) = (grade, topic) {
-            let store_path = base.join(&g).join(&t).join("chunks.json");
-            if store_path.exists() {
-                if let Ok(mut store) = store::load_store(&store_path) {
-                    store.chunks.retain(|c| c.chunk.source_file != filename);
-                    store::save_store(&store, &store_path)?;
-                }
-            }
+            let conn = store_sqlite::open(&vault_path)?;
+            store_sqlite::delete_document(&conn, &subject, &g, &t, &filename)?;
         }
     }
 
@@ -555,33 +627,56 @@ pub async fn subject_db_query(
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
 
-    let db_dir = subject_db_dir(&vault_path);
     let top_k = top_k.clamp(1, 50) as usize;
 
-    let base_url = get_ollama_base_url();
-    let query_emb = embed::embed_texts(&[query], EMBEDDING_MODEL, &base_url)
-        .await?
+    let db_path = store_sqlite::db_path(&vault_path);
+    if !db_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let app = APP_HANDLE.get().ok_or("App handle not initialized")?;
+    embeddings::ensure_embedder(app)?;
+
+    let q = query.clone();
+    let query_emb = crate::ai::client::run_blocking(move || embeddings::embed_texts(&[q]))?
         .into_iter()
         .next()
         .ok_or("Embedding returned empty result".to_string())?;
+    let norm = query_emb.iter().map(|x| x * x).sum::<f32>().sqrt().max(1e-12);
+    let query_vec: Vec<f32> = query_emb.iter().map(|x| x / norm).collect();
 
-    let search_dir = db_dir.join(&subject);
-    if !search_dir.exists() { return Ok(Vec::new()); }
+    let conn = store_sqlite::open(&vault_path)?;
+    let dense = store_sqlite::dense_search(
+        &conn,
+        &subject,
+        grade.as_deref(),
+        topic.as_deref(),
+        &query_vec,
+        top_k * 2,
+    )?;
+    let fts = store_sqlite::fts_search(
+        &conn,
+        &subject,
+        grade.as_deref(),
+        topic.as_deref(),
+        &query,
+        top_k * 2,
+    )?;
+    let fused = store_sqlite::fuse(dense, fts, top_k);
 
-    let topics = collect_topic_dirs(&search_dir, &grade, &topic)?;
-    let mut all_scored = Vec::new();
-
-    for dir in &topics {
-        let store_path = dir.join("chunks.json");
-        if !store_path.exists() { continue; }
-        if let Ok(store) = store::load_store(&store_path) {
-            all_scored.extend(store.query(&query_emb, top_k));
-        }
-    }
-
-    all_scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-    all_scored.truncate(top_k);
-    Ok(all_scored)
+    Ok(fused
+        .into_iter()
+        .map(|s| ScoredChunk {
+            id: s.row.chunk_id.to_string(),
+            text: s.row.text,
+            source: s.row.source_file,
+            page: s.row.page.max(0) as u32,
+            subject: s.row.subject,
+            grade: s.row.grade,
+            topic: s.row.topic,
+            score: s.score,
+        })
+        .collect())
 }
 
 // ── subject_db_delete ────────────────────────────────────────
@@ -599,6 +694,16 @@ pub async fn subject_db_delete(
 
     let db_dir = subject_db_dir(&vault_path);
     let target = db_dir.join(&subject);
+
+    {
+        let conn = store_sqlite::open(&vault_path)?;
+        store_sqlite::delete_hierarchy(
+            &conn,
+            &subject,
+            grade.as_deref(),
+            topic.as_deref(),
+        )?;
+    }
 
     if let Some(g) = &grade {
         let grade_dir = target.join(g);
@@ -619,7 +724,7 @@ pub async fn subject_db_delete(
     Ok(())
 }
 
-// ── subject_db_diagnose ──────────────────────────────────────
+// \u2500\u2500 subject_db_diagnose \u2500\u2500
 
 #[derive(Serialize)]
 pub struct DbDiagnostic {
@@ -641,17 +746,17 @@ pub async fn subject_db_diagnose(
         return Ok(Vec::new());
     }
 
-    // Check if bge-m3 is available via Ollama
-    let base_url = get_ollama_base_url();
-    let model_available = tauri::async_runtime::spawn_blocking(move || {
-        let agent = ureq::AgentBuilder::new()
-            .timeout(std::time::Duration::from_secs(5))
-            .build();
-        agent.post(&format!("{base_url}/api/show"))
-            .send_json(serde_json::json!({"model": "bge-m3"}))
-            .is_ok()
-    }).await.unwrap_or(false);
+    // Embedder readiness = weights present on disk (in-process ONNX)
+    let model_available = APP_HANDLE
+        .get()
+        .map(|app| {
+            crate::ai::embeddings::emb_models_dir(app)
+                .map(|d| d.join("model_quantized.onnx").is_file())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
 
+    let conn = store_sqlite::open(&vault_path)?;
     let mut results = Vec::new();
     for s_entry in collect_dirs(&db_dir)? {
         let subject = s_entry.file_name().to_string_lossy().to_string();
@@ -659,36 +764,33 @@ pub async fn subject_db_diagnose(
             let grade = g_entry.file_name().to_string_lossy().to_string();
             for t_entry in collect_dirs(&g_entry.path())? {
                 let topic = t_entry.file_name().to_string_lossy().to_string();
-                let store_path = t_entry.path().join("chunks.json");
-                let has_store = store_path.exists();
-                let chunk_count = if has_store {
-                    store::load_chunks_meta(&store_path).ok().map(|c| c.len()).unwrap_or(0)
-                } else { 0 };
-                results.push(DbDiagnostic {
-                    subject: subject.clone(),
-                    grade: grade.clone(),
-                    topic,
-                    chunk_count,
-                    has_store,
-                    store_path: store_path.to_string_lossy().to_string(),
-                    embedding_model_available: model_available,
-                });
-            }
-            // Also check grade-level store
-            let grade_store = g_entry.path().join("chunks.json");
-            if grade_store.exists() {
-                let chunk_count = store::load_chunks_meta(&grade_store).ok().map(|c| c.len()).unwrap_or(0);
+                let chunk_count = store_sqlite::chunk_count_by_hierarchy(
+                    &conn, &subject, Some(&grade), Some(&topic),
+                )?;
                 if chunk_count > 0 {
                     results.push(DbDiagnostic {
                         subject: subject.clone(),
                         grade: grade.clone(),
-                        topic: "(grade-level)".to_string(),
-                        chunk_count,
+                        topic,
+                        chunk_count: chunk_count as usize,
                         has_store: true,
-                        store_path: grade_store.to_string_lossy().to_string(),
+                        store_path: store_sqlite::db_path(&vault_path).to_string_lossy().to_string(),
                         embedding_model_available: model_available,
                     });
                 }
+            }
+            // Grade-level (topic = stem) counts
+            let grade_count = store_sqlite::chunk_count_by_hierarchy(&conn, &subject, Some(&grade), None)?;
+            if grade_count > 0 {
+                results.push(DbDiagnostic {
+                    subject: subject.clone(),
+                    grade: grade.clone(),
+                    topic: "(grade-level)".to_string(),
+                    chunk_count: grade_count as usize,
+                    has_store: true,
+                    store_path: store_sqlite::db_path(&vault_path).to_string_lossy().to_string(),
+                    embedding_model_available: model_available,
+                });
             }
         }
     }
@@ -696,45 +798,6 @@ pub async fn subject_db_diagnose(
 }
 
 // ── Utility ──────────────────────────────────────────────────
-
-fn collect_topic_dirs(
-    subject_path: &Path,
-    grade: &Option<String>,
-    topic: &Option<String>,
-) -> Result<Vec<PathBuf>, String> {
-    let mut dirs = Vec::new();
-    if let Some(g) = grade {
-        let gp = subject_path.join(g);
-        if !gp.exists() { return Ok(Vec::new()); }
-        if let Some(t) = topic {
-            let tp = gp.join(t);
-            if tp.exists() && tp.is_dir() { dirs.push(tp); }
-        } else {
-            // Grade selected without topic → only search grade-level chunks
-            // (PDFs directly in the grade folder, not in sub-topics)
-            // If there's a grade-level chunks.json, include the grade path
-            if gp.join("chunks.json").exists() {
-                dirs.push(gp);
-            }
-            // Also check for virtual topic folders from subject-level PDF processing
-            // This is for backward compatibility with subject-level PDFs that got
-            // moved into stem-named folders
-        }
-    } else {
-        // Subject selected without grade → search all grade-level chunks
-        for ge in collect_dirs(subject_path)? {
-            let gp = ge.path();
-            if gp.join("chunks.json").exists() {
-                dirs.push(gp.clone());
-            }
-            // Also include topic-level chunks in sub-folders
-            if let Ok(topic_dirs) = collect_dirs(&gp) {
-                for te in &topic_dirs { dirs.push(te.path()); }
-            }
-        }
-    }
-    Ok(dirs)
-}
 
 #[cfg(test)]
 mod tests {
