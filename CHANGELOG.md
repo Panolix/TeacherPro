@@ -1,5 +1,32 @@
 # Changelog
 
+## [2.7.0] - 2026-10-17
+
+### Fixed
+- **Underline colour rendering** — underline colour was stored but never
+  painted (underlines always used the text colour). Now renders correctly in
+  the editor, preview and printed output, independent of the text colour.
+- **Text-style attributes overwriting each other** — changing text colour,
+  underline colour, font size or font family wiped the other attributes on
+  the shared text-style mark; all changes now merge.
+- **Preview/print/export failing on lessons with material links** — snapshot
+  failures caused by dead image references are now benign; the pipeline skips
+  them and tolerates broken images.
+- **Material preview scaling with canvas zoom** — the preview modal is now
+  rendered outside the zoomed canvas at a consistent size.
+
+### Added / Improved
+- **One-click rail colours + palette** — click A/U/H to apply the last-used
+  colour; right-click opens a compact 15-colour palette.
+- **Formatting bar inside table selections** — right-clicking selected text in
+  a table shows the mini formatting toolbar.
+- **Table context menu trimmed** — merge/split cells and header toggles
+  removed; menu ends at Delete Table.
+
+### Internal
+- Editor split into focused modules (rail, context menu, AI chat, notes,
+  method bank, PDF pipeline). No functional change intended.
+
 ## [2.6.1] - 2026-10-16
 
 ### Fixed
