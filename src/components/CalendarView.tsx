@@ -1,4 +1,4 @@
-import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+﻿import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
@@ -511,15 +511,15 @@ export function CalendarView() {
               >
                 <button
                   onClick={() => void createNewLesson(day)}
-                  className="h-7 w-7 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                  className="h-9 w-9 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
                   title={t('calendar.actions.add')}
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => void handleDeleteAllForDate(day)}
                   disabled={isDeletingLessons || lessons.length === 0}
-                  className={`h-7 w-7 inline-flex items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                  className={`h-9 w-9 inline-flex items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                     lessons.length > 0 && !isDeletingLessons ? "hover:[filter:brightness(1.15)]" : ""
                   }`}
                   title={isDeletingLessons ? t('calendar.actions.deleting') : t('calendar.tooltips.moveAllForDate', { count: lessons.length })}
@@ -529,7 +529,7 @@ export function CalendarView() {
                     border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
                   }}
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>

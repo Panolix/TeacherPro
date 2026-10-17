@@ -1,4 +1,4 @@
-import { create } from "zustand";
+﻿import { create } from "zustand";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   readDir,
@@ -229,9 +229,11 @@ interface AppState {
   activeChatDb: string | null;         // subject name or null
   activeChatGrade: string | null;      // grade name or null
   activeChatTopic: string | null;      // topic name or null
+  activeChatFile: string | null;       // source file name or null
   setActiveChatDb: (db: string | null) => void;
   setActiveChatGrade: (grade: string | null) => void;
   setActiveChatTopic: (topic: string | null) => void;
+  setActiveChatFile: (file: string | null) => void;
 
   // Context budget display
   chatContextBudget: ChatContextBudget | null;
@@ -1053,6 +1055,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeChatDb: null,
   activeChatGrade: null,
   activeChatTopic: null,
+  activeChatFile: null,
   chatContextBudget: null,
 
   initVault: async () => {
@@ -1267,6 +1270,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   setActiveChatTopic: (topic) => {
     set({ activeChatTopic: topic });
+  },
+  setActiveChatFile: (file) => {
+    set({ activeChatFile: file });
   },
   setChatContextBudget: (budget) => {
     set({ chatContextBudget: budget });

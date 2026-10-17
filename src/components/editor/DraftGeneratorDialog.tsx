@@ -1,13 +1,9 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
-import {
-  Database,
-  Loader2,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Loader2, Sparkles, X } from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "../../i18n/useTranslation";
+import { SubjectDbPicker } from "./SubjectDbPicker";
 import type { SubjectDbInfo } from "../../store";
 import type { MethodBankItem } from "../../utils/methodBank";
 
@@ -22,6 +18,7 @@ interface Props {
   activeDb: string | null;
   activeGrade: string | null;
   activeTopic: string | null;
+  activeFile: string | null;
   subjectDatabases: SubjectDbInfo[];
   methodBankItems: MethodBankItem[];
 }
@@ -77,6 +74,7 @@ export function DraftGeneratorDialog({
   activeDb: defaultDb,
   activeGrade: defaultGradeProp,
   activeTopic: defaultTopicProp,
+  activeFile: defaultFileProp,
   subjectDatabases,
   methodBankItems,
 }: Props) {
@@ -88,6 +86,7 @@ export function DraftGeneratorDialog({
   const [db, setDb] = useState<string | null>(defaultDb);
   const [dbGrade, setDbGrade] = useState<string | null>(defaultGradeProp);
   const [dbTopic, setDbTopic] = useState<string | null>(defaultTopicProp);
+  const [dbFile, setDbFile] = useState<string | null>(defaultFileProp);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
@@ -130,6 +129,7 @@ export function DraftGeneratorDialog({
             subject: db,
             grade: dbGrade ?? null,
             topic: dbTopic ?? null,
+            file: dbFile ?? null,
             query: `${topic.trim()} ${focus.trim()}`.trim(),
             topK: 6,
           });
@@ -252,7 +252,7 @@ export function DraftGeneratorDialog({
   return (
     <div className="fixed inset-0 z-[400] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.55)" }}>
       <div
-        className="w-[720px] max-w-[94vw] max-h-[90vh] overflow-y-auto rounded-xl border shadow-2xl p-6"
+        className="w-[720px] max-w-[94vw] max-h-[92vh] overflow-y-auto rounded-xl border shadow-2xl p-6"
         style={{ background: "var(--tp-panel-elevated)", borderColor: "var(--tp-border-strong)", color: "var(--tp-text-primary)" }}
       >
         <div className="mb-4 flex items-center gap-2">
@@ -315,87 +315,29 @@ export function DraftGeneratorDialog({
               style={inputStyle}
             />
           </label>
-          {db && (
-            <div className="inline-flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--tp-t-4)" }}>
-              <Database className="w-3 h-3 shrink-0 text-[var(--tp-accent)]" />
-              {t("editor.aiDraft.usingDb", {
-                name: `${db}${dbGrade ? ` > ${dbGrade}` : ""}${dbTopic ? ` > ${dbTopic}` : ""}`,
-              })}
-            </div>
-          )}
-
-          {subjectDatabases.length > 0 ? (
-            <div>
-              <span className="text-[13px] font-medium" style={{ color: "var(--tp-text-secondary)" }}>
-                {t("editor.aiDraft.kbLabel")}
-              </span>
-              <div className="mt-1 grid grid-cols-3 gap-2">
-                <select
-                  className="tp-input"
-                  value={db ?? ""}
-                  onChange={(e) => {
-                    setDb(e.target.value || null);
-                    setDbGrade(null);
-                    setDbTopic(null);
+          <div>
+            <span className="text-[13px] font-medium" style={{ color: "var(--tp-text-secondary)" }}>
+              {t("editor.aiDraft.kbLabel")}
+            </span>
+            {subjectDatabases.length > 0 ? (
+              <div className="mt-1">
+                <SubjectDbPicker
+                  databases={subjectDatabases}
+                  value={{ subject: db, grade: dbGrade, topic: dbTopic, file: dbFile }}
+                  onChange={(scope) => {
+                    setDb(scope.subject);
+                    setDbGrade(scope.grade);
+                    setDbTopic(scope.topic);
+                    setDbFile(scope.file);
                   }}
-                >
-                  <option value="">{t("subjectDb.noDbSelected")}</option>
-                  {subjectDatabases.map((s) => (
-                    <option key={s.subject} value={s.subject}>
-                      {s.subject}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="tp-input"
-                  value={dbGrade ?? ""}
-                  disabled={!db}
-                  onChange={(e) => {
-                    setDbGrade(e.target.value || null);
-                    setDbTopic(null);
-                  }}
-                >
-                  <option value="">{t("editor.aiDraft.allGrades")}</option>
-                  {db &&
-                    subjectDatabases
-                      .find((s) => s.subject === db)
-                      ?.grades.map((g) => (
-                        <option key={g.name} value={g.name}>
-                          {g.name}
-                        </option>
-                      ))}
-                </select>
-                <select
-                  className="tp-input"
-                  value={dbTopic ?? ""}
-                  disabled={!dbGrade}
-                  onChange={(e) => setDbTopic(e.target.value || null)}
-                >
-                  <option value="">{t("editor.aiDraft.allTopics")}</option>
-                  {db &&
-                    dbGrade &&
-                    subjectDatabases
-                      .find((s) => s.subject === db)
-                      ?.grades.find((g) => g.name === dbGrade)
-                      ?.topics.filter((tp) => tp.chunk_count > 0)
-                      .map((tp) => (
-                        <option key={tp.name} value={tp.name}>
-                          {tp.name} ({tp.chunk_count})
-                        </option>
-                      ))}
-                </select>
+                />
               </div>
-            </div>
-          ) : (
-            <div>
-              <span className="text-[13px] font-medium" style={{ color: "var(--tp-text-secondary)" }}>
-                {t("editor.aiDraft.kbLabel")}
-              </span>
+            ) : (
               <div className="mt-1 text-[12.5px]" style={{ color: "var(--tp-text-muted)" }}>
                 {t("editor.aiDraft.noKb")}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <button
             className="tp-btn inline-flex items-center justify-center gap-2"

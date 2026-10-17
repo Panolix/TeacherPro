@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+﻿import { useState, useCallback, useMemo, useRef } from "react";
 import { GripVertical } from "lucide-react";
 import {
   FolderOpen,
@@ -1481,9 +1481,10 @@ export function SidebarMinimal() {
                         }
                       }
                     }}
-                    className="text-[11px] text-[var(--tp-t-3)] hover:text-red-400 transition-colors"
+                    title={t('sidebar.trash.emptyAll')}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
                   >
-                    {t('sidebar.trash.emptyAll')}
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>

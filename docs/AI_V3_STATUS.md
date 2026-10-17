@@ -11,6 +11,11 @@
 > - P5: Ollama backend fully removed from `lib.rs` (~1,600 lines), `AiProvider`
 >   and the old Ollama-era `modelCatalog.ts`/i18n keys deleted, `whatlang`
 >   chunk language detection, `fetch:engines` added to both CI workflows.
+> - Embedder upgraded: **IBM Granite Embedding 311M Multilingual R2** (int8
+>   ONNX, in-process via fastembed, CLS pooling, Apache 2.0) replaces bge-m3.
+>   The index is tagged with an `embedder_id` in the SQLite `meta` table; scans
+>   reset the index automatically when the embedder changes, and queries against
+>   a stale index return a clear re-index error.
 > For the authoritative design read `AI_V3_PLAN.md`; for current code grep the
 > symbols listed in Appendix A (line numbers are stale).
 

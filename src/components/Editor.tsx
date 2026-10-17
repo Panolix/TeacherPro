@@ -1,4 +1,4 @@
-import { useEditor, EditorContent } from "@tiptap/react";
+﻿import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
@@ -48,6 +48,7 @@ import { NotesPanel } from "./editor/NotesPanel";
 import { MethodBankPanel } from "./editor/MethodBankPanel";
 import { AiChatPanel } from "./editor/AiChatPanel";
 import type { AiChatMessage } from "./editor/AiChatPanel";
+import type { SubjectDbScope } from "./editor/SubjectDbPicker";
 import { DraftGeneratorDialog } from "./editor/DraftGeneratorDialog";
 import type { SelectedTextRange, TableContextMenuState } from "./editor/EditorContextMenu";
 import { normalizeAiFragmentOutput } from "../utils/aiText";
@@ -116,9 +117,11 @@ export function Editor() {
     activeChatDb,
     activeChatGrade,
     activeChatTopic,
+    activeChatFile,
     setActiveChatDb,
     setActiveChatGrade,
     setActiveChatTopic,
+    setActiveChatFile,
     setChatContextBudget,
     setSubjectDatabases,
   } = useAppStore();
@@ -295,12 +298,13 @@ export function Editor() {
     }
   }, []);
 
-  const selectDb = useCallback((subject: string, grade: string | null, topic: string | null) => {
+  const selectDb = useCallback((scope: SubjectDbScope) => {
     ragChunksRef.current = [];
-    setActiveChatDb(subject || null);
-    setActiveChatGrade(grade);
-    setActiveChatTopic(topic);
-  }, [setActiveChatDb, setActiveChatGrade, setActiveChatTopic]);
+    setActiveChatDb(scope.subject || null);
+    setActiveChatGrade(scope.grade);
+    setActiveChatTopic(scope.topic);
+    setActiveChatFile(scope.file);
+  }, [setActiveChatDb, setActiveChatGrade, setActiveChatTopic, setActiveChatFile]);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
@@ -1374,7 +1378,6 @@ export function Editor() {
       // Fetch RAG chunks if a DB is selected
       let ragContext = "";
       let ragTokens = 0;
-      let ragStatus = "";
       let ragResults: ScoredChunk[] = [];
       if (activeChatDb && vaultPath) {
         setAiStatusMessage(t("editor.chat.searchingKnowledge"));
@@ -1389,6 +1392,7 @@ export function Editor() {
               subject: activeChatDb,
               grade: activeChatGrade ?? null,
               topic: activeChatTopic ?? null,
+              file: activeChatFile ?? null,
               query: userText,
               topK: topK,
             });
@@ -1401,16 +1405,20 @@ export function Editor() {
                 const header = `[${r.source}, S.${r.page}] (${r.grade} > ${r.topic})`;
                 parts.push(`${header}\n${r.text}`);
               }
-              ragContext = `\n\n📚 Wissen aus "${activeChatDb}":\n${parts.join("\n\n---\n\n")}`;
+              const scopeLabel = [activeChatDb, activeChatGrade, activeChatTopic, activeChatFile]
+                .filter(Boolean)
+                .join(" > ");
+              ragContext = `\n\n📚 Wissen aus "${scopeLabel}":\n${parts.join("\n\n---\n\n")}`;
               ragTokens = estimateTokens(ragContext);
-              ragStatus = `RAG: ${results.length} chunks gefunden in ${activeChatDb}`;
             } else {
-              ragStatus = `RAG: Keine Chunks gefunden in ${activeChatDb}${activeChatGrade ? ` > ${activeChatGrade}` : ""}${activeChatTopic ? ` > ${activeChatTopic}` : ""}. Datei ist embedded aber Query findet nichts.`;
+              const scopeLabel = [activeChatDb, activeChatGrade, activeChatTopic, activeChatFile]
+                .filter(Boolean)
+                .join(" > ");
+              console.warn(`RAG: no chunks found in ${scopeLabel}`);
             }
           }
-          logDebug("ai", "rag-results", `db=${activeChatDb} | grade=${activeChatGrade ?? "-"} | topic=${activeChatTopic ?? "-"} | found=${ragChunksRef.current.length > 0} | results=${ragChunksRef.current.length}`);
+          logDebug("ai", "rag-results", `db=${activeChatDb} | grade=${activeChatGrade ?? "-"} | topic=${activeChatTopic ?? "-"} | file=${activeChatFile ?? "-"} | found=${ragChunksRef.current.length > 0} | results=${ragChunksRef.current.length}`);
         } catch (e) {
-          ragStatus = `RAG: Fehler - ${String(e)}`;
           console.error("RAG query failed:", e);
           logDebug("ai", "rag-error", String(e));
         }
@@ -1435,10 +1443,9 @@ export function Editor() {
       const contextIntro = ragContext
         ? "Below is the current lesson plan and retrieved knowledge from the teacher's database. Read both carefully before responding."
         : "Below is the current lesson plan. Read it carefully before responding.";
-      const ragDebug = ragStatus ? `\n\n[RAG Debug: ${ragStatus}]` : "";
       const contextWithRag = ragContext
-        ? `${contextIntro}\n\n---\n${lessonBlock}${ragContext}\n---${ragDebug ? `\n${ragDebug}` : ""}`
-        : `${contextIntro}\n\n---\n${lessonBlock}\n---${ragDebug ? `\n${ragDebug}` : ""}`;
+        ? `${contextIntro}\n\n---\n${lessonBlock}${ragContext}\n---`
+        : `${contextIntro}\n\n---\n${lessonBlock}\n---`;
 
       const messages: ChatMessage[] = [
         { role: "system", content: effectiveSystemPrompt },
@@ -1613,7 +1620,7 @@ export function Editor() {
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiV3ChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, vaultPath, setChatContextBudget, t]);
+  }, [aiEnabled, aiV3ChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
 
   // Fetch subject DB list when chat or the draft dialog opens (so dropdown is populated)
   useEffect(() => {
@@ -2936,6 +2943,7 @@ export function Editor() {
         activeDb={activeChatDb}
         activeGrade={activeChatGrade}
         activeTopic={activeChatTopic}
+        activeFile={activeChatFile}
         subjectDatabases={subjectDatabases}
         methodBankItems={methodBankItems}
       />
@@ -2984,6 +2992,7 @@ export function Editor() {
         activeDb={activeChatDb}
         activeGrade={activeChatGrade}
         activeTopic={activeChatTopic}
+        activeFile={activeChatFile}
         onSelectDb={selectDb}
         streaming={isChatBusy}
         onStopStreaming={() => void stopAiStreaming()}

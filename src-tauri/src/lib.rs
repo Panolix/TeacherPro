@@ -1,4 +1,4 @@
-use std::ffi::OsStr;
+﻿use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{LazyLock, Mutex};
@@ -377,7 +377,6 @@ pub fn run() {
             subject_db::subject_db_delete_file,
             subject_db::subject_db_query,
             subject_db::subject_db_delete,
-            subject_db::subject_db_diagnose,
             ai::catalog::ai_catalog_info,
             ai::engine::ai_engine_status,
             ai::engine::ai_engine_start,

@@ -1,4 +1,4 @@
-const de = {
+﻿const de = {
   common: {
     save: "Speichern",
     yes: "Ja",
@@ -597,6 +597,7 @@ const de = {
       gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
       gpuNone: "Keine NVIDIA-GPU erkannt — Vulkan/CPU-Engine wird verwendet",
       ramDetected: "Arbeitsspeicher: {{ram}} GB",
+      embedModel: "Embedding-Modell: IBM Granite 311M Multilingual R2 (Apache 2.0)",
       cudaPack: "CUDA-Beschleunigungspaket",
       cudaPackDesc:
         "Empfohlen für deine NVIDIA-GPU — aktiviert GPU-Inferenz und MTP-Speculative-Decoding ({{size}} GB Download).",
@@ -675,9 +676,6 @@ const de = {
       trashSettings: "Papierkorbeinstellungen",
       autoClearTrash: "Papierkorb automatisch leeren",
       autoClearTrashHint: "Elemente im Papierkorb werden nach diesem Zeitraum endgültig gelöscht.",
-      diagnostics: "Diagnose",
-      debugMode: "Debug-Modus",
-      debugModeDesc: "Diagnoseinformationen in der integrierten Konsole anzeigen.",
       trashOptions: {
         never: "Nie (nur manuell)",
         after7: "Nach 7 Tagen",
@@ -773,11 +771,6 @@ const de = {
   subjectDb: {
     title: "Wissensdatenbanken",
     noVault: "Kein Vault konfiguriert.",
-    diagnose: "Diagnose",
-    embeddingAvailable: "✅ verfügbar",
-    embeddingNotAvailable: "❌ NICHT verfügbar",
-    noDatabasesDiag: "\nKeine Datenbanken",
-    diagErrorPrefix: "Fehler: ",
     scanImport: "Scannen & Importieren",
     importing: "Importiere...",
     noDatabases: "Noch keine Wissensdatenbanken. Erstelle Ordner unter <Vault>/SubjectDBs/",
@@ -801,6 +794,7 @@ const de = {
     newGradePlaceholder: "Klassenstufe (z.B. Klasse 8)",
     newTopicPlaceholder: "Thema (z.B. Lineare Gleichungen)",
     notEmbedded: "(nicht eingebettet)",
+    toggleFolder: "Ein-/ausklappen",
     addSubfolder: "Unterordner anlegen",
     generalTopic: "Allgemein",
     generalGrade: "Allgemein",

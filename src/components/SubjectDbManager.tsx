@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { mkdir } from "@tauri-apps/plugin-fs";
@@ -44,7 +44,6 @@ export function SubjectDbManager() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [diagnostic, setDiagnostic] = useState<string | null>(null);
   const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [expandedGrades, setExpandedGrades] = useState<Record<string, boolean>>({});
   const [expandedTopics, setExpandedTopics] = useState<Record<string, boolean>>({});
@@ -231,7 +230,7 @@ export function SubjectDbManager() {
     key: string,
     onDelete: () => void,
   ) => (
-    <div key={key} className="flex items-center justify-between px-3 py-1.5 gap-2 hover:bg-[var(--tp-panel-elevated)]">
+    <div key={key} className="flex items-center justify-between px-3 py-1.5 gap-2">
       <div className="flex items-center gap-2 min-w-0">
         <File className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
         <span className="text-[12.5px] text-[var(--tp-text-primary)] truncate">{file.name}</span>
@@ -242,11 +241,15 @@ export function SubjectDbManager() {
           <span className="text-[11px] text-amber-400 shrink-0">{t("subjectDb.pending")}</span>
         )}
       </div>
-      <button onClick={onDelete}
-        className="h-5 w-5 inline-flex items-center justify-center rounded text-[var(--tp-text-muted)] hover:text-red-400"
-        title={t("common.delete")}>
-        <Trash2 className="w-3 h-3" />
-      </button>
+      <div className="flex items-center gap-0.5 shrink-0">
+        <span className="h-7 w-7 shrink-0" />
+        <span className="h-7 w-7 shrink-0" />
+        <button onClick={onDelete}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
+          title={t("common.delete")}>
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   );
 
@@ -324,11 +327,6 @@ export function SubjectDbManager() {
           <AlertCircle className="w-3.5 h-3.5 shrink-0" />{error}
         </div>
       )}
-      {diagnostic && (
-        <div className="mb-3 px-3 py-2 rounded-lg bg-[var(--tp-panel-muted)] text-[12.5px] whitespace-pre-wrap" style={{ color: "var(--tp-text-primary)" }}>
-          {diagnostic}
-        </div>
-      )}
 
       {/* Empty state */}
       {subjectDatabases.length === 0 && !importing && (
@@ -344,17 +342,20 @@ export function SubjectDbManager() {
           <div key={subject.subject} className="rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] overflow-hidden">
             {/* Subject row */}
             <div className="flex items-center justify-between px-3 py-2.5 bg-[var(--tp-panel-elevated)] gap-2">
-              <button onClick={() => toggleSubject(subject.subject)}
-                className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                {expandedSubjects[subject.subject]
-                  ? <ChevronDown className="w-4 h-4 shrink-0 text-[var(--tp-text-muted)]" />
-                  : <ChevronRight className="w-4 h-4 shrink-0 text-[var(--tp-text-muted)]" />}
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <button onClick={() => toggleSubject(subject.subject)}
+                  title={t("subjectDb.toggleFolder")}
+                  className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-text-primary)] transition-colors">
+                  {expandedSubjects[subject.subject]
+                    ? <ChevronDown className="w-4 h-4" />
+                    : <ChevronRight className="w-4 h-4" />}
+                </button>
                 <Folder className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
                 <span className="text-sm font-medium text-[var(--tp-text-primary)] truncate">{subject.subject}</span>
                 <span className="text-[11px] text-[var(--tp-text-muted)]">
                   {subject.grades.reduce((s, g) => s + g.topics.reduce((a, t) => a + t.chunk_count, 0), 0)} chunks
                 </span>
-              </button>
+              </div>
               <div className="flex items-center gap-0.5 shrink-0">
                 <button onClick={() => startAdding({ type: "grade", subject: subject.subject })}
                   className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
@@ -404,32 +405,35 @@ export function SubjectDbManager() {
                     <div key={grade.name}>
                       {/* Grade row */}
                       <div className="flex items-center justify-between px-3 py-2.5 gap-2">
-                        <button onClick={() => toggleGrade(gradeKey)}
-                          className="flex items-center gap-2 min-w-0 flex-1 text-left">
-                          {expandedGrades[gradeKey]
-                            ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
-                            : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />}
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <button onClick={() => toggleGrade(gradeKey)}
+                            title={t("subjectDb.toggleFolder")}
+                            className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-text-primary)] transition-colors">
+                            {expandedGrades[gradeKey]
+                              ? <ChevronDown className="w-3.5 h-3.5" />
+                              : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
                           <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
                           <span className="text-[12.5px] font-medium text-[var(--tp-text-primary)] truncate">{grade.name}</span>
                           <span className="text-[11px] text-[var(--tp-text-muted)]">
                             {grade.topics.reduce((s, t) => s + t.chunk_count, 0)} chunks
                           </span>
-                        </button>
+                        </div>
                         <div className="flex items-center gap-0.5 shrink-0">
                           <button onClick={() => startAdding({ type: "topic", subject: subject.subject, grade: grade.name })}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                             title={t("subjectDb.addSubfolder")}>
-                            <FolderPlus className="w-3 h-3" />
+                            <FolderPlus className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleAddPdfsToGrade(subject.subject, grade.name)}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                             title={t("subjectDb.addPdfs")}>
-                            <Upload className="w-3 h-3" />
+                            <Upload className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => handleDeleteGrade(subject.subject, grade.name)}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                            className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
                             title={t("common.delete")}>
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </div>
@@ -443,7 +447,7 @@ export function SubjectDbManager() {
 
                       {/* Topics */}
                       {expandedGrades[gradeKey] && (
-                        <div className="pl-6 pr-3 py-0.5 space-y-0.5">
+                        <div className="pl-6 py-0.5 space-y-0.5">
                           {adding?.type === "topic" && adding.subject === subject.subject && adding.grade === grade.name && (
                             <div className="flex items-center gap-2 mx-2 mb-0.5 px-2 py-1 rounded-md bg-[var(--tp-panel-elevated)] border border-[var(--tp-border-strong)]">
                               <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
@@ -464,18 +468,20 @@ export function SubjectDbManager() {
                             return (
                             <div key={topic.name}>
                               {/* Topic row */}
-                              <div className="flex items-center justify-between px-3 py-2.5 gap-2 hover:bg-[var(--tp-panel-elevated)]">
-                                <button
-                                  onClick={() => hasFiles ? toggleTopic(topicKey) : undefined}
-                                  className="flex items-center gap-2 min-w-0 flex-1 text-left"
-                                  disabled={!hasFiles}
-                                >
+                              <div className="flex items-center justify-between px-3 py-2.5 gap-2">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
                                   {hasFiles ? (
-                                    expandedTopics[topicKey]
-                                      ? <ChevronDown className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
-                                      : <ChevronRight className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
+                                    <button
+                                      onClick={() => toggleTopic(topicKey)}
+                                      title={t("subjectDb.toggleFolder")}
+                                      className="h-6 w-6 shrink-0 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-text-primary)] transition-colors"
+                                    >
+                                      {expandedTopics[topicKey]
+                                        ? <ChevronDown className="w-3.5 h-3.5" />
+                                        : <ChevronRight className="w-3.5 h-3.5" />}
+                                    </button>
                                   ) : (
-                                    <span className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="h-6 w-6 shrink-0" />
                                   )}
                                   <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-text-muted)]" />
                                   <span className="text-[12.5px] font-medium text-[var(--tp-text-primary)] truncate">{topic.name}</span>
@@ -487,17 +493,18 @@ export function SubjectDbManager() {
                                       {topic.pending_pdfs}
                                     </span>
                                   )}
-                                </button>
+                                </div>
                                 <div className="flex items-center gap-0.5 shrink-0">
+                                  <span className="h-7 w-7 shrink-0" />
                                   <button onClick={() => handleAddPdfsToTopic(subject.subject, grade.name, topic.name)}
-                                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
+                                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)] transition-colors"
                                     title={t("subjectDb.addPdfs")}>
-                                    <Upload className="w-3 h-3" />
+                                    <Upload className="w-3.5 h-3.5" />
                                   </button>
                                   <button onClick={() => handleDeleteTopic(subject.subject, grade.name, topic.name)}
-                                    className="h-6 w-6 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
                                     title={t("common.delete")}>
-                                    <Trash2 className="w-3 h-3" />
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </div>
@@ -523,20 +530,7 @@ export function SubjectDbManager() {
 
       {/* Footer */}
       <div className="mt-4 pt-3 border-t border-[var(--tp-border-strong)] text-[11px] text-[var(--tp-text-muted)] leading-relaxed">
-        <p className="mb-2"><Database className="w-2.5 h-2.5 inline-block mr-1" />{t("subjectDb.folderHint")}</p>
-        <button onClick={async () => {
-          if (!vaultPath) return;
-          try {
-            const diag = await invoke<Array<{subject: string; grade: string; topic: string; chunk_count: number; has_store: boolean; store_path: string; embedding_model_available: boolean}>>("subject_db_diagnose", { vaultPath });
-            const msg = diag.map((d) => `${d.subject}/${d.grade}/${d.topic}: ${d.chunk_count} chunks (store: ${d.has_store})`).join("\n");
-            const modelStatus = diag.length > 0 ? `\nbge-m3: ${diag[0].embedding_model_available ? t("subjectDb.embeddingAvailable") : t("subjectDb.embeddingNotAvailable")}` : t("subjectDb.noDatabasesDiag");
-            setDiagnostic(msg + modelStatus);
-          } catch (e) {
-            setDiagnostic(t("subjectDb.diagErrorPrefix") + String(e));
-          }
-        }} className="tp-action-btn px-2 py-0.5 rounded text-[11px] font-medium">
-          {t("subjectDb.diagnose")}
-        </button>
+        <p><Database className="w-2.5 h-2.5 inline-block mr-1" />{t("subjectDb.folderHint")}</p>
       </div>
     </div>
   );

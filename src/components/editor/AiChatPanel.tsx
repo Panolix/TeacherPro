@@ -1,10 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef } from "react";
 import {
   Brain,
-  ChevronDown,
-  ChevronRight,
-  Database,
-  Folder,
   MessageSquare,
   Send,
   Sparkles,
@@ -16,6 +12,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import type { SubjectDbInfo } from "../../store";
 import { ChatContextBar } from "../ChatContextBar";
 import { AiMarkdown } from "./AiMarkdown";
+import { SubjectDbPicker, type SubjectDbScope } from "./SubjectDbPicker";
 
 export interface AiChatMessage {
   id: string;
@@ -45,7 +42,8 @@ interface Props {
   activeDb: string | null;
   activeGrade: string | null;
   activeTopic: string | null;
-  onSelectDb: (subject: string, grade: string | null, topic: string | null) => void;
+  activeFile: string | null;
+  onSelectDb: (scope: SubjectDbScope) => void;
   streaming: boolean;
   onStopStreaming: () => void;
   onOpenDraftGenerator: () => void;
@@ -71,15 +69,13 @@ export function AiChatPanel({
   activeDb,
   activeGrade,
   activeTopic,
+  activeFile,
   onSelectDb,
   streaming,
   onStopStreaming,
   onOpenDraftGenerator,
 }: Props) {
   const { t } = useTranslation();
-  const [dbMenuOpen, setDbMenuOpen] = useState(false);
-  const [dbExpandedSubjects, setDbExpandedSubjects] = useState<Record<string, boolean>>({});
-  const [dbExpandedGrades, setDbExpandedGrades] = useState<Record<string, boolean>>({});
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -160,116 +156,14 @@ export function AiChatPanel({
               </div>
             </div>
 
-            {/* Subject DB Dropdown (custom, dark-mode safe) */}
+            {/* Knowledge-base scope picker (shared with the lesson-draft dialog) */}
             {subjectDatabases.length > 0 && (
               <div className="shrink-0 border-b border-[var(--tp-border-strong)] px-3 py-1.5">
-                <div className="relative">
-                  <button
-                    onClick={() => setDbMenuOpen(!dbMenuOpen)}
-                    className="flex items-center gap-1.5 w-full rounded-md px-2 py-1 text-[11px] text-left bg-[var(--tp-panel-muted)] text-[var(--tp-text-primary)] hover:bg-[var(--tp-bg-4)]"
-                  >
-                    <Database className="w-3 h-3 shrink-0 text-[var(--tp-accent)]" />
-                    <span className="flex-1 truncate">
-                      {activeDb
-                        ? `${activeDb}${activeGrade ? ` > ${activeGrade}` : ""}${activeTopic ? ` > ${activeTopic}` : ""}`
-                        : `— ${t("subjectDb.noDbSelected")} —`}
-                    </span>
-                    <ChevronDown className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
-                  </button>
-
-                  {dbMenuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[300]" onClick={() => setDbMenuOpen(false)} />
-                      <div
-                        className="absolute left-0 right-0 top-full mt-1 z-[301] rounded-lg border shadow-2xl overflow-y-auto max-h-72"
-                        style={{
-                          background: "var(--tp-panel-elevated)",
-                          borderColor: "var(--tp-border-strong)",
-                          color: "var(--tp-text-primary)",
-                        }}
-                      >
-                        {/* — Keine — option */}
-                        <button
-                          onClick={() => { onSelectDb("", "", ""); setDbMenuOpen(false); }}
-                          className="w-full text-left px-3 py-2 text-[12.5px] font-medium hover:bg-[var(--tp-bg-4)] transition-colors border-b"
-                          style={{ borderColor: "var(--tp-border-strong)", color: "var(--tp-text-secondary)" }}
-                        >
-                          — {t("subjectDb.noDbSelected")} —
-                        </button>
-
-                        {/* Tree */}
-                        <div className="py-0.5 text-[12.5px]">
-                          {subjectDatabases.map((s) => {
-                            const isExpanded = dbExpandedSubjects[s.subject];
-                            return (
-                              <div key={s.subject}>
-                                {/* Subject row */}
-                                <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-bg-4)]">
-                                  <button
-                                    onClick={() => setDbExpandedSubjects((p) => ({ ...p, [s.subject]: !p[s.subject] }))}
-                                    className="w-5 h-5 flex items-center justify-center shrink-0"
-                                  >
-                                    {isExpanded
-                                      ? <ChevronDown className="w-3 h-3 text-[var(--tp-text-muted)]" />
-                                      : <ChevronRight className="w-3 h-3 text-[var(--tp-text-muted)]" />}
-                                  </button>
-                                  <button
-                                    onClick={() => { onSelectDb(s.subject, null, null); setDbMenuOpen(false); }}
-                                    className="flex items-center gap-1.5 flex-1 text-left truncate px-1"
-                                  >
-                                    <Folder className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
-                                    <span className="truncate font-medium">{s.subject}</span>
-                                  </button>
-                                </div>
-
-                                {/* Grades */}
-                                {isExpanded && s.grades.map((g) => {
-                                  const gradeKey = `${s.subject}::${g.name}`;
-                                  const gradeExpanded = dbExpandedGrades[gradeKey];
-                                  return (
-                                    <div key={gradeKey} style={{ paddingLeft: "24px" }}>
-                                      <div className="flex items-center px-1 py-1 hover:bg-[var(--tp-bg-4)]">
-                                        <button
-                                          onClick={() => setDbExpandedGrades((p) => ({ ...p, [gradeKey]: !p[gradeKey] }))}
-                                          className="w-5 h-5 flex items-center justify-center shrink-0"
-                                        >
-                                          {gradeExpanded
-                                            ? <ChevronDown className="w-3 h-3 text-[var(--tp-text-muted)]" />
-                                            : <ChevronRight className="w-3 h-3 text-[var(--tp-text-muted)]" />}
-                                        </button>
-                                        <button
-                                          onClick={() => { onSelectDb(s.subject, g.name, null); setDbMenuOpen(false); }}
-                                          className="flex items-center gap-1.5 flex-1 text-left truncate px-1"
-                                        >
-                                          <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
-                                          <span className="truncate">{g.name}</span>
-                                        </button>
-                                      </div>
-
-                                      {/* Topics */}
-                                      {gradeExpanded && g.topics.filter((t) => t.chunk_count > 0).map((t) => (
-                                        <div key={t.name} style={{ paddingLeft: "36px" }}>
-                                          <button
-                                            onClick={() => { onSelectDb(s.subject, g.name, t.name); setDbMenuOpen(false); }}
-                                            className="flex items-center gap-1.5 w-full text-left px-1 py-1 truncate hover:bg-[var(--tp-bg-4)]"
-                                          >
-                                            <Folder className="w-3 h-3 shrink-0 text-[var(--tp-text-muted)]" />
-                                            <span className="truncate">{t.name}</span>
-                                            <span className="text-[11px] text-[var(--tp-text-muted)] shrink-0">({t.chunk_count})</span>
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
+                <SubjectDbPicker
+                  databases={subjectDatabases}
+                  value={{ subject: activeDb, grade: activeGrade, topic: activeTopic, file: activeFile }}
+                  onChange={onSelectDb}
+                />
               </div>
             )}
 

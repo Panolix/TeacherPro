@@ -226,8 +226,27 @@ The compiled files will appear under `src-tauri/target/release/bundle/`.
 TeacherPro uses a live documentation system to track design decisions, remaining gaps, and app features. If you are developing or modifying the codebase, please refer to:
 - [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
 - [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) - The initial architectural phase planning map.
-- [docs/AI_IMPLEMENTATION_PLAN.md](docs/AI_IMPLEMENTATION_PLAN.md) - The implementation roadmap and acceptance criteria for local AI features.
+- [docs/AI_V3_PLAN.md](docs/AI_V3_PLAN.md) - The current AI architecture (bundled llama-server sidecar, GGUF models, hybrid RAG) and its implementation phases.
 - [release-notes/](release-notes/) - Versioned release notes for every published build.
+
+---
+
+## 🧩 Third-Party Models
+
+TeacherPro downloads and runs open models locally. None of the model weights are
+bundled in the repository or installers — they are fetched at runtime from their
+official Hugging Face repositories.
+
+- **Chat / draft models** — various GGUF builds (Qwen, Gemma, Ministral, …), each
+  under its own license as listed in the app's model catalog.
+- **Embedding model: IBM Granite Embedding 311M Multilingual R2** —
+  © IBM, Apache License 2.0. The model's tokenizer is derived from the Gemma 3
+  tokenizer and is subject to the Gemma Terms of Use. Model page:
+  <https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2>
+- **llama.cpp / llama-server** — MIT License,
+  <https://github.com/ggml-org/llama.cpp>
+
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for details.
 
 ---
 

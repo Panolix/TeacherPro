@@ -1,4 +1,4 @@
-const en = {
+﻿const en = {
   common: {
     save: "Save",
     yes: "Yes",
@@ -596,6 +596,7 @@ const en = {
       gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
       gpuNone: "No NVIDIA GPU detected — using the Vulkan/CPU engine",
       ramDetected: "System RAM: {{ram}} GB",
+      embedModel: "Embedding model: IBM Granite 311M Multilingual R2 (Apache 2.0)",
       cudaPack: "CUDA acceleration pack",
       cudaPackDesc:
         "Recommended for your NVIDIA GPU — enables GPU inference and MTP speculative decoding ({{size}} GB download).",
@@ -674,9 +675,6 @@ const en = {
       trashSettings: "Trash Settings",
       autoClearTrash: "Auto-clear trash",
       autoClearTrashHint: "Items in trash are permanently deleted after this period.",
-      diagnostics: "Diagnostics",
-      debugMode: "Debug mode",
-      debugModeDesc: "Show diagnostic information in the in-app console.",
       trashOptions: {
         never: "Never (manual only)",
         after7: "After 7 days",
@@ -772,11 +770,6 @@ const en = {
   subjectDb: {
     title: "Knowledge Databases",
     noVault: "No vault configured.",
-    diagnose: "Run diagnostics",
-    embeddingAvailable: "✅ available",
-    embeddingNotAvailable: "❌ NOT available",
-    noDatabasesDiag: "\nNo databases",
-    diagErrorPrefix: "Error: ",
     scanImport: "Scan & Import",
     importing: "Importing...",
     noDatabases: "No knowledge databases yet. Create folders under <Vault>/SubjectDBs/",
@@ -800,6 +793,7 @@ const en = {
     newGradePlaceholder: "Grade level (e.g. Grade 8)",
     newTopicPlaceholder: "Topic (e.g. Linear Equations)",
     notEmbedded: "(not embedded)",
+    toggleFolder: "Expand/collapse",
     addSubfolder: "Add subfolder",
     generalTopic: "General",
     generalGrade: "General",

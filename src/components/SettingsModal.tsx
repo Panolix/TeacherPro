@@ -127,8 +127,6 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiThinkingEnabled,
     aiTranslateTargetLanguage,
     setAiTranslateTargetLanguage,
-    debugMode,
-    setDebugMode,
     showActionButtonLabels,
     setShowActionButtonLabels,
     trashAutoClearDays,
@@ -588,6 +586,9 @@ export function SettingsModal({ open, onClose }: Props) {
                     <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
                       {t("settings.aiV3.ramDetected", { ram: hardware?.totalRamGb ?? "?" })}
                     </div>
+                    <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                      {t("settings.aiV3.embedModel")}
+                    </div>
                   </div>
 
                   {catalog?.cudaPackAvailable && (
@@ -804,14 +805,6 @@ export function SettingsModal({ open, onClose }: Props) {
                       {t("settings.advanced.autoClearTrashHint")}
                     </span>
                   </div>
-                </Section>
-                <Section title={t("settings.advanced.diagnostics")}>
-                  <ToggleRow
-                    label={t("settings.advanced.debugMode")}
-                    desc={t("settings.advanced.debugModeDesc")}
-                    value={debugMode}
-                    onChange={setDebugMode}
-                  />
                 </Section>
               </>
             )}

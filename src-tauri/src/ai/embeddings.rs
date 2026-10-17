@@ -1,6 +1,8 @@
 //! In-process embeddings via fastembed/ONNX (CPU-only, docs/AI_V3_PLAN.md §3.5).
 //!
-//! Model: bge-m3 quantized ONNX (Xenova/bge-m3, 1024-dim, multilingual, 8192 ctx).
+//! Model: IBM Granite Embedding 311M Multilingual R2 (int8 ONNX, 768-dim,
+//! Apache 2.0, CLS pooling, no query/document prefixes, 32K context,
+//! German explicitly in the enhanced-retrieval language set).
 //! Weights auto-download on first RAG index into app_data_dir/emb-models/ —
 //! never bundled, never a separate process, never touches the GPU.
 
@@ -14,35 +16,43 @@ use serde::Serialize;
 use tauri::Emitter;
 use tauri::Manager;
 
-/// (url, sha256) — verified 2026-10-17 via HF API / linked etags.
-const ONNX_URL: &str =
-    "https://huggingface.co/Xenova/bge-m3/resolve/main/onnx/model_quantized.onnx";
-const ONNX_SHA: &str = "0826f8c1ab9edf1801db86c61919d4d108e8bfc0b809ec823ad366882ff0b77d";
-const TOKENIZER_URL: &str = "https://huggingface.co/Xenova/bge-m3/resolve/main/tokenizer.json";
-const TOKENIZER_SHA: &str = "6710678b12670bc442b99edc952c4d996ae309a7020c1fa0096dd245c2faf790";
-const TOKENIZER_CONFIG_URL: &str =
-    "https://huggingface.co/Xenova/bge-m3/resolve/main/tokenizer_config.json";
-// SHA-256 of the file content (the HF API `oid` for these two non-LFS files is
-// a git blob SHA-1 — do not copy it here; verified by hashing the download).
-const TOKENIZER_CONFIG_SHA: &str =
-    "7e4c1cc848840aeccdd763458c18dd525eb0f795c992e00ebe9c28554e7db2d4";
-const SPECIAL_TOKENS_URL: &str =
-    "https://huggingface.co/Xenova/bge-m3/resolve/main/special_tokens_map.json";
-const SPECIAL_TOKENS_SHA: &str = "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835";
-const CONFIG_URL: &str = "https://huggingface.co/Xenova/bge-m3/resolve/main/config.json";
-const CONFIG_SHA: &str = "734a79bf12d388c1467a4e3ab625f45de7f6906cffcfb93a1eca1787504bed95";
+/// Stored in the SubjectDB `meta` table; changing it triggers a re-index.
+pub const EMBEDDER_ID: &str = "granite-embedding-311m-multilingual-r2-q8";
 
-#[allow(dead_code)]
-pub const EMBED_DIM: usize = 1024;
-/// Cap per-input length; bge-m3 supports up to 8192 but our chunks are 256-512 tokens.
+/// (url, sha256) — verified 2026-10-18 via HF API (LFS oids) / local hashing.
+const ONNX_URL: &str = "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2/resolve/main/onnx/model_quint8_avx2.onnx";
+const ONNX_SHA: &str = "f1fdd44e7e1ac51f12ab7957c7bd092e064d596c288513bf9d326842f669edee";
+const TOKENIZER_URL: &str =
+    "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2/resolve/main/tokenizer.json";
+const TOKENIZER_SHA: &str = "0087c868b33bad550a78a08d19798cfd7f713cde4f020803b8f51f405503e15f";
+const TOKENIZER_CONFIG_URL: &str =
+    "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2/resolve/main/tokenizer_config.json";
+const TOKENIZER_CONFIG_SHA: &str =
+    "7947bdf0378520e69ca412b8c4dacd1cffa8aef099f851fdd5c65aa27c6b36a0";
+const SPECIAL_TOKENS_URL: &str =
+    "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2/resolve/main/special_tokens_map.json";
+const SPECIAL_TOKENS_SHA: &str = "cb9e60dcf4d8d314315cb3e761fe4c2e664fda8dbf66d7815372b2639e381182";
+const CONFIG_URL: &str =
+    "https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2/resolve/main/config.json";
+const CONFIG_SHA: &str = "e1e3fc842a8e0537e25d6e4c93879698b92ae96722e8c162bef334b57978a3b0";
+
+/// Cap per-input length; Granite supports 32K but our chunks are 256-512 tokens.
 const MAX_LENGTH: usize = 512;
 
+/// Base directory for embedding-model files (also used by diagnose).
 pub fn emb_models_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("emb-models");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+/// Per-embedder subdirectory so files from older models never collide.
+fn model_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = emb_models_dir(app)?.join("granite-311m-r2");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -141,9 +151,8 @@ fn download_if_missing(
             Ok(r) => r,
             Err(ureq::Error::Status(416, _)) if existing > 0 => {
                 // The .part file is at/over the remote size. If its content is
-                // already valid (e.g. small files served without Content-Length
-                // that were fully received), finalize it; otherwise drop it and
-                // download from scratch on the next attempt.
+                // already valid, finalize it; otherwise drop it and download
+                // from scratch on the next attempt.
                 if sha256_file(&part).map(|h| h == sha).unwrap_or(false) {
                     std::fs::rename(&part, dest).map_err(|e| {
                         let msg = format!("Failed to finalize {file_label}: {e}");
@@ -164,7 +173,11 @@ fn download_if_missing(
                 std::thread::sleep(Duration::from_millis(400 * u64::from(attempt.min(4))));
                 continue;
             }
-            Err(e) => return Err(format!("Embedding-model download failed: {e}")),
+            Err(e) => {
+                let msg = format!("Embedding-model download failed: {e}");
+                emit_failed(app, &file_label, &msg);
+                return Err(msg);
+            }
         };
 
         let resumed = response.status() == 206;
@@ -297,10 +310,28 @@ fn already_ensured(ensured_key: &str) -> bool {
     ensured.as_deref() == Some(ensured_key) && embed_model_static().lock().unwrap().is_some()
 }
 
+/// The bge-m3 era left ~600 MB of ONNX files in the base emb-models dir.
+/// Best-effort cleanup once the Granite model is ready.
+fn cleanup_legacy_files(app: &tauri::AppHandle) {
+    let Ok(base) = emb_models_dir(app) else {
+        return;
+    };
+    for name in [
+        "model_quantized.onnx",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "special_tokens_map.json",
+        "config.json",
+    ] {
+        let _ = std::fs::remove_file(base.join(name));
+        let _ = std::fs::remove_file(base.join(format!("{name}.part")));
+    }
+}
+
 /// Ensure weights exist + model session is built. Cheap after first call.
-/// Must run on a blocking thread (570 MB download + session init on first use).
+/// Must run on a blocking thread (download + session init on first use).
 pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
-    let dir = emb_models_dir(app)?;
+    let dir = model_dir(app)?;
     let ensured_key = dir.to_string_lossy().to_string();
 
     if already_ensured(&ensured_key) {
@@ -314,7 +345,7 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let onnx_path = dir.join("model_quantized.onnx");
+    let onnx_path = dir.join("model_quint8_avx2.onnx");
     let tokenizer_path = dir.join("tokenizer.json");
     let tokenizer_config_path = dir.join("tokenizer_config.json");
     let special_tokens_path = dir.join("special_tokens_map.json");
@@ -345,6 +376,8 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
     let onnx_bytes = std::fs::read(&onnx_path).map_err(|e| e.to_string())?;
 
     let model = UserDefinedEmbeddingModel::new(onnx_bytes, tokenizer_files);
+    // Granite uses CLS pooling, which is fastembed's default for user-defined
+    // models — no `.with_pooling()` needed. No query/document prefixes either.
     let embedding = TextEmbedding::try_new_from_user_defined(
         model,
         InitOptionsUserDefined::new().with_max_length(MAX_LENGTH),
@@ -353,10 +386,12 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
 
     *embed_model_static().lock().unwrap() = Some(embedding);
     *embed_ensured_static().lock().unwrap() = Some(ensured_key);
+    cleanup_legacy_files(app);
     Ok(())
 }
 
-/// Embed texts into 1024-dim vectors. Blocks the calling thread (spawn_blocking).
+/// Embed texts (documents and queries alike — Granite needs no prefixes) into
+/// 768-dim vectors. Blocks the calling thread (spawn_blocking).
 pub fn embed_texts(texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
     let mut guard = embed_model_static().lock().unwrap();
     let model = guard

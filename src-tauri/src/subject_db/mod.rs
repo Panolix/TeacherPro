@@ -1,4 +1,4 @@
-pub mod pdf;
+﻿pub mod pdf;
 pub mod chunk;
 pub mod store_sqlite;
 
@@ -281,6 +281,9 @@ pub async fn subject_db_scan_import(
     // must never be held across an await point.
     let existing_map = {
         let conn = store_sqlite::open(&vault_path)?;
+        // A different embedding model produces incomparable vectors — wipe the
+        // index so this scan re-embeds every file from scratch.
+        store_sqlite::reset_if_embedder_changed(&conn, embeddings::EMBEDDER_ID)?;
         let mut map: std::collections::HashMap<(String, String, String), HashSet<String>> =
             std::collections::HashMap::new();
         for s_entry in collect_dirs(&db_dir)? {
@@ -625,18 +628,26 @@ pub async fn subject_db_query(
     subject: String,
     grade: Option<String>,
     topic: Option<String>,
+    file: Option<String>,
     query: String,
     top_k: u32,
 ) -> Result<Vec<ScoredChunk>, String> {
     let subject = validate_segment(&subject, "subject")?;
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
+    let file = file.map(|f| validate_segment(&f, "filename")).transpose()?;
 
     let top_k = top_k.clamp(1, 50) as usize;
 
     let db_path = store_sqlite::db_path(&vault_path);
     if !db_path.exists() {
         return Ok(Vec::new());
+    }
+
+    // Refuse to query an index built with a different embedding model.
+    {
+        let conn = store_sqlite::open(&vault_path)?;
+        store_sqlite::assert_embedder(&conn, embeddings::EMBEDDER_ID)?;
     }
 
     let app = APP_HANDLE.get().ok_or("App handle not initialized")?;
@@ -659,6 +670,7 @@ pub async fn subject_db_query(
         &subject,
         grade.as_deref(),
         topic.as_deref(),
+        file.as_deref(),
         &query_vec,
         top_k * 2,
     )?;
@@ -667,6 +679,7 @@ pub async fn subject_db_query(
         &subject,
         grade.as_deref(),
         topic.as_deref(),
+        file.as_deref(),
         &query,
         top_k * 2,
     )?;
@@ -731,80 +744,6 @@ pub async fn subject_db_delete(
     }
     Ok(())
 }
-
-// \u2500\u2500 subject_db_diagnose \u2500\u2500
-
-#[derive(Serialize)]
-pub struct DbDiagnostic {
-    pub subject: String,
-    pub grade: String,
-    pub topic: String,
-    pub chunk_count: usize,
-    pub has_store: bool,
-    pub store_path: String,
-    pub embedding_model_available: bool,
-}
-
-#[tauri::command]
-pub async fn subject_db_diagnose(
-    vault_path: String,
-) -> Result<Vec<DbDiagnostic>, String> {
-    let db_dir = subject_db_dir(&vault_path);
-    if !db_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    // Embedder readiness = weights present on disk (in-process ONNX)
-    let model_available = APP_HANDLE
-        .get()
-        .map(|app| {
-            crate::ai::embeddings::emb_models_dir(app)
-                .map(|d| d.join("model_quantized.onnx").is_file())
-                .unwrap_or(false)
-        })
-        .unwrap_or(false);
-
-    let conn = store_sqlite::open(&vault_path)?;
-    let mut results = Vec::new();
-    for s_entry in collect_dirs(&db_dir)? {
-        let subject = s_entry.file_name().to_string_lossy().to_string();
-        for g_entry in collect_dirs(&s_entry.path())? {
-            let grade = g_entry.file_name().to_string_lossy().to_string();
-            for t_entry in collect_dirs(&g_entry.path())? {
-                let topic = t_entry.file_name().to_string_lossy().to_string();
-                let chunk_count = store_sqlite::chunk_count_by_hierarchy(
-                    &conn, &subject, Some(&grade), Some(&topic),
-                )?;
-                if chunk_count > 0 {
-                    results.push(DbDiagnostic {
-                        subject: subject.clone(),
-                        grade: grade.clone(),
-                        topic,
-                        chunk_count: chunk_count as usize,
-                        has_store: true,
-                        store_path: store_sqlite::db_path(&vault_path).to_string_lossy().to_string(),
-                        embedding_model_available: model_available,
-                    });
-                }
-            }
-            // Grade-level (topic = stem) counts
-            let grade_count = store_sqlite::chunk_count_by_hierarchy(&conn, &subject, Some(&grade), None)?;
-            if grade_count > 0 {
-                results.push(DbDiagnostic {
-                    subject: subject.clone(),
-                    grade: grade.clone(),
-                    topic: "(grade-level)".to_string(),
-                    chunk_count: grade_count as usize,
-                    has_store: true,
-                    store_path: store_sqlite::db_path(&vault_path).to_string_lossy().to_string(),
-                    embedding_model_available: model_available,
-                });
-            }
-        }
-    }
-    Ok(results)
-}
-
 // ── Utility ──────────────────────────────────────────────────
 
 #[cfg(test)]

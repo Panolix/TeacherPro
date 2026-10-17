@@ -200,6 +200,7 @@ pub fn dense_search(
     subject: &str,
     grade: Option<&str>,
     topic: Option<&str>,
+    file: Option<&str>,
     query_vec: &[f32],
     top_k: usize,
 ) -> Result<Vec<ScoredRow>, String> {
@@ -209,12 +210,13 @@ pub fn dense_search(
              FROM chunks c JOIN vecs v ON v.chunk_id = c.chunk_id
              WHERE c.subject = ?1
                AND (?2 IS NULL OR c.grade = ?2)
-               AND (?3 IS NULL OR c.topic = ?3)",
+               AND (?3 IS NULL OR c.topic = ?3)
+               AND (?4 IS NULL OR c.source_file = ?4)",
         )
         .map_err(|e| e.to_string())?;
 
     let rows = stmt
-        .query_map(params![subject, grade, topic], |r| {
+        .query_map(params![subject, grade, topic, file], |r| {
             Ok((
                 StoredChunkRow {
                     chunk_id: r.get(0)?,
@@ -253,6 +255,7 @@ pub fn fts_search(
     subject: &str,
     grade: Option<&str>,
     topic: Option<&str>,
+    file: Option<&str>,
     query: &str,
     top_k: usize,
 ) -> Result<Vec<ScoredRow>, String> {
@@ -286,12 +289,13 @@ pub fn fts_search(
            AND c.subject = ?1
            AND (?2 IS NULL OR c.grade = ?2)
            AND (?3 IS NULL OR c.topic = ?3)
+           AND (?5 IS NULL OR c.source_file = ?5)
          ORDER BY rank
          LIMIT {top_k}"
     );
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(params![subject, grade, topic, fts_query], |r| {
+        .query_map(params![subject, grade, topic, fts_query, file], |r| {
             Ok((
                 StoredChunkRow {
                     chunk_id: r.get(0)?,
@@ -350,32 +354,54 @@ pub fn fuse(dense: Vec<ScoredRow>, fts: Vec<ScoredRow>, top_k: usize) -> Vec<Sco
     out
 }
 
-pub fn chunk_count_by_hierarchy(
-    conn: &Connection,
-    subject: &str,
-    grade: Option<&str>,
-    topic: Option<&str>,
-) -> Result<i64, String> {
-    let sql = match (grade, topic) {
-        (Some(_), Some(_)) => {
-            "SELECT COUNT(*) FROM chunks WHERE subject=?1 AND grade=?2 AND topic=?3".to_string()
-        }
-        (Some(_), None) => "SELECT COUNT(*) FROM chunks WHERE subject=?1 AND grade=?2".to_string(),
-        _ => "SELECT COUNT(*) FROM chunks WHERE subject=?1".to_string(),
-    };
-    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-    let n: i64 = match (grade, topic) {
-        (Some(g), Some(t)) => stmt
-            .query_row(params![subject, g, t], |r| r.get(0))
-            .map_err(|e| e.to_string())?,
-        (Some(g), None) => stmt
-            .query_row(params![subject, g], |r| r.get(0))
-            .map_err(|e| e.to_string())?,
-        _ => stmt
-            .query_row(params![subject], |r| r.get(0))
-            .map_err(|e| e.to_string())?,
-    };
-    Ok(n)
+// ---- embedder identity marker (re-index detection) ----
+
+const META_EMBEDDER_ID: &str = "embedder_id";
+
+pub fn get_meta(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    use rusqlite::OptionalExtension;
+    conn.query_row("SELECT value FROM meta WHERE key = ?1", params![key], |r| {
+        r.get::<_, String>(0)
+    })
+    .optional()
+    .map_err(|e| e.to_string())
+}
+
+fn chunk_total(conn: &Connection) -> Result<i64, String> {
+    conn.query_row("SELECT COUNT(*) FROM chunks", [], |r| r.get(0))
+        .map_err(|e| e.to_string())
+}
+
+/// Clear the whole index when it was built with a different embedding model
+/// (vectors from different models are not comparable). Returns true if reset.
+pub fn reset_if_embedder_changed(conn: &Connection, embedder_id: &str) -> Result<bool, String> {
+    if get_meta(conn, META_EMBEDDER_ID)?.as_deref() == Some(embedder_id) {
+        return Ok(false);
+    }
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    if chunk_total(conn)? > 0 {
+        tx.execute("DELETE FROM chunks", [])
+            .map_err(|e| e.to_string())?;
+    }
+    tx.execute(
+        "INSERT INTO meta(key, value) VALUES(?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![META_EMBEDDER_ID, embedder_id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// Reject queries against an index built with a different embedding model.
+pub fn assert_embedder(conn: &Connection, embedder_id: &str) -> Result<(), String> {
+    if chunk_total(conn)? == 0 {
+        return Ok(());
+    }
+    if get_meta(conn, META_EMBEDDER_ID)?.as_deref() == Some(embedder_id) {
+        return Ok(());
+    }
+    Err("The knowledge index was built with a different embedding model. Run \"Scan & Import\" in Datenbanken to re-index.".to_string())
 }
 
 pub fn embedded_sources(
