@@ -12,8 +12,6 @@ import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import TaskItem from "@tiptap/extension-task-item";
 import TaskList from "@tiptap/extension-task-list";
-import { readText, writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { DOMSerializer } from "@tiptap/pm/model";
 import {
   addMonths,
   eachDayOfInterval,
@@ -31,7 +29,6 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
 import { ChatContextBar } from "./ChatContextBar";
 import type { ScoredChunk, ChatMessage, SubjectDbInfo, LessonMetadata, LessonData } from "../store";
@@ -46,25 +43,21 @@ import { AppLink, WordStyleTextAlign } from "./editor/editorExtensions";
 import { MenuBar } from "./editor/MenuBar";
 import { LessonPdfPreviewModal } from "./editor/LessonPdfPreviewModal";
 import { useLessonPdf } from "./editor/useLessonPdf";
+import { EditorContextMenu } from "./editor/EditorContextMenu";
+import type { SelectedTextRange, TableContextMenuState } from "./editor/EditorContextMenu";
 import { AiMarkdown } from "./editor/AiMarkdown";
 import { normalizeAiFragmentOutput, parseThinkingFromResponse } from "../utils/aiText";
 import type { MaterialDropPayload } from "../utils/editorDnD";
 import { getMaterialDropPayload, hasMaterialDropData, hasMethodDropData } from "../utils/editorDnD";
 import type { MethodBankItem, MethodBankType, MethodDropPayload } from "../utils/methodBank";
 import { METHOD_TYPE_ACCENT, getMethodDropPayload, parseMethodBankSeed } from "../utils/methodBank";
-import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
+import { clampContextMenuPosition } from "../utils/contextMenu";
 import {
-  Bold,
-  Italic,
-  Strikethrough,
-  Underline,
   Table as TableIcon,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Sparkles,
-  Languages,
   MessageSquare,
   Send,
   X,
@@ -72,18 +65,8 @@ import {
   Trash2,
   FileText,
   BookOpen,
-  Minus as MinusIcon,
-  Eraser,
   Database,
   Folder,
-  ListChecks,
-  Quote,
-  Link2,
-  Highlighter,
-  Scissors,
-  Copy as CopyIcon,
-  ClipboardPaste,
-  TextSelect,
 } from "lucide-react";
 
 interface SlashMenuState {
@@ -94,21 +77,6 @@ interface SlashMenuState {
   y: number;
   requiredType: MethodBankType | "time";
   selectedIndex: number;
-}
-
-interface TableContextMenuState {
-  x: number;
-  y: number;
-  showTableActions: boolean;
-  showFormatActions: boolean;
-  showInsertActions: boolean;
-  aiSelection: SelectedTextRange | null;
-}
-
-interface SelectedTextRange {
-  from: number;
-  to: number;
-  selectedText: string;
 }
 
 interface AiChatMessage {
@@ -186,8 +154,6 @@ export function Editor() {
     cols: number;
     withHeaderRow: boolean;
   } | null>(null);
-  const [rewriteSubmenuOpen, setRewriteSubmenuOpen] = useState(false);
-  const [translateSubmenuOpen, setTranslateSubmenuOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const [notesOpen, setNotesOpen] = useState(false);
@@ -210,8 +176,6 @@ export function Editor() {
   const [fitZoom, setFitZoom] = useState(1);
   // Last highlight color picked in the rail — reused by the context menu.
   const [highlightColor, setHighlightColor] = useState("#fef08a");
-  // Whether the OS clipboard currently holds text (drives Paste visibility).
-  const [clipboardHasText, setClipboardHasText] = useState(false);
   // Set briefly by the Mod+Shift+V keydown so the next paste inserts plain text.
   const plainPasteRef = useRef(false);
 
@@ -498,16 +462,12 @@ export function Editor() {
   useEffect(() => {
     const closeMenu = () => {
       setTableContextMenu(null);
-      setRewriteSubmenuOpen(false);
-      setTranslateSubmenuOpen(false);
       setSlashMenu(null);
     };
 
     const onEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setTableContextMenu(null);
-        setRewriteSubmenuOpen(false);
-        setTranslateSubmenuOpen(false);
         setSlashMenu(null);
         setPlannedCalendarOpen(false);
         closeEditorSidePanels();
@@ -989,14 +949,6 @@ export function Editor() {
     setCustomTableDialog(null);
   };
 
-  const runTableCommand = useCallback(
-    (runner: () => boolean) => {
-      if (!editor) return;
-      runner();
-      setTableContextMenu(null);
-    },
-    [editor],
-  );
 
   const handleEditorContextMenu = useCallback(
     (event: React.MouseEvent) => {
@@ -1024,10 +976,6 @@ export function Editor() {
       event.preventDefault();
       event.stopPropagation();
 
-      // Know whether paste should be offered before rendering the menu.
-      void readText()
-        .then((text) => setClipboardHasText(!!text && !!text.trim()))
-        .catch(() => setClipboardHasText(false));
 
       // With no text selection, anchor to the clicked position so table
       // commands / inserted blocks land where the user right-clicked.
@@ -1048,8 +996,6 @@ export function Editor() {
         estimatedHeight: showTableActions ? 760 : showFormatActions ? 480 : 220,
       });
 
-      setRewriteSubmenuOpen(false);
-      setTranslateSubmenuOpen(false);
       setTableContextMenu({
         x,
         y,
@@ -2674,99 +2620,7 @@ export function Editor() {
   }, [setEditorActions, chatOpen, notesOpen, methodBankOpen, isPdfBusy, aiEnabled]);
 
   const selectedPlannedDate = parseEuropeanDateToDate(plannedForInput);
-  const canRunAiContextActions = !!tableContextMenu?.aiSelection && !isAiBusy && aiEnabled;
-  const contextMenuItemClass = (active = false) =>
-    `w-full inline-flex items-center justify-start gap-2 text-left px-2.5 py-1 text-[12.5px] rounded hover:bg-[#2d2d2d] disabled:opacity-40 disabled:cursor-not-allowed ${
-      active ? "text-[var(--tp-accent)]" : "text-gray-200"
-    }`;
-  const contextMenuMiniBtn = (active = false) =>
-    `h-6 w-6 inline-flex items-center justify-center rounded transition-colors ${
-      active
-        ? "text-[var(--tp-accent)] bg-[rgba(45,134,165,0.15)]"
-        : "text-gray-200 hover:bg-[#2d2d2d]"
-    }`;
 
-  const copySelectionToClipboard = async () => {
-    if (!editor) return;
-    const { from, to, empty } = editor.state.selection;
-    if (empty) return;
-    const text = editor.state.doc.textBetween(from, to, "\n", "\n");
-
-    // Also put a rich HTML flavour on the clipboard so pasting into Word /
-    // other apps keeps bold, italic, lists, etc. Falls back to text only.
-    try {
-      const slice = editor.state.selection.content();
-      const container = document.createElement("div");
-      container.appendChild(
-        DOMSerializer.fromSchema(editor.schema).serializeFragment(slice.content),
-      );
-      await writeHtml(container.innerHTML, text);
-      setClipboardHasText(true);
-    } catch (error) {
-      console.warn("Clipboard HTML write failed, falling back to text", error);
-      try {
-        await writeText(text);
-        setClipboardHasText(true);
-      } catch (fallbackError) {
-        console.warn("Clipboard write failed", fallbackError);
-      }
-    }
-  };
-
-  const cutSelectionToClipboard = async () => {
-    if (!editor) return;
-    await copySelectionToClipboard();
-    editor.chain().focus().deleteSelection().run();
-  };
-
-  const pastePlainTextFromClipboard = async () => {
-    if (!editor) return;
-    let text = "";
-    try {
-      text = (await readText()) ?? "";
-    } catch (error) {
-      console.warn("Clipboard read failed", error);
-      return;
-    }
-    if (!text.trim()) return;
-
-    snapSelectionInsideTextblock(editor);
-
-    const lines = text.replace(/\r\n?/g, "\n").split("\n");
-    if (lines.length > 1 && lines[lines.length - 1] === "") {
-      lines.pop();
-    }
-
-    // Single line: insert as inline text at the cursor so it lands exactly
-    // where clicked instead of opening a new paragraph (Word behaviour).
-    if (lines.length <= 1) {
-      editor.chain().focus().insertContent({ type: "text", text: lines[0] ?? "" }).run();
-      return;
-    }
-
-    const blocks = lines.map((line) =>
-      line
-        ? { type: "paragraph", content: [{ type: "text", text: line }] }
-        : { type: "paragraph" },
-    );
-
-    // Replace the clicked empty block instead of inserting below it, so the
-    // pasted text lands exactly on the clicked line.
-    const { $from } = editor.state.selection;
-    const parentBlock = $from.parent;
-    const grandParent = $from.depth > 0 ? $from.node($from.depth - 1) : null;
-    const shouldReplaceEmptyBlock =
-      parentBlock.isTextblock &&
-      parentBlock.content.size === 0 &&
-      !!grandParent &&
-      grandParent.childCount > 1;
-
-    const chain = editor.chain().focus();
-    if (shouldReplaceEmptyBlock) {
-      chain.deleteRange({ from: $from.before($from.depth), to: $from.after($from.depth) });
-    }
-    chain.insertContent(blocks).run();
-  };
   const monthStart = startOfMonth(plannedCalendarMonth);
   const monthEnd = endOfMonth(monthStart);
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -2992,414 +2846,19 @@ export function Editor() {
             <EditorContent editor={editor} className="h-full" />
           </div>
 
-          {tableContextMenu && createPortal(
-            <div
-              className={buildContextMenuClassName(
-                `z-[70] print:hidden ${
-                  tableContextMenu.showTableActions
-                    ? "min-w-[240px]"
-                    : tableContextMenu.showFormatActions
-                      ? "min-w-[260px]"
-                      : "min-w-[190px]"
-                }`,
-              )}
-              style={{
-                top: tableContextMenu.y,
-                left: tableContextMenu.x,
-                maxHeight: `calc(100vh - ${Math.max(tableContextMenu.y + 8, 32)}px)`,
-              }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {tableContextMenu.showFormatActions && (
-                <>
-                  {/* Word-style mini format bar */}
-                  <div className="flex items-center gap-0.5 px-1 py-1">
-                    <button
-                      type="button"
-                      title={t("editor.toolbar.bold")}
-                      onClick={() => editor!.chain().focus().toggleBold().run()}
-                      className={contextMenuMiniBtn(editor!.isActive("bold"))}
-                    >
-                      <Bold className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={t("editor.toolbar.italic")}
-                      onClick={() => editor!.chain().focus().toggleItalic().run()}
-                      className={contextMenuMiniBtn(editor!.isActive("italic"))}
-                    >
-                      <Italic className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={t("editor.toolbar.underline")}
-                      onClick={() => editor!.chain().focus().toggleUnderline().run()}
-                      className={contextMenuMiniBtn(editor!.isActive("underline"))}
-                    >
-                      <Underline className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={t("editor.toolbar.strikethrough")}
-                      onClick={() => editor!.chain().focus().toggleStrike().run()}
-                      className={contextMenuMiniBtn(editor!.isActive("strike"))}
-                    >
-                      <Strikethrough className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={t("editor.contextMenu.highlight")}
-                      onClick={() => {
-                        if (editor!.isActive("highlight")) {
-                          editor!.chain().focus().unsetHighlight().run();
-                        } else {
-                          editor!.chain().focus().setHighlight({ color: highlightColor }).run();
-                        }
-                      }}
-                      className={contextMenuMiniBtn(editor!.isActive("highlight"))}
-                    >
-                      <Highlighter className="w-3.5 h-3.5" />
-                    </button>
-
-                    <div className="w-px h-3.5 bg-[#3a3a3a] mx-0.5" aria-hidden="true" />
-
-                    <button
-                      type="button"
-                      title={t("editor.toolbar.link")}
-                      onClick={() => {
-                        setTableContextMenu(null);
-                        window.dispatchEvent(new CustomEvent("tp:open-link-popover"));
-                      }}
-                      className={contextMenuMiniBtn(editor!.isActive("link"))}
-                    >
-                      <Link2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={t("editor.contextMenu.removeFormatting")}
-                      onClick={() => {
-                        editor!.chain().focus().unsetAllMarks().clearNodes().run();
-                        setTableContextMenu(null);
-                      }}
-                      className={contextMenuMiniBtn(false)}
-                    >
-                      <Eraser className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {tableContextMenu.showFormatActions && <div className="h-px bg-[#333] my-0.5" />}
-
-              {/* Clipboard actions — below the format bar, Word-style */}
-              <button
-                onClick={() => {
-                  void cutSelectionToClipboard();
-                  setTableContextMenu(null);
-                }}
-                disabled={editor!.state.selection.empty}
-                className={contextMenuItemClass(false)}
-              >
-                <Scissors className="w-3.5 h-3.5 shrink-0" />
-                {t("editor.contextMenu.cut")}
-              </button>
-              <button
-                onClick={() => {
-                  void copySelectionToClipboard();
-                  setTableContextMenu(null);
-                }}
-                disabled={editor!.state.selection.empty}
-                className={contextMenuItemClass(false)}
-              >
-                <CopyIcon className="w-3.5 h-3.5 shrink-0" />
-                {t("editor.contextMenu.copy")}
-              </button>
-              {(!tableContextMenu.showInsertActions || clipboardHasText) && (
-                <button
-                  onClick={() => {
-                    void pastePlainTextFromClipboard();
-                    setTableContextMenu(null);
-                  }}
-                  className={contextMenuItemClass(false)}
-                >
-                  <ClipboardPaste className="w-3.5 h-3.5 shrink-0" />
-                  {t("editor.contextMenu.paste")}
-                </button>
-              )}
-
-              {(tableContextMenu.showInsertActions ||
-                tableContextMenu.showTableActions ||
-                (aiEnabled && tableContextMenu.aiSelection)) && (
-                <div className="h-px bg-[#333] my-0.5" />
-              )}
-
-              {tableContextMenu.showInsertActions && (
-                <>
-                  <button
-                    onClick={() => {
-                      setTableContextMenu(null);
-                      insertCustomTable();
-                    }}
-                    className={contextMenuItemClass(false)}
-                  >
-                    <TableIcon className="w-3.5 h-3.5 shrink-0" />
-                    {t("editor.toolbar.insertTable")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTableContextMenu(null);
-                      editor!.chain().focus().toggleTaskList().run();
-                    }}
-                    className={contextMenuItemClass(false)}
-                  >
-                    <ListChecks className="w-3.5 h-3.5 shrink-0" />
-                    {t("editor.toolbar.taskList")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTableContextMenu(null);
-                      editor!.chain().focus().toggleBlockquote().run();
-                    }}
-                    className={contextMenuItemClass(false)}
-                  >
-                    <Quote className="w-3.5 h-3.5 shrink-0" />
-                    {t("editor.toolbar.blockquote")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setTableContextMenu(null);
-                      editor!.chain().focus().setHorizontalRule().run();
-                    }}
-                    className={contextMenuItemClass(false)}
-                  >
-                    <MinusIcon className="w-3.5 h-3.5 shrink-0" />
-                    {t("editor.toolbar.horizontalRule")}
-                  </button>
-
-                  <div className="h-px bg-[#333] my-0.5" />
-
-                  <button
-                    onClick={() => {
-                      setTableContextMenu(null);
-                      editor!.chain().focus().selectAll().run();
-                    }}
-                    className={contextMenuItemClass(false)}
-                  >
-                    <TextSelect className="w-3.5 h-3.5 shrink-0" />
-                    {t("editor.contextMenu.selectAll")}
-                  </button>
-                </>
-              )}
-
-              {tableContextMenu.showTableActions && (
-                <>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().addRowBefore().run())}
-                    disabled={!tableActionsEnabled.addRowBefore}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.insertRowAbove")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().addRowAfter().run())}
-                    disabled={!tableActionsEnabled.addRowAfter}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.insertRowBelow")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().addColumnBefore().run())}
-                    disabled={!tableActionsEnabled.addColumnBefore}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.insertColumnLeft")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().addColumnAfter().run())}
-                    disabled={!tableActionsEnabled.addColumnAfter}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.insertColumnRight")}
-                  </button>
-
-                  <div className="h-px bg-[#333] my-0.5" />
-                </>
-              )}
-
-              {aiEnabled && tableContextMenu.aiSelection && (
-                <>
-                  {/* ── Rewrite submenu ─────────────────────────────────── */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setRewriteSubmenuOpen((v) => !v);
-                      setTranslateSubmenuOpen(false);
-                    }}
-                    disabled={!canRunAiContextActions}
-                    className="w-full inline-flex items-center justify-between gap-2 text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Sparkles className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
-                      {t("editor.aiMenu.aiRewrite")}
-                    </span>
-                    <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${rewriteSubmenuOpen ? "rotate-90" : ""}`} />
-                  </button>
-                  {rewriteSubmenuOpen && (
-                    <div className="ml-5 flex flex-col">
-                      {(
-                        [
-                          { tone: "improve",  label: t("editor.aiMenu.improve") },
-                          { tone: "formal",   label: t("editor.aiMenu.moreFormal") },
-                          { tone: "casual",   label: t("editor.aiMenu.moreCasual") },
-                          { tone: "simple",   label: t("editor.aiMenu.simpler") },
-                          { tone: "engaging", label: t("editor.aiMenu.moreEngaging") },
-                          { tone: "concise",  label: t("editor.aiMenu.moreConcise") },
-                        ] as const
-                      ).map(({ tone, label }) => (
-                        <button
-                          key={tone}
-                          onClick={() => {
-                            setTableContextMenu(null);
-                            setRewriteSubmenuOpen(false);
-                            void runAiSelectionAction("rewrite", tableContextMenu!.aiSelection, { tone });
-                          }}
-                          disabled={!canRunAiContextActions}
-                          className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* ── Translate submenu ────────────────────────────────── */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setTranslateSubmenuOpen((v) => !v);
-                      setRewriteSubmenuOpen(false);
-                    }}
-                    disabled={!canRunAiContextActions}
-                    className="w-full inline-flex items-center justify-between gap-2 text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <Languages className="w-3.5 h-3.5 text-[var(--tp-accent)]" />
-                      {t("editor.aiMenu.aiTranslate")}
-                    </span>
-                    <ChevronRight className={`w-3.5 h-3.5 text-gray-400 transition-transform ${translateSubmenuOpen ? "rotate-90" : ""}`} />
-                  </button>
-                  {translateSubmenuOpen && (
-                    <div className="ml-5 flex flex-col">
-                      {/* configured language first */}
-                      {aiTranslateTargetLanguage && (
-                        <button
-                          onClick={() => {
-                            setTableContextMenu(null);
-                            setTranslateSubmenuOpen(false);
-                            void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: aiTranslateTargetLanguage });
-                          }}
-                          disabled={!canRunAiContextActions}
-                          className="w-full text-left px-2.5 py-1 text-[12.5px] text-[var(--tp-accent)] hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {aiTranslateTargetLanguage} ★
-                        </button>
-                      )}
-                      {(
-                        [
-                          { code: "en", name: "English" },
-                          { code: "fr", name: "French" },
-                          { code: "es", name: "Spanish" },
-                          { code: "de", name: "German" },
-                          { code: "el", name: "Greek" },
-                          { code: "it", name: "Italian" },
-                          { code: "pt", name: "Portuguese" },
-                          { code: "nl", name: "Dutch" },
-                          { code: "ru", name: "Russian" },
-                          { code: "ar", name: "Arabic" },
-                          { code: "ja", name: "Japanese" },
-                          { code: "zh", name: "Chinese (Simplified)" },
-                        ] as const
-                      )
-                        .filter(({ name }) => name !== aiTranslateTargetLanguage)
-                        .map(({ code, name }) => (
-                          <button
-                            key={code}
-                            onClick={() => {
-                              setTableContextMenu(null);
-                              setTranslateSubmenuOpen(false);
-                              void runAiSelectionAction("translate", tableContextMenu!.aiSelection, { language: name });
-                            }}
-                            disabled={!canRunAiContextActions}
-                            className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            {t(`languages.${code}`)}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {tableContextMenu.showTableActions && aiEnabled && <div className="h-px bg-[#333] my-0.5" />}
-
-              {tableContextMenu.showTableActions && (
-                <>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteRow().run())}
-                    disabled={!tableActionsEnabled.deleteRow}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.deleteRow")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteColumn().run())}
-                    disabled={!tableActionsEnabled.deleteColumn}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.deleteColumn")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().deleteTable().run())}
-                    disabled={!tableActionsEnabled.deleteTable}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-red-300 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.deleteTable")}
-                  </button>
-
-                  <div className="h-px bg-[#333] my-0.5" />
-
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().mergeCells().run())}
-                    disabled={!tableActionsEnabled.mergeCells}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.mergeCells")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
-                    disabled={!tableActionsEnabled.splitCell}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.splitCell")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
-                    disabled={!tableActionsEnabled.toggleHeaderRow}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.toggleHeaderRow")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
-                    disabled={!tableActionsEnabled.toggleHeaderColumn}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.toggleHeaderColumn")}
-                  </button>
-                </>
-              )}
-            </div>,
-            document.body,
+          {tableContextMenu && (
+            <EditorContextMenu
+              editor={editor}
+              menu={tableContextMenu}
+              onClose={() => setTableContextMenu(null)}
+              aiEnabled={aiEnabled}
+              aiBusy={isAiBusy}
+              highlightColor={highlightColor}
+              aiTranslateTargetLanguage={aiTranslateTargetLanguage}
+              tableActionsEnabled={tableActionsEnabled}
+              onInsertCustomTable={insertCustomTable}
+              runAiSelectionAction={runAiSelectionAction}
+            />
           )}
         </div>
       </div>
