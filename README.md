@@ -1,262 +1,206 @@
-# TeacherPro 🎓
+# TeacherPro
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
 [![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/release.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#)
 
-TeacherPro is a local-first, privacy-focused desktop application designed specifically for educators, tutors, and teachers. It tightly integrates a rich-text lesson plan editor, a weekly calendar for scheduling, material/file management, and interactive mindmapping into one seamless workspace.
+TeacherPro is a desktop app for planning lessons. It combines a lesson-plan
+editor, a weekly calendar, note-taking, a method bank and mindmaps in one
+window, and keeps everything in a folder you choose on your own disk — no
+account, no cloud, no subscription.
 
-Built with performance and cross-platform compatibility in mind using **Tauri**, **React**, **Tailwind CSS**, and **Rust**.
-
-<p align="center">
-  <img src="public/icon.png" width="150" alt="TeacherPro Logo">
-</p>
-
-<h2 align="center">Product Tour</h2>
+It's built with Tauri (Rust) and React. I made it for my own teaching work and
+use it daily; it's shared here in case it's useful to someone else.
 
 <p align="center">
-  A quick visual walkthrough of TeacherPro — from planning and editing to mindmapping and pedagogy.
+  <img src="public/icon.png" width="150" alt="TeacherPro">
 </p>
+
+## Screenshots
 
 <table align="center">
   <tr>
-    <td colspan="2" align="center"><b>Plan &amp; Schedule</b></td>
-  </tr>
-  <tr>
     <td align="center" width="50%">
-      <img src="public/screenshot1.png" alt="Weekly Planner with subject-coloured lesson cards" width="100%"><br>
-      <b>Weekly Planner</b><br>
-      <sub>See your whole week at a glance. Each lesson card shows its subject with a colour-coded left accent. Drag cards between day columns to reschedule, or bulk-select and move to Trash.</sub>
+      <img src="public/screenshot1.png" alt="Weekly planner" width="100%"><br>
+      <b>Weekly planner</b><br>
+      <sub>Lessons grouped by day, colour-coded by subject. Drag to reschedule, or select several and move them to the trash.</sub>
     </td>
     <td align="center" width="50%">
-      <img src="public/screenshot3.png" alt="Lesson Plan Editor with metadata and pedagogy table" width="100%"><br>
-      <b>Lesson Plan Editor</b><br>
-      <sub>Structured rich-text editor with a metadata row (teacher, date, subject) and a built-in pedagogy table tracking Time, Phase, Learning Activity, Social Form, and Media. Full formatting toolbar on the right.</sub>
+      <img src="public/screenshot3.png" alt="Lesson plan editor" width="100%"><br>
+      <b>Lesson plan editor</b><br>
+      <sub>Rich-text editing with a lesson metadata row and the usual pedagogy table: time, phase, activity, social form, media.</sub>
     </td>
   </tr>
   <tr>
-    <td colspan="2" align="center"><b>Think &amp; Explore</b></td>
-  </tr>
-  <tr>
     <td align="center" width="50%">
-      <img src="public/screenshot2.png" alt="Mindmap workspace with node colour context menu" width="100%"><br>
-      <b>Mindmap Workspace</b><br>
-      <sub>Build connected ideas on an infinite canvas. Right-click any node to rename it, link new child nodes, apply a preset colour, or pick a custom one. Drop material files onto the canvas to create linked file nodes.</sub>
+      <img src="public/screenshot2.png" alt="Mindmap" width="100%"><br>
+      <b>Mindmaps</b><br>
+      <sub>Infinite canvas for curriculum maps. Nodes can be renamed, coloured and linked; files can be dropped onto the canvas.</sub>
     </td>
     <td align="center" width="50%">
-      <img src="public/screenshot4.png" alt="Method Bank dock open alongside the lesson editor" width="100%"><br>
-      <b>Method Bank</b><br>
-      <sub>Browse a searchable library of teaching phases, social forms, and pedagogical methods in a slide-out left dock. Filter by Phase, Social, or Method tags and double-click any entry to insert it directly into your active lesson table row.</sub>
+      <img src="public/screenshot4.png" alt="Method bank" width="100%"><br>
+      <b>Method bank</b><br>
+      <sub>A searchable list of teaching phases, social forms and methods. Double-click an entry to drop it into the current lesson row.</sub>
     </td>
   </tr>
 </table>
 
+## How it works
 
+Everything lives in a **vault** — a normal folder you pick on first launch.
+Lessons and mindmaps are JSON files, materials stay where you put them, and the
+trash is just a `Trash` folder inside the vault. Because it's all plain files,
+you can back the vault up, sync it with Dropbox or put it on a USB stick
+without the app caring.
 
----
+If you want to know what the vault looks like before committing to it, create
+an empty folder and poke around after a few minutes of use.
 
-## ✨ Features & Settings Guide
+## What's included
 
-TeacherPro is packed with purpose-built tools designed to adapt to your teaching workflow. Here is a breakdown of what you can do:
+**Lessons.** A rich-text editor with headings, lists, checklists, quotes,
+links, tables, colours and highlights. There are a dozen bundled fonts so
+documents look the same on every machine. Lesson tables are set up for the
+typical pedagogy columns (time, phase, activity, social form, media) and can
+grow rows or columns as needed. Lessons autosave; `Ctrl/Cmd+S` saves on demand.
 
-### 🗂️ The Vault System (Local-First)
-- **100% Local Storage:** First, you select a "Vault" folder anywhere on your computer. TeacherPro saves all your lessons, mindmaps, and materials directly into this folder. No cloud accounts, no sync issues.
-- **Portability:** Everything is saved as lightweight `.json` files. You can safely back up your Vault to a USB drive or cloud folder (like Google Drive or Dropbox) without breaking the app.
-- **Smart Breadcrumbs:** The top navigation bar intelligently displays your exact location relative to your Vault.
+**Notes.** Every lesson has a notes drawer that saves with it. Notes stay out
+of PDF export unless you add them to the lesson itself.
 
-### 📝 Lesson Plan Editor
-- **Rich Text Formatting:** Powered by TipTap, the editor supports Headings, Bold, Italic, Strikethrough, Underline, text color, underline color, multicolor highlighting, text alignment (left / center / right / justify), checklists, subscript / superscript, blockquotes and web links.
-- **Bundled Fonts:** Twelve typefaces ship inside the app (Inter, Lato, Nunito, Lexend, Atkinson Hyperlegible, Merriweather, Lora, Playfair Display, EB Garamond, Caveat, Patrick Hand, Shadows Into Light), grouped by category in the font picker. Documents look identical on every machine and in every export — no font installs needed. System fonts remain available too.
-- **One-Click Colours:** The A / U / H chips in the formatting rail apply your last-used text, underline or highlight colour with a single click. Right-clicking a chip opens a compact preset palette, and the chip always shows the active colour.
-- **Word-Style Context Menus:** Right-clicking selected text shows a compact formatting bar plus Cut / Copy / Paste; right-clicking empty space offers insertion actions (table, checklist, quote, divider, select all); right-clicking inside a lesson table gives row/column and delete operations. AI rewrite / translate appears whenever local AI is enabled.
-- **Native Clipboard:** Cut / Copy / Paste in the context menus use the OS clipboard; copying also writes rich HTML so pasting into Word or Google Docs keeps your formatting.
-- **Specialized Lesson Tables:** Insert pre-formatted pedagogy tables tracking *Time, Phase, LTA (Learning/Teaching Activity), Social Form, and Media*. You can dynamically add/remove rows and columns, resize them freely, and set the default inserted body-row count in Settings.
-- **Metadata Management:** Easily track the *Teacher Name*, *Creation Date*, and use a built-in calendar popup to set the *Planned Date*.
-- **Autosave + Manual Save:** Changes are automatically saved in the background, and you can still trigger a manual save anytime.
-- **Contextual AI Chat Dock:** Toggle AI chat directly from the editor action buttons; when active, it opens as a slide-out side dock so it remains visible while you work.
-- **Private Lesson Notes Drawer:** Open a dedicated notes panel per lesson from the editor header action row (right next to AI Chat). It uses the same left-side dock area as AI Chat, with only one panel open at a time. Notes autosave with the lesson, are searchable locally, and stay out of print/PDF export by default.
-- **Method Bank Pedagogy Drawer:** Open a third optional dock panel from the same lesson action row to browse teaching phases, social forms, and methods. It shares the same left-side dock footprint as AI Chat and Notes, stays mutually exclusive with them, supports double-click insertion into mapped lesson-table columns when the cursor is inside a lesson-table body row, and supports contextual `/` suggestions inside table cells.
-- **Stable Editor Button Order:** The dock toggles in the lesson action row stay ordered as AI Chat (leftmost), then Notes, then Method Bank.
-- **Readable Workspace Density:** The main sidebar and all lesson side docks are slightly wider, while surrounding workspace padding is reduced to maximize useful space without shrinking core editor or mindmap surfaces.
-- **Material Linking:** Double-click a material entry in the sidebar to insert a clickable media link into the lesson table's media column for the active row (when cursor focus is inside a lesson-table body row). Double-clicking an inserted link opens the file in your computer's default native application.
+**Method bank.** Comes with a built-in set of phases, social forms and
+methods, searchable and insertable into lesson tables from a side panel or via
+`/` inside a table cell.
 
-### 🧠 Mindmap Editor
-- **Infinite Canvas:** Build visual curriculums using a node-based interface (powered by React Flow).
-- **Drag-and-Drop Connectivity:** Create nodes, double-click to rename them, and drag connections between them to map out concepts.
-- **Color Workflow:** Right-click any standard node to apply fast preset colors or use a custom color picker; text and border contrast are auto-adjusted for readability.
-- **Material Nodes:** You can drag and drop external files directly onto the mindmap surface to create dedicated file nodes.
-- **Context Menus:** Right-click anywhere on the canvas or on specific nodes to access quick-actions (Delete, Add Node).
+**Mindmaps.** A node-based canvas for mapping out a unit or a topic. Nodes can
+be colour-coded, renamed, connected, and external files dragged in.
 
-### 📅 Weekly Calendar View
-- **Visual Scheduling:** See your upcoming week at a glance.
-- **Quick Reset to Current Week:** Use the built-in *Today* button to jump back instantly after browsing future/past weeks.
-- **Easy Access:** Click on any scheduled lesson directly from the calendar to instantly open it in the editor.
-- **Drag to Reschedule:** Drag a lesson card to another day column to move it. TeacherPro updates the lesson's planned date and file date so it appears under the new day immediately.
+**Calendar.** A week view of all planned lessons. Click a card to open the
+lesson, drag it to another day to reschedule it.
 
-### 🧭 Sidebar Productivity Tools
-- **Unified Smart Search:** Open one collapsible search block in the sidebar and filter Lesson Plans, Mindmaps, Materials, and Trash from a single query (including indexed document content for lessons/mindmaps).
-- **Material Search:** Find copied/imported materials quickly by file name or nested relative path.
-- **Duplicate Plan:** Right-click any lesson and duplicate it for recurring classes.
-- **Safe Deletion + Recovery:** Deleted lessons/mindmaps/materials are moved to the Vault's `Trash` folder, where you can restore items later or permanently delete them.
-- **Rendered Trash Preview:** Lesson plans and mindmaps inside Trash can be previewed in rendered form (not raw JSON) before restoring.
-- **Centered Settings Workspace:** Settings now open in a dedicated centered modal with clearer spacing, professional section tabs, and ESC/backdrop close behavior.
+**Search and trash.** One search field filters lessons, mindmaps, materials
+and trash, including the text inside documents. Deleted items go to the vault's
+trash where they can be restored or deleted permanently; rendered previews are
+available before restoring.
 
-### 🖨️ Native Printing & PDF Export
-- **Flawless UI Capture:** TeacherPro uses a custom canvas engine to perfectly capture the exact colors, table borders, and layouts of your lesson plans and mindmaps—ensuring your printed sheets look exactly like your screen.
-- **High-Resolution Output:** Exports render at ~300 DPI and are printed at true physical size (12 pt on screen prints as 12 pt on paper).
-- **Native OS Print Dialogs:** Built with a custom Rust backend, clicking "Print" seamlessly opens the native Windows, macOS, or Linux print dialogs, avoiding standard webview limitations. Choose **100% / Actual size** in the system print dialog for margins that match the in-app preview — "Fit to printable area" adds the printer's own margins.
-- **Export to PDF:** Save beautifully formatted PDF versions of your documents directly into your Vault's `Exports` folder.
+**Printing and PDF.** Lessons and mindmaps print through the native print
+dialog and export as PDF into an `Exports` folder. The exported page matches
+what's on screen, including table borders and colours.
 
-### ⚙️ UI & Customization
-- **Accent Colors:** Personalize your workspace! The default theme is a deeper TeacherPro blue (`#2d86a5`) for better in-app readability, and you can still change the accent color to match your preference.
-- **Custom Accent Picker:** In addition to presets, you can choose any custom accent color directly from the settings color picker.
-- **Dark Mode Focus:** TeacherPro now runs with a dark app shell for consistent readability and reduced visual drift across screens.
-- **Independent Paper Tones:** Set Lesson Plan paper and Mindmap paper to White or Dark independently from the global app theme.
-- **Viewport-Safe Context Menus:** Right-click menus in sidebar, editor tables, mindmaps, and material links auto-reposition near window edges so actions remain fully visible.
-- **Stable Scrolling Layout:** Scrollbar gutters are stabilized to avoid content width shifts while scrolling; scrollbar visuals are slimmer and neutral gray.
-- **Collapsible Sidebar:** Keep your workspace clean by collapsing the sidebar and individual sections (Lesson Plans, Mindmaps, Materials).
-- **Persistent Sidebar Setup:** Sidebar open/collapsed state, Sidebar Search collapse state, and expanded Material/Trash folders now restore after restarting the app.
-- **Centered Main Welcome Screen:** When no lesson is open, the main content area shows a simple centered welcome with shortcut hints instead of an immediate create button.
-- **Keyboard Shortcuts:** Word-style shortcuts throughout — `Cmd/Ctrl+S` save, `Esc` closes preview overlays/settings/side panels, `Cmd/Ctrl+B/I/U` bold/italic/underline, `Cmd/Ctrl+Shift+S` strikethrough, `Cmd/Ctrl+E/L/R/J` alignment, `Cmd/Ctrl+K` link, `Cmd/Ctrl+P` print, `Cmd/Ctrl+Shift+V` paste as plain text, `Cmd/Ctrl+Shift+8/7/9` bullet/ordered/checklist, `Cmd/Ctrl+Shift+B` quote. Toolbar tooltips show the correct modifier for your platform (⌘ on macOS, Ctrl elsewhere).
-- **Compact Action Buttons:** AI Chat, Save, Preview, Print, and Export actions are icon-first by default, with an optional setting to show text labels.
+**Shortcuts.** `Ctrl/Cmd+S` save, `Esc` close panels, `Ctrl/Cmd+B/I/U` basic
+formatting, `Ctrl/Cmd+E/L/R/J` alignment, `Ctrl/Cmd+K` link, `Ctrl/Cmd+P`
+print, `Ctrl/Cmd+Shift+V` paste as plain text.
 
-### 🤖 Local AI Assistant
-- **Local-First Runtime:** AI runs entirely on your machine via a local Ollama runtime managed by the app (no cloud account required; enable it in Settings → AI).
-- **Model Catalog:** Includes current practical local families — Granite 4.2, Qwen 3.5 / 3.6 / 3.8, Gemma 4, LFM 2.5, Ministral 3 and GPT-OSS 20B — with per-model disk/RAM/VRAM guidance and runtime defaults. Apple Silicon users get dedicated MLX builds.
-- **Knowledge Base / RAG:** Import PDFs into subject databases; content is chunked, embedded locally (`bge-m3`) and can be used as chat context.
-- **Capability Chips:** Model cards provide neutral capability hints (`reasoning`, `multilingual`, `low-latency`, `long-context`, `english-focused`) instead of hard recommendations.
-- **Thinking Mode Awareness:** Chat thinking toggle is model-aware and only sends thinking requests for supported models.
-- **No Terminal Popups (Windows):** Runtime setup, model installs, imports, and chat-related runtime calls execute with hidden process flags so random command windows do not flash while using AI features.
-- **Runtime Diagnostics Panel:** AI Settings now show runtime availability, server status, preferred backend, detected hardware, and active model processor usage from `ollama ps` (for example, CPU-only vs GPU usage).
-- **Cross-Platform Backend Strategy:**
-  - Windows: prefers `cuda` when NVIDIA tooling is detected, otherwise CPU fallback.
-  - macOS Intel + Apple Silicon: prefers `metal`.
-  - Linux: prefers `cuda` for NVIDIA, `rocm` for AMD ROCm environments, otherwise CPU fallback.
-  - Hybrid GPU systems: when backend is `cuda`, inference targets NVIDIA GPUs (for example, RTX 4090) instead of integrated AMD graphics.
-- **Direct Download Mode:** You can use download-only mode so Install opens external Gemma 4 download pages (Hugging Face / Kaggle) without starting or managing Ollama.
-- **Settings Integration:** A new AI settings tab is available for enable/disable, chat persistence policy, default model selection, and model install/remove actions with progress + cancel.
-- **Settings Durability:** UI preferences are persisted in app storage and mirrored to a Vault backup file (`.teacherpro/ui-settings.backup.json`) for easier recovery across app updates.
-- **Source Discovery:** AI settings include quick links to external Gemma catalogs (e.g., Hugging Face and Kaggle) for newer variants.
-- **Privacy Boundary:** Lesson and mindmap content remains in your Vault; AI runtime metadata is managed outside the Vault.
+## Local AI
 
----
+AI is optional and runs entirely on your machine. TeacherPro starts its own
+`llama-server` process when needed and shuts it down with the app — there is no
+Ollama install, no runtime to set up and nothing sent to the internet.
 
-## 🚀 Use Cases
-- **Teachers**: Plan your entire semester ahead of time, attaching the exact PDF worksheets or slideshows you need right next to the lesson structure. 
-- **Tutors**: Generate customized PDF summaries and study mindmaps to export and hand back to your students after a session.
-- **Professors**: Keep research and lecture materials tightly organized and visually mapped without relying on messy folder structures.
+- **Models** are downloaded in Settings → KI-Funktionen as GGUF files from
+  Hugging Face and verified with SHA-256. Sizes range from small models for
+  older laptops to 27B models for machines with a big GPU.
+- **Chat** streams token by token, supports thinking models, and can be stopped
+  mid-answer. The rewrite/translate actions in the editor use the same engine.
+- **Knowledge bases.** You can import PDFs into subject databases. They're
+  chunked and embedded locally (IBM Granite Embedding 311M Multilingual R2, CPU
+  only) and stored in a single SQLite index per vault. Search combines vector
+  similarity with keyword search, and answers cite the source file and page
+  number; you can scope the search to a subject, class, topic or a single PDF.
+- **Lesson drafts.** The sparkle button in the chat panel can generate a full
+  lesson table from a topic, duration and the selected knowledge-base content.
+- **CUDA (optional).** On NVIDIA machines a separate acceleration pack can be
+  installed from Settings to run the chat model on the GPU. Without it the app
+  uses the bundled Vulkan build; either way it falls back cleanly if something
+  fails.
 
----
+AI settings live in Settings → KI-Funktionen. Nothing AI-related is enabled by
+default, and disabling it leaves the rest of the app untouched.
 
-## 📦 Installation
+## Installation
 
-Pre-compiled, ready-to-run installers for **Windows**, **macOS**, and **Linux** are available in the [Releases](https://github.com/Panolix/TeacherPro/releases) tab.
+Ready-to-run installers for Windows, macOS and Linux are on the
+[Releases](https://github.com/Panolix/TeacherPro/releases) page. On Linux both
+`.deb` and `.rpm` packages plus an AppImage are provided.
 
-### 🔖 Automated Release Flow (Recommended)
+### macOS: "App is damaged"
 
-TeacherPro now uses a tag-driven release pipeline with version synchronization across:
+The macOS build is not signed with a paid Apple Developer certificate, so
+Gatekeeper sometimes refuses to open it. If that happens:
 
-- `package.json`
-- `package-lock.json`
-- `src-tauri/Cargo.toml`
-- `src-tauri/tauri.conf.json`
+1. Move `TeacherPro.app` from the `.dmg` into `/Applications`.
+2. Open Terminal and run:
 
-To publish a new installer release:
-
-1. Prepare notes in `release-notes/RELEASE_NOTES_vX.Y.Z.md` (for example `release-notes/RELEASE_NOTES_v1.2.2.md`).
-2. Push your code changes.
-3. Create and push a matching tag:
-
-   ```bash
-   git tag v1.2.2
-   git push origin v1.2.2
-   ```
-
-4. GitHub Actions workflow **Release** builds installers for Windows, macOS, and Linux and uploads them as assets to the draft release.
-
-If you need to rebuild installers for an existing version tag, run **Build Installers** manually from the Actions tab and provide `version` (without the `v` prefix, e.g. `1.2.2`).
-
-### 🍎 macOS Users: "App is damaged" Error
-Because TeacherPro is an open-source app and not currently signed with a paid Apple Developer certificate, macOS Gatekeeper may flag the downloaded app as "damaged" and tell you to move it to the trash. 
-
-To fix this and run the app safely:
-1. Move `TeacherPro.app` (from the downloaded `.dmg`) to your **Applications** folder.
-2. Open your Mac's **Terminal** app.
-3. Run the following command to remove the quarantine flag:
    ```bash
    xattr -cr /Applications/TeacherPro.app
    ```
-4. You can now open TeacherPro normally!
 
----
+3. Open the app normally.
 
-## 🛠 Building from Source
+Without signing there isn't a nicer workaround; the command only removes the
+"downloaded from the internet" flag.
 
-If you want to build the project yourself or contribute:
+## Building from source
 
-### Prerequisites
-1. **Node.js**: v20 or higher.
-2. **Rust**: Install the latest stable Rust toolchain via [rustup](https://rustup.rs/).
-3. **Tauri System Dependencies**: Specifically required if building on Linux. Check the [Tauri Prerequisites guide](https://v2.tauri.app/start/prerequisites/).
+You need Node.js 20+ and a recent stable Rust toolchain. On Linux you also need
+the usual Tauri system packages (webkit2gtk, gtk3, etc.) — see the
+[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
-### Development Setup
-
-Clone the repository and install the frontend dependencies:
 ```bash
 git clone https://github.com/Panolix/TeacherPro.git
 cd TeacherPro
 npm install
+
+# Fetches the pinned llama-server build for your platform into
+# src-tauri/resources/engines/ (required before building; not committed)
+npm run fetch:engines
+
+npm run tauri dev     # development with hot reload
+npm run tauri build   # installer in src-tauri/target/release/bundle/
 ```
 
-Start the local development server (with hot-reloading):
+The engine pin lives in `scripts/engine-config.json`. To bump it, change the
+pin there and regenerate the checksum with
+`node scripts/fetch-engines.mjs --print-hashes <asset>`.
+
+## Releases
+
+Releases are tag-driven. Write the notes in
+`release-notes/RELEASE_NOTES_vX.Y.Z.md`, then push a matching tag:
+
 ```bash
-npm run tauri dev
+git tag v2.8.0
+git push origin v2.8.0
 ```
 
-Build the final native application executable for your current OS:
-```bash
-npm run tauri build
-```
-The compiled files will appear under `src-tauri/target/release/bundle/`.
+The Release workflow builds the Windows, macOS and Linux installers and
+attaches them to a draft release. The "Build Installers" workflow can rebuild
+an existing version from the Actions tab.
 
----
+## Documentation
 
-## 📜 Documentation & Architecture
+- [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) — feature map and recent work
+- [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) — early architecture notes
+- [docs/AI_V3_PLAN.md](docs/AI_V3_PLAN.md) — how the AI stack works
+- [release-notes/](release-notes/) — notes for every release
 
-TeacherPro uses a live documentation system to track design decisions, remaining gaps, and app features. If you are developing or modifying the codebase, please refer to:
-- [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) - The single source of truth for the codebase function map, UX decisions, and recently completed tasks.
-- [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) - The initial architectural phase planning map.
-- [docs/AI_V3_PLAN.md](docs/AI_V3_PLAN.md) - The current AI architecture (bundled llama-server sidecar, GGUF models, hybrid RAG) and its implementation phases.
-- [release-notes/](release-notes/) - Versioned release notes for every published build.
+## Third-party models
 
----
+Model weights are not bundled with the app. They're downloaded at runtime from
+their official Hugging Face repositories and stay under their respective
+licenses.
 
-## 🧩 Third-Party Models
+- Chat and draft models: various GGUF builds (Qwen, Gemma, Ministral, …); each
+  model's license is listed in the app's model catalog.
+- Embedding: **IBM Granite Embedding 311M Multilingual R2** (Apache 2.0). Its
+  tokenizer derives from the Gemma 3 tokenizer and is subject to the
+  [Gemma Terms of Use](https://ai.google.dev/gemma/terms).
+- Engine: [llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT).
 
-TeacherPro downloads and runs open models locally. None of the model weights are
-bundled in the repository or installers — they are fetched at runtime from their
-official Hugging Face repositories.
+See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the details.
 
-- **Chat / draft models** — various GGUF builds (Qwen, Gemma, Ministral, …), each
-  under its own license as listed in the app's model catalog.
-- **Embedding model: IBM Granite Embedding 311M Multilingual R2** —
-  © IBM, Apache License 2.0. The model's tokenizer is derived from the Gemma 3
-  tokenizer and is subject to the Gemma Terms of Use. Model page:
-  <https://huggingface.co/ibm-granite/granite-embedding-311m-multilingual-r2>
-- **llama.cpp / llama-server** — MIT License,
-  <https://github.com/ggml-org/llama.cpp>
+## License
 
-See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for details.
-
----
-
-## ⚖️ License
-
-**Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)**
-
-You are free to **download**, **use**, **modify**, and **share** this software! However, you must adhere to the following conditions:
-
-- **Attribution**: You must give appropriate credit to the original author, provide a link to the license, and indicate if any changes were made.
-- **NonCommercial**: You may **not** use the material for commercial purposes (you cannot sell this software or use it within a commercial product without explicit permission or profit-sharing arrangements).
-
-See the [LICENSE](LICENSE) file for the full legal text.
+TeacherPro is licensed under
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You can use,
+modify and share it, but not sell it or ship it as part of a commercial
+product. The full text is in [LICENSE](LICENSE).
