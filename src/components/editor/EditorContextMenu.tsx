@@ -558,37 +558,6 @@ export function EditorContextMenu({
                   >
                     {t("editor.tableContextMenu.deleteTable")}
                   </button>
-
-                  <div className="h-px bg-[#333] my-0.5" />
-
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().mergeCells().run())}
-                    disabled={!tableActionsEnabled.mergeCells}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.mergeCells")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().splitCell().run())}
-                    disabled={!tableActionsEnabled.splitCell}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.splitCell")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderRow().run())}
-                    disabled={!tableActionsEnabled.toggleHeaderRow}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.toggleHeaderRow")}
-                  </button>
-                  <button
-                    onClick={() => runTableCommand(() => editor!.chain().focus().toggleHeaderColumn().run())}
-                    disabled={!tableActionsEnabled.toggleHeaderColumn}
-                    className="w-full text-left px-2.5 py-1 text-[12.5px] text-gray-200 hover:bg-[#2d2d2d] rounded disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {t("editor.tableContextMenu.toggleHeaderColumn")}
-                  </button>
                 </>
               )}
             </div>,
