@@ -201,9 +201,13 @@ const en = {
       thinkingWith: "AI chat is thinking with {{model}}...",
       noResponse: "(No response)",
       responseReady: "AI chat response ready ({{time}}s)",
+      done: "AI response ready",
+      thinkingOn: "Thinking mode on",
+      rewriteDone: "Rewrite applied",
+      translateDone: "Translation applied",
+      stopGenerating: "Stop generating",
       failed: "AI chat failed: {{error}}",
-      rewriting: "AI rewriting selection...",
-      rewritingWithTone: "AI rewriting ({{tone}})...",
+      rewriting: "AI rewriting selection...",      rewritingWithTone: "AI rewriting ({{tone}})...",
       translating: "AI translating to {{language}}...",
       rewriteApplied: "AI rewrite applied ({{time}}s)",
       translationApplied: "AI translation applied ({{time}}s)",
@@ -213,6 +217,38 @@ const en = {
       contextSystem: "System",
       contextFree: "Free",
       searchingKnowledge: "Searching knowledge database...",
+    },
+
+    aiDraft: {
+      title: "AI lesson draft",
+      systemPrompt:
+        "You are an expert pedagogy assistant for lesson planning. Design a structured, realistic lesson draft with varied phases, sensible time budgeting that adds up to the requested duration, appropriate social forms, and concrete media. Use the teacher's language for all content. Provided method-bank vocabulary and knowledge-base material are reference information, not binding — use them where they fit and deviate when pedagogically sensible.",
+      userPrompt:
+        "Create a lesson plan draft.\nTopic: {{topic}}\nGrade/audience: {{grade}}\nDuration: {{duration}} minutes (split the time sensibly across phases; the time column should add up to {{duration}} min).\nFocus/requests: {{focus}}\nInclude 5-8 phases. Return only via the given structure.",
+      gradeFallback: "general",
+      focusFallback: "none",
+      topic: "Topic",
+      topicPlaceholder: "e.g. The Roman Empire — daily life, gladiators, legions",
+      grade: "Grade / audience",
+      gradePlaceholder: "e.g. Grade 7",
+      duration: "Duration",
+      focus: "Focus / requests (optional)",
+      focusPlaceholder: "e.g. start with a quiz, prefer group work",
+      usingDb: "Knowledge base: {{name}}",
+      kbLabel: "Knowledge base (optional)",
+      noKb: "No embedded knowledge bases in this vault yet — import PDFs under Datenbanken to give the draft access to your material.",
+      allGrades: "All grades",
+      allTopics: "All topics",
+      useMethodBank: "Use Method Bank terminology ({{count}} entries)",
+      methodBankBlock:
+        "Method Bank vocabulary (reference, not binding) — established terms for phases, social forms and methods you may use where they fit:",
+      knowledgeBlock:
+        "Knowledge-base material from the teacher's database (reference, not binding) — draw on it where it fits the topic:",
+      generate: "Generate draft",
+      generating: "Generating draft...",
+      regenerate: "Regenerate",
+      insert: "Insert into lesson plan",
+      failed: "Draft failed: {{error}}",
     },
 
     methodBank: {
@@ -542,6 +578,20 @@ const en = {
   settings: {
     title: "Settings",
     close: "Close settings",
+    aiV3: {
+      title: "AI Models (local engine)",
+      subtitle:
+        "Download a model once; it runs entirely on this computer. The engine starts automatically when you first use AI.",
+      download: "Download",
+      cancel: "Cancel",
+      downloaded: "Downloaded",
+      verifying: "Verifying...",
+      use: "Use",
+      active: "Active",
+      autoModel: "Auto (recommended)",
+      routingHint:
+        "Auto uses your selected model, or the best downloaded one. Switching models restarts the engine.",
+    },
     tabs: {
       appearance: "Appearance",
       lessons: "Lessons",
@@ -645,11 +695,11 @@ const en = {
         all: "All",
       },
       creativityOptions: {
-        "0.1": "Precise (0.1)",
-        "0.4": "Focused (0.4)",
-        "0.7": "Balanced (0.7)",
-        "1.0": "Creative (1.0)",
-        "1.4": "Wild (1.4)",
+        "0_1": "Precise (0.1)",
+        "0_4": "Focused (0.4)",
+        "0_7": "Balanced (0.7)",
+        "1_0": "Creative (1.0)",
+        "1_4": "Wild (1.4)",
       },
       ramVramLabel: "RAM/VRAM: {{value}}",
       contextLabel: "Context: {{value}}",

@@ -523,3 +523,12 @@ export function getAiModelRuntimeDefaults(modelId: string): {
     defaultNumPredict: item.defaultNumPredict,
   };
 }
+
+// AI v3 catalog (Rust is source of truth: src-tauri/src/ai/catalog.rs).
+// These are the v3 GGUF model ids; thinking support per family.
+const V3_NO_THINKING_PREFIXES = ["ministral", "smollm"];
+
+export function doesV3ModelSupportThinking(modelId: string | null | undefined): boolean {
+  if (!modelId) return true; // "Auto" resolves to the selected/downloaded model
+  return !V3_NO_THINKING_PREFIXES.some((p) => modelId.startsWith(p));
+}

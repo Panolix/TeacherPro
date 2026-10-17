@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Sparkles } from "lucide-react";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 
@@ -20,12 +20,20 @@ export function StatusBar() {
     setLessonZoomMode,
     setLessonZoomFixed,
     lastSavedAt,
+    aiStatusMessage,
+    setAiStatusMessage,
   } = useAppStore();
 
   const { t } = useTranslation();
 
+  useEffect(() => {
+    if (!aiStatusMessage) return;
+    const timer = window.setTimeout(() => setAiStatusMessage(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [aiStatusMessage, setAiStatusMessage]);
+
   const zoomControlsVisible =
-    currentView === "editor" && !!activeFilePath && !!vaultPath;
+    currentView === "editor" && !!activeFilePath;
 
   const [zoomMenuOpen, setZoomMenuOpen] = useState(false);
   const zoomMenuRef = useRef<HTMLDivElement | null>(null);
@@ -77,6 +85,17 @@ export function StatusBar() {
       {lastSavedAt && (
         <span title={t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm:ss") })}>
           {t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm") })}
+        </span>
+      )}
+
+      {aiStatusMessage && (
+        <span
+          className="inline-flex items-center gap-1.5 rounded px-2 py-0.5"
+          style={{ background: "var(--tp-bg-3)", border: "1px solid var(--tp-b-2)", color: "var(--tp-accent)" }}
+          title={aiStatusMessage}
+        >
+          <Sparkles className="w-3 h-3 shrink-0" />
+          <span className="truncate max-w-[420px]">{aiStatusMessage}</span>
         </span>
       )}
 

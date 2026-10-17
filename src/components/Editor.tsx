@@ -26,10 +26,11 @@ import {
 } from "date-fns";
 import { de as deLocale } from "date-fns/locale";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen } from "@tauri-apps/api/event";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { doesAiModelSupportThinking, getAiModelRuntimeDefaults } from "../ai/modelCatalog";
+import { doesV3ModelSupportThinking } from "../ai/modelCatalog";
 import type { ScoredChunk, ChatMessage, SubjectDbInfo, LessonMetadata, LessonData } from "../store";
 import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle, FontFamily } from "@tiptap/extension-text-style";
@@ -47,8 +48,9 @@ import { NotesPanel } from "./editor/NotesPanel";
 import { MethodBankPanel } from "./editor/MethodBankPanel";
 import { AiChatPanel } from "./editor/AiChatPanel";
 import type { AiChatMessage } from "./editor/AiChatPanel";
+import { DraftGeneratorDialog } from "./editor/DraftGeneratorDialog";
 import type { SelectedTextRange, TableContextMenuState } from "./editor/EditorContextMenu";
-import { normalizeAiFragmentOutput, parseThinkingFromResponse } from "../utils/aiText";
+import { normalizeAiFragmentOutput } from "../utils/aiText";
 import type { MaterialDropPayload } from "../utils/editorDnD";
 import { getMaterialDropPayload, hasMaterialDropData, hasMethodDropData } from "../utils/editorDnD";
 import type { MethodBankItem, MethodBankType, MethodDropPayload } from "../utils/methodBank";
@@ -91,8 +93,9 @@ export function Editor() {
     logDebug,
     subjects,
     aiEnabled,
-    aiDefaultModelId,
-    aiRewriteTranslateModelId,
+    setAiStatusMessage,
+    aiV3ChatModelId,
+    aiV3RewriteModelId,
     aiChatHistoryLimit,
     aiTemperature,
     aiSystemPrompt,
@@ -127,13 +130,13 @@ export function Editor() {
     formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
   );
   const [isAiBusy, setIsAiBusy] = useState(false);
-  const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [customTableDialog, setCustomTableDialog] = useState<{
     rows: number;
     cols: number;
     withHeaderRow: boolean;
   } | null>(null);
+  const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
   const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const [notesOpen, setNotesOpen] = useState(false);
@@ -146,7 +149,7 @@ export function Editor() {
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const [, setIsEditorDropActive] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
-  const modelSupportsThinking = doesAiModelSupportThinking(aiDefaultModelId);
+  const modelSupportsThinking = doesV3ModelSupportThinking(aiV3ChatModelId);
   const lessonEditorDragDropEnabled = false;
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
@@ -280,6 +283,17 @@ export function Editor() {
   const [isChatBusy, setIsChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
   const ragChunksRef = useRef<ScoredChunk[]>([]);
+  const activeStreamIdRef = useRef<string | null>(null);
+
+  const stopAiStreaming = useCallback(async () => {
+    const id = activeStreamIdRef.current;
+    if (!id) return;
+    try {
+      await tauriInvoke("ai_chat_cancel", { requestId: id });
+    } catch (e) {
+      console.error("stream cancel failed:", e);
+    }
+  }, []);
 
   const selectDb = useCallback((subject: string, grade: string | null, topic: string | null) => {
     ragChunksRef.current = [];
@@ -1172,28 +1186,25 @@ export function Editor() {
           ? t("editor.chat.rewriting")
           : t("editor.chat.rewritingWithTone", { tone });
 
-      const rewriteRuntimeDefaults = getAiModelRuntimeDefaults(aiRewriteTranslateModelId);
-
       setIsAiBusy(true);
       setAiStatusMessage(statusLabel);
       logDebug(
         "ai",
         "rewrite-translate-invoke",
-        `${mode} | model=${aiRewriteTranslateModelId} | ctx=${rewriteRuntimeDefaults.defaultNumCtx} | predict=${rewriteRuntimeDefaults.defaultNumPredict}`,
+        `${mode} | v3 engine auto-model | temp=0.35`,
       );
 
       try {
-        const response = await tauriInvoke<string>("ai_generate_text", {
-          modelId: aiRewriteTranslateModelId,
+        // AI v3: engine auto-selects the downloaded rewrite model (model pickers
+        // return in the settings pass; the sidecar starts lazily on this call).
+        const result = await tauriInvoke<{ text: string }>("ai_generate_text_v2", {
+          modelId: aiV3RewriteModelId ?? undefined,
           prompt,
-          temperature: 0.35,
           systemPrompt: rewriteSystemPrompt,
-          enableThinking: false,
-          numCtx: Math.min(rewriteRuntimeDefaults.defaultNumCtx, 8192),
-          numPredict: rewriteRuntimeDefaults.defaultNumPredict,
+          temperature: 0.35,
         });
 
-        const transformedText = normalizeAiFragmentOutput(response, sourceText);
+        const transformedText = normalizeAiFragmentOutput(result.text, sourceText);
         if (!transformedText) {
           throw new Error(t("editor.chat.emptyResponse"));
         }
@@ -1220,8 +1231,8 @@ export function Editor() {
 
         setAiStatusMessage(
           mode === "rewrite"
-            ? t("editor.chat.rewriteApplied", { time: aiRewriteTranslateModelId })
-            : t("editor.chat.translationApplied", { time: aiRewriteTranslateModelId }),
+            ? t("editor.chat.rewriteDone")
+            : t("editor.chat.translateDone"),
         );
       } catch (error) {
         console.error("AI action failed:", error);
@@ -1232,7 +1243,7 @@ export function Editor() {
     },
     [
       aiEnabled,
-      aiRewriteTranslateModelId,
+      aiV3RewriteModelId,
       aiTemperature,
       aiTranslateTargetLanguage,
       editor,
@@ -1334,12 +1345,19 @@ export function Editor() {
     setChatMessages((previous) => [...previous, userMessage]);
     setChatInput("");
     setIsChatBusy(true);
-    setAiStatusMessage(t("editor.chat.thinkingWith", { model: aiDefaultModelId }));
+    setAiStatusMessage(t("editor.chat.thinkingOn"));
 
     try {
-      const chatRuntimeDefaults = getAiModelRuntimeDefaults(aiDefaultModelId);
-      let maxNumCtx = chatRuntimeDefaults.defaultNumCtx;
-      const modelMaxCtx = chatRuntimeDefaults.maxNumCtx;
+      // v3: engine context comes from the live engine status; exact token
+      // counts from /tokenize when the engine is reachable.
+      let maxNumCtx = 16384;
+      try {
+        const engine = await tauriInvoke<{ ctx: number | null }>("ai_engine_status");
+        if (engine.ctx && engine.ctx > 0) maxNumCtx = engine.ctx;
+      } catch {
+        /* engine idle — keep default */
+      }
+      const modelMaxCtx = 32768;
       const chatContextCharLimit = Math.max(5000, Math.floor(maxNumCtx * 0.6));
       const contextText = buildLessonContextText(chatContextCharLimit);
 
@@ -1441,41 +1459,135 @@ export function Editor() {
         freeTokens: maxNumCtx - lessonTokens - historyTokens - ragTokens - systemTokens - estimateTokens(userText) - 100,
       });
 
+      // Exact token counts via the engine tokenizer (fallback: chars/4 estimate)
+      let exactCounts: number[] | null = null;
+      try {
+        exactCounts = await tauriInvoke<number[]>("ai_count_tokens", {
+          texts: [lessonBlock, ragContext, effectiveSystemPrompt, userText, ...recentMessages.map((m) => m.text)],
+        });
+      } catch {
+        /* engine idle — estimates are fine for the bar */
+      }
+      const countExact = (index: number, str: string) =>
+        exactCounts && exactCounts[index] !== undefined ? exactCounts[index] : estimateTokens(str);
+
+      // Refresh the context bar with exact counts once the engine tokenizer answered
+      const lessonTokensExact = countExact(0, lessonBlock);
+      const ragTokensExact = countExact(1, ragContext);
+      const systemTokensExact = countExact(2, effectiveSystemPrompt);
+      const userTokensExact = countExact(3, userText);
+      const historyTokensExact = recentMessages.reduce(
+        (sum, msg, i) => sum + (exactCounts?.[4 + i] ?? estimateTokens(msg.text)),
+        0,
+      );
+      setChatContextBudget({
+        totalTokens: maxNumCtx,
+        usedByLesson: lessonTokensExact,
+        usedByHistory: historyTokensExact,
+        usedByRag: ragTokensExact,
+        usedBySystem: systemTokensExact,
+        freeTokens: maxNumCtx - lessonTokensExact - historyTokensExact - ragTokensExact - systemTokensExact - userTokensExact - 100,
+      });
+
       // Thinking mode needs more predict tokens (thinking ~1-2K + response)
       const thinkMode = aiThinkingEnabled && modelSupportsThinking;
-      const effectiveNumPredict = thinkMode
-        ? Math.max(chatRuntimeDefaults.defaultNumPredict, 4096)
-        : chatRuntimeDefaults.defaultNumPredict;
+      const effectiveNumPredict = thinkMode ? Math.max(1024, 4096) : 1024;
 
       logDebug(
         "ai",
         "chat-invoke",
-        `model=${aiDefaultModelId} | ctx=${maxNumCtx} | predict=${effectiveNumPredict} | messages=${messages.length} | rag=${ragTokens > 0 ? `+${ragTokens}` : "off"} | history=${historyTokens} | lesson=${lessonTokens} | think=${String(thinkMode)}`,
+        `model=${aiV3ChatModelId ?? "auto"} | ctx=${maxNumCtx} | predict=${effectiveNumPredict} | messages=${messages.length} | rag=${ragTokens > 0 ? `+${ragTokens}` : "off"} | history=${historyTokens} | lesson=${lessonTokens} | think=${String(thinkMode)}`,
       );
 
-      const response = await tauriInvoke<string>("ai_generate_chat", {
-        modelId: aiDefaultModelId,
-        messages,
-        temperature: aiTemperature,
-        enableThinking: thinkMode,
-        numCtx: maxNumCtx,
-        numPredict: effectiveNumPredict,
-      });
+      const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      activeStreamIdRef.current = requestId;
 
-      const { thinking: thinkingContent, response: cleanResponse } = parseThinkingFromResponse(response);
-      const assistantText = cleanResponse || t("editor.chat.noResponse");
+      const assistantId = `assistant-${Date.now()}`;
+      let streamText = "";
+      let streamThinking = "";
 
       setChatMessages((previous) => [
         ...previous,
         {
-          id: `assistant-${Date.now()}`,
+          id: assistantId,
           role: "assistant",
-          text: assistantText,
-          thinking: thinkingContent ?? undefined,
+          text: "",
           timestamp: Date.now(),
         },
       ]);
-      setAiStatusMessage(t("editor.chat.responseReady", { time: aiDefaultModelId }));
+
+      const applyStream = () => {
+        setChatMessages((previous) =>
+          previous.map((m) =>
+            m.id === assistantId
+              ? { ...m, text: streamText, thinking: streamThinking || undefined }
+              : m,
+          ),
+        );
+      };
+
+      // AI v3: streaming relay — chunks arrive as ai-stream-{requestId} events.
+      await new Promise<void>((resolve, reject) => {
+        let unlistenFn: (() => void) | null = null;
+        const cleanup = () => {
+          unlistenFn?.();
+          unlistenFn = null;
+        };
+        tauriListen<{
+          kind: string;
+          text?: string | null;
+          error?: string | null;
+          finish?: string | null;
+        }>(`ai-stream-${requestId}`, (event) => {
+          const payload = event.payload;
+          if (payload.kind === "chunk" && payload.text) {
+            streamText += payload.text;
+            applyStream();
+          } else if (payload.kind === "thinking" && payload.text) {
+            streamThinking += payload.text;
+            applyStream();
+          } else if (payload.kind === "done") {
+            cleanup();
+            if (payload.error && payload.error !== "cancelled") {
+              reject(new Error(payload.error));
+              return;
+            }
+            resolve();
+          } else if (payload.kind === "error") {
+            cleanup();
+            reject(new Error(payload.error ?? "stream error"));
+          }
+        })
+          .then((unlisten) => {
+            unlistenFn = unlisten;
+            return tauriInvoke("ai_chat", {
+              requestId,
+              messages,
+              temperature: aiTemperature,
+              maxTokens: effectiveNumPredict,
+              thinking: thinkMode,
+              modelId: aiV3ChatModelId ?? undefined,
+            });
+          })
+          .then(() => {
+            // Rust side streams via events; completion arrives as "done".
+          })
+          .catch((err) => {
+            cleanup();
+            reject(err);
+          });
+      });
+
+      activeStreamIdRef.current = null;
+      const assistantText = streamText.trim() || t("editor.chat.noResponse");
+      setChatMessages((previous) =>
+        previous.map((m) =>
+          m.id === assistantId
+            ? { ...m, text: assistantText, thinking: streamThinking || undefined }
+            : m,
+        ),
+      );
+      setAiStatusMessage(t("editor.chat.done"));
     } catch (error) {
       console.error("AI chat failed:", error);
       setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
@@ -1491,15 +1603,15 @@ export function Editor() {
     } finally {
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiDefaultModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, vaultPath, setChatContextBudget, t]);
+  }, [aiEnabled, aiV3ChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, vaultPath, setChatContextBudget, t]);
 
-  // Fetch subject DB list when chat opens (so dropdown is populated)
+  // Fetch subject DB list when chat or the draft dialog opens (so dropdown is populated)
   useEffect(() => {
-    if (!chatOpen || !vaultPath) return;
+    if ((!chatOpen && !draftDialogOpen) || !vaultPath) return;
     tauriInvoke<SubjectDbInfo[]>("subject_db_list", { vaultPath })
       .then((dbs) => setSubjectDatabases(dbs))
       .catch(() => {});
-  }, [chatOpen, vaultPath]);
+  }, [chatOpen, draftDialogOpen, vaultPath]);
 
   const getSlashSuggestions = useCallback(
     (requiredType: string, query: string): MethodBankItem[] => {
@@ -2606,19 +2718,6 @@ export function Editor() {
         className="tp-paper-scroll flex-1 min-w-0 print:p-0 print:overflow-visible"
       >
         <div className="tp-paper-zoom" style={{ zoom: effectiveZoom }}>
-        {aiStatusMessage && (
-          <div
-            className="mb-3 rounded-md px-3 py-2 text-[12.5px] mx-auto"
-            style={{
-              background: "var(--tp-bg-2)",
-              border: "1px solid var(--tp-b-2)",
-              color: "var(--tp-t-2)",
-              maxWidth: "var(--tp-paper-w)",
-            }}
-          >
-            {aiStatusMessage}
-          </div>
-        )}
       <div
         id="lesson-plan-container"
         className="tp-editor-surface rounded-[14px] shadow-[0_14px_44px_rgba(0,0,0,0.42)] flex flex-col mx-auto print:bg-white print:border-none print:shadow-none print:min-h-0 print:max-w-none"
@@ -2815,6 +2914,22 @@ export function Editor() {
         onUnderlineColorChange={setUnderlineColor}
       />
 
+      {/* AI Lesson Draft Generator (opt-in) */}
+      <DraftGeneratorDialog
+        open={draftDialogOpen}
+        onClose={() => setDraftDialogOpen(false)}
+        editor={editor}
+        defaultTopic={subject ?? ""}
+        defaultGrade=""
+        aiEnabled={aiEnabled}
+        vaultPath={vaultPath}
+        activeDb={activeChatDb}
+        activeGrade={activeChatGrade}
+        activeTopic={activeChatTopic}
+        subjectDatabases={subjectDatabases}
+        methodBankItems={methodBankItems}
+      />
+
       {/* Notes Panel - Left Side */}
       <NotesPanel
         open={notesOpen}
@@ -2842,7 +2957,7 @@ export function Editor() {
         onInputChange={setChatInput}
         onSend={handleSubmitChat}
         busy={isChatBusy}
-        modelId={aiDefaultModelId}
+        modelId={aiV3ChatModelId ?? "Auto (v3)"}
         thinkingEnabled={aiThinkingEnabled}
         onToggleThinking={() => setAiThinkingEnabled(!aiThinkingEnabled)}
         modelSupportsThinking={modelSupportsThinking}
@@ -2860,6 +2975,9 @@ export function Editor() {
         activeGrade={activeChatGrade}
         activeTopic={activeChatTopic}
         onSelectDb={selectDb}
+        streaming={isChatBusy}
+        onStopStreaming={() => void stopAiStreaming()}
+        onOpenDraftGenerator={() => setDraftDialogOpen(true)}
       />
 
 

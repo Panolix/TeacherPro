@@ -7,6 +7,8 @@ import {
   Folder,
   MessageSquare,
   Send,
+  Sparkles,
+  Square,
   Trash2,
   X,
 } from "lucide-react";
@@ -43,6 +45,9 @@ interface Props {
   activeGrade: string | null;
   activeTopic: string | null;
   onSelectDb: (subject: string, grade: string | null, topic: string | null) => void;
+  streaming: boolean;
+  onStopStreaming: () => void;
+  onOpenDraftGenerator: () => void;
 }
 
 /** Slide-in AI chat panel (lesson-aware chat with RAG context selector). */
@@ -66,6 +71,9 @@ export function AiChatPanel({
   activeGrade,
   activeTopic,
   onSelectDb,
+  streaming,
+  onStopStreaming,
+  onOpenDraftGenerator,
 }: Props) {
   const { t } = useTranslation();
   const [dbMenuOpen, setDbMenuOpen] = useState(false);
@@ -99,6 +107,13 @@ export function AiChatPanel({
                 {modelId}
               </span>
               <div className="flex items-center gap-0.5">
+                <button
+                  onClick={onOpenDraftGenerator}
+                  title={t("editor.aiDraft.title")}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-accent)] hover:bg-[var(--tp-bg-4)]"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
                 <button
                   onClick={() => onClearMessages()}
                   title={t("editor.panels.clearChatHistory")}
@@ -337,10 +352,23 @@ export function AiChatPanel({
                     <MessageSquare className="w-3 h-3 text-[var(--tp-accent)]" />
                     <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--tp-accent)] opacity-70">AI</span>
                   </div>
-                  <div className="flex items-center gap-1.5 py-1">
-                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:0ms]" />
-                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:150ms]" />
-                    <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:300ms]" />
+                  <div className="flex items-center gap-2 py-1">
+                    {streaming ? (
+                      <button
+                        onClick={onStopStreaming}
+                        title={t("editor.chat.stopGenerating")}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-2.5 py-1 text-[11px] text-[var(--tp-text-primary)] hover:bg-[var(--tp-bg-4)] transition-colors"
+                      >
+                        <Square className="w-2.5 h-2.5 fill-current" />
+                        {t("editor.chat.stopGenerating")}
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 py-1">
+                        <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:0ms]" />
+                        <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:150ms]" />
+                        <span className="inline-block w-2 h-2 rounded-full bg-[var(--tp-text-muted)] animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

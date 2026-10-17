@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   X,
   Settings as SettingsIcon,
@@ -9,23 +9,14 @@ import {
   Save,
   Minus,
   Plus,
-  Trash2,
   HardDriveDownload,
   Loader2,
-  AlertCircle,
   CheckCircle2,
-  RefreshCw,
   Database,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type AccentColor } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
-import {
-  AI_MODEL_CATALOG,
-  DEFAULT_AI_MODEL_ID,
-  type AiModelCapability,
-} from "../ai/modelCatalog";
 import { SubjectDbManager } from "./SubjectDbManager";
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; labelKey: string; color: string }> = [
@@ -37,28 +28,44 @@ const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; labelKey: strin
   { value: "rose", label: "Rose", labelKey: "settings.accentLabels.rose", color: "#e11d48" },
 ];
 
-const AI_MODEL_CAPABILITY_LABELS: Record<AiModelCapability, string> = {
-  multilingual: "settings.aiCapabilities.multilingual",
-  reasoning: "settings.aiCapabilities.reasoning",
-  "low-latency": "settings.aiCapabilities.lowLatency",
-  "long-context": "settings.aiCapabilities.longContext",
-  "english-focused": "settings.aiCapabilities.englishFocused",
-  "apple-silicon": "settings.aiCapabilities.appleSilicon",
-};
-
-interface AiModelInstallProgress {
-  model_id: string;
-  status: "not-started" | "preparing" | "installing" | "completed" | "failed" | "cancelled";
-  progress: number;
-  detail?: string | null;
+interface EngineStatusDto {
+  state: string;
+  modelId: string | null;
+  port: number | null;
+  ctx: number | null;
+  variant: string | null;
+  error: string | null;
 }
 
-const TERMINAL_INSTALL_STATUSES = new Set<AiModelInstallProgress["status"]>([
-  "not-started",
-  "completed",
-  "failed",
-  "cancelled",
-]);
+interface DownloadProgressDto {
+  modelId: string;
+  state: string;
+  received: number;
+  total: number;
+  error: string | null;
+}
+
+interface CatalogModelDto {
+  id: string;
+  name: string;
+  tier: string;
+  origin: string;
+  sizeBytes: number;
+  minRamGb: number;
+  numCtx: number;
+  supportsThinking: boolean;
+  recommended: boolean;
+  downloaded: boolean;
+  filePresent: boolean;
+}
+
+interface CatalogInfoDto {
+  enginePin: string;
+  engineVariant: string | null;
+  engineInstalled: boolean;
+  modelsDir: string;
+  models: CatalogModelDto[];
+}
 
 const TRANSLATE_LANGUAGES = [
   { code: "en", name: "English" },
@@ -96,12 +103,10 @@ export function SettingsModal({ open, onClose }: Props) {
     setDefaultLessonTableBodyRows,
     aiEnabled,
     setAiEnabled,
-    aiProvider,
-    setAiProvider,
-    aiDefaultModelId,
-    setAiDefaultModelId,
-    aiRewriteTranslateModelId,
-    setAiRewriteTranslateModelId,
+    aiV3ChatModelId,
+    setAiV3ChatModelId,
+    aiV3RewriteModelId,
+    setAiV3RewriteModelId,
     aiPersistChats,
     setAiPersistChats,
     aiChatHistoryLimit,
@@ -114,8 +119,6 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiThinkingEnabled,
     aiTranslateTargetLanguage,
     setAiTranslateTargetLanguage,
-    aiModelInstallState,
-    setAiModelInstallState,
     debugMode,
     setDebugMode,
     showActionButtonLabels,
@@ -131,243 +134,97 @@ export function SettingsModal({ open, onClose }: Props) {
   const [tab, setTab] = useState<SettingsTab>("appearance");
 
   // ===== AI runtime / model management state =====
-  const [aiActionBusy, setAiActionBusy] = useState<string | null>(null);
-  const [aiErrorMessage, setAiErrorMessage] = useState<string | null>(null);
-  const [aiInfoMessage, setAiInfoMessage] = useState<string | null>(null);
-  const [aiInstalledModelIds, setAiInstalledModelIds] = useState<string[]>([]);
-  const [aiInstallProgress, setAiInstallProgress] = useState<Record<string, AiModelInstallProgress>>({});
-  const aiInstallPollersRef = useRef<Record<string, number>>({});
 
-  const getModelInstallState = (modelId: string) => aiModelInstallState[modelId] || "not-installed";
+  // P0 debug engine card (temporary â€” replaced by the P1 engine UI)
+  const [engineStatus, setEngineStatus] = useState<EngineStatusDto | null>(null);
+  const [catalog, setCatalog] = useState<CatalogInfoDto | null>(null);
+  const [v3Downloads, setV3Downloads] = useState<Record<string, DownloadProgressDto>>({});
 
-  const clearInstallPoller = useCallback((modelId: string) => {
-    const timerId = aiInstallPollersRef.current[modelId];
-    if (timerId) {
-      window.clearInterval(timerId);
-      delete aiInstallPollersRef.current[modelId];
-    }
-  }, []);
 
-  const handleInstallProgressUpdate = useCallback(
-    (progress: AiModelInstallProgress) => {
-      const modelId = progress.model_id;
-      setAiInstallProgress((prev) => ({ ...prev, [modelId]: progress }));
-
-      if (progress.status === "preparing" || progress.status === "installing") {
-        setAiModelInstallState(modelId, "installing");
-        return;
-      }
-      if (progress.status === "completed") {
-        clearInstallPoller(modelId);
-        setAiModelInstallState(modelId, "installed");
-        setAiDefaultModelId(modelId);
-        setAiInfoMessage(t("settings.ai.installedModel", { model: modelId }));
-        void syncInstalledModels();
-        return;
-      }
-      if (progress.status === "cancelled") {
-        clearInstallPoller(modelId);
-        setAiModelInstallState(modelId, "not-installed");
-        setAiInfoMessage(t("settings.ai.cancelledModel", { model: modelId }));
-        return;
-      }
-      if (progress.status === "failed") {
-        clearInstallPoller(modelId);
-        setAiModelInstallState(modelId, "error");
-        setAiErrorMessage(progress.detail || t("settings.ai.failedModel", { model: modelId }));
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [clearInstallPoller, setAiDefaultModelId, setAiModelInstallState],
-  );
-
-  const pollModelInstallProgress = useCallback(
-    async (modelId: string) => {
+  useEffect(() => {
+    if (tab !== "ai") return;
+    let alive = true;
+    const tick = async () => {
       try {
-        const progress = await invoke<AiModelInstallProgress>("ai_get_model_install_progress", { modelId });
-        handleInstallProgressUpdate(progress);
-        if (TERMINAL_INSTALL_STATUSES.has(progress.status)) clearInstallPoller(modelId);
-      } catch (error) {
-        clearInstallPoller(modelId);
-        setAiModelInstallState(modelId, "error");
-        setAiErrorMessage(t("settings.ai.installProgressError", { model: modelId, error: String(error) }));
+        const s = await invoke<EngineStatusDto>("ai_engine_status");
+        if (alive) setEngineStatus(s);
+      } catch {
+        /* backend not running the v3 engine commands */
       }
-    },
-    [clearInstallPoller, handleInstallProgressUpdate, setAiModelInstallState, t],
-  );
-
-  const startInstallPolling = useCallback(
-    (modelId: string) => {
-      clearInstallPoller(modelId);
-      aiInstallPollersRef.current[modelId] = window.setInterval(() => {
-        void pollModelInstallProgress(modelId);
-      }, 750);
-      void pollModelInstallProgress(modelId);
-    },
-    [clearInstallPoller, pollModelInstallProgress],
-  );
-
-  const syncInstalledModels = useCallback(async () => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    setAiActionBusy("refresh-models");
-    try {
-      // Ensure Ollama is running before listing models
-      await invoke("ai_ensure_runtime");
-      const installedModels = await invoke<string[]>("ai_list_models");
-      const installed = new Set(installedModels || []);
-      setAiInstalledModelIds(Array.from(installed));
-      for (const model of AI_MODEL_CATALOG) {
-        setAiModelInstallState(model.id, installed.has(model.id) ? "installed" : "not-installed");
+      try {
+        const cat = await invoke<CatalogInfoDto>("ai_catalog_info");
+        if (alive) {
+          setCatalog(cat);
+          setV3Downloads((prev) => {
+            const next = { ...prev };
+            for (const m of cat.models) {
+              if (m.downloaded && !next[m.id]?.error) {
+                // keep completed states cached; refresh handled by downloads
+              }
+            }
+            return next;
+          });
+        }
+      } catch {
+        /* catalog unavailable */
       }
-      const currentState = useAppStore.getState();
-      const firstCatalogMatch = AI_MODEL_CATALOG.find((m) => installed.has(m.id));
-      const corrected = firstCatalogMatch?.id ?? Array.from(installed)[0];
-      if (corrected && !installed.has(currentState.aiDefaultModelId)) setAiDefaultModelId(corrected);
-      if (corrected && !installed.has(currentState.aiRewriteTranslateModelId))
-        setAiRewriteTranslateModelId(corrected);
-    } catch (error) {
-      setAiErrorMessage(t("settings.ai.refreshModelsError", { error: String(error) }));
-    } finally {
-      setAiActionBusy(null);
-    }
-  }, [setAiModelInstallState, setAiDefaultModelId, setAiRewriteTranslateModelId, setAiInstalledModelIds, setAiActionBusy, setAiInfoMessage, setAiErrorMessage]);
-
-  const handleInstallModel = async (modelId: string) => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    setAiModelInstallState(modelId, "installing");
-    setAiInstallProgress((prev) => ({
-      ...prev,
-      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: t("settings.ai.preparingRuntime") },
-    }));
-    try {
-      const progress = await invoke<AiModelInstallProgress>("ai_start_model_install", { modelId });
-      handleInstallProgressUpdate(progress);
-      if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) startInstallPolling(modelId);
-    } catch (error) {
-      setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(t("settings.ai.installError", { model: modelId, error: String(error) }));
-    }
-  };
-
-  const handleCancelInstallModel = async (modelId: string) => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    setAiActionBusy(`cancel:${modelId}`);
-    try {
-      const progress = await invoke<AiModelInstallProgress>("ai_cancel_model_install", { modelId });
-      handleInstallProgressUpdate(progress);
-      clearInstallPoller(modelId);
-    } catch (error) {
-      setAiErrorMessage(t("settings.ai.cancelInstallError", { model: modelId, error: String(error) }));
-    } finally {
-      setAiActionBusy(null);
-    }
-  };
-
-  const handleRemoveModel = async (modelId: string) => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    setAiActionBusy(`remove:${modelId}`);
-    try {
-      await invoke("ai_remove_model", { modelId });
-      setAiModelInstallState(modelId, "not-installed");
-      if (aiDefaultModelId === modelId) setAiDefaultModelId(DEFAULT_AI_MODEL_ID);
-      if (aiRewriteTranslateModelId === modelId) setAiRewriteTranslateModelId(DEFAULT_AI_MODEL_ID);
-      setAiInfoMessage(t("settings.ai.removedModel", { model: modelId }));
-      void syncInstalledModels();
-    } catch (error) {
-      setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(t("settings.ai.removeError", { model: modelId, error: String(error) }));
-    } finally {
-      setAiActionBusy(null);
-    }
-  };
-
-  const handleEnsureRuntime = async () => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    setAiActionBusy("ensure-runtime");
-    try {
-      const result = await invoke<string>("ai_ensure_runtime");
-      setAiInfoMessage(result || t("settings.ai.localRuntimeReady"));
-    } catch (error) {
-      setAiErrorMessage(t("settings.ai.runtimeSetupError", { error: String(error) }));
-    } finally {
-      setAiActionBusy(null);
-    }
-  };
-
-  const handleImportGguf = async (modelId: string) => {
-    setAiInfoMessage(null);
-    setAiErrorMessage(null);
-    let selected: string | null = null;
-    try {
-      const result = await openFileDialog({
-        title: t("settings.ai.selectGgufTitle"),
-        filters: [{ name: "GGUF Model", extensions: ["gguf"] }],
-        multiple: false,
-        directory: false,
-      });
-      selected = typeof result === "string" ? result : (result as { path?: string } | null)?.path ?? null;
-    } catch {
-      return;
-    }
-    if (!selected) return;
-    setAiModelInstallState(modelId, "installing");
-    setAiInstallProgress((prev) => ({
-      ...prev,
-      [modelId]: { model_id: modelId, status: "preparing", progress: 0, detail: t("settings.ai.preparingRuntime") },
-    }));
-    try {
-      const progress = await invoke<AiModelInstallProgress>("ai_import_local_model", {
-        ggufPath: selected,
-        modelId,
-      });
-      handleInstallProgressUpdate(progress);
-      if (!TERMINAL_INSTALL_STATUSES.has(progress.status)) startInstallPolling(modelId);
-    } catch (error) {
-      setAiModelInstallState(modelId, "error");
-      setAiErrorMessage(t("settings.ai.importError", { model: modelId, error: String(error) }));
-    }
-  };
-
-  const modelLabelById = useMemo(() => {
-    const lookup = new Map<string, string>();
-    for (const model of AI_MODEL_CATALOG) lookup.set(model.id, model.label);
-    return lookup;
-  }, []);
-
-  const availableRoutingModels = useMemo(() => {
-    const ids = new Set<string>(aiInstalledModelIds);
-    if (aiDefaultModelId) ids.add(aiDefaultModelId);
-    if (aiRewriteTranslateModelId) ids.add(aiRewriteTranslateModelId);
-    if (ids.size === 0) ids.add(DEFAULT_AI_MODEL_ID);
-    return Array.from(ids).sort((a, b) => {
-      const ai = AI_MODEL_CATALOG.findIndex((m) => m.id === a);
-      const bi = AI_MODEL_CATALOG.findIndex((m) => m.id === b);
-      if (ai !== -1 && bi !== -1) return ai - bi;
-      if (ai !== -1) return -1;
-      if (bi !== -1) return 1;
-      return a.localeCompare(b);
-    });
-  }, [aiInstalledModelIds, aiDefaultModelId, aiRewriteTranslateModelId]);
-
-  // Sync installed models whenever the AI tab opens (with delay so UI stays responsive)
-  useEffect(() => {
-    if (!open || tab !== "ai") return;
-    const timer = setTimeout(() => { void syncInstalledModels(); }, 500);
-    return () => clearTimeout(timer);
-  }, [open, tab, aiProvider, syncInstalledModels]);
-
-  // Cleanup pollers on unmount
-  useEffect(() => {
-    return () => {
-      Object.values(aiInstallPollersRef.current).forEach((id) => window.clearInterval(id));
-      aiInstallPollersRef.current = {};
     };
-  }, []);
+    void tick();
+    const handle = window.setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      window.clearInterval(handle);
+    };
+  }, [tab]);
+
+  const pollDownload = async (modelId: string) => {
+    try {
+      const d = await invoke<DownloadProgressDto>("ai_download_model_progress", { modelId });
+      setV3Downloads((prev) => ({ ...prev, [modelId]: d }));
+      if (["queued", "downloading", "verifying"].includes(d.state)) {
+        window.setTimeout(() => void pollDownload(modelId), 750);
+      }
+    } catch {
+      /* job finished and cleared */
+    }
+  };
+
+  const startDownload = async (modelId: string) => {
+    try {
+      const d = await invoke<DownloadProgressDto>("ai_download_model_start", { modelId });
+      setV3Downloads((prev) => ({ ...prev, [modelId]: d }));
+      if (["queued", "downloading", "verifying"].includes(d.state)) {
+        window.setTimeout(() => void pollDownload(modelId), 750);
+      }
+    } catch (e) {
+      setV3Downloads((prev) => ({
+        ...prev,
+        [modelId]: { modelId, state: "failed", received: 0, total: 0, error: String(e) },
+      }));
+    }
+  };
+
+  const cancelDownload = async (modelId: string) => {
+    try {
+      const d = await invoke<DownloadProgressDto>("ai_download_model_cancel", { modelId });
+      setV3Downloads((prev) => ({ ...prev, [modelId]: d }));
+    } catch (e) {
+      console.error("cancel failed:", e);
+    }
+  };
+
+  const useModel = async (modelId: string) => {
+    try {
+      setEngineStatus(await invoke<EngineStatusDto>("ai_select_model", { modelId }));
+      // Persisted routing: chat + rewrite default to the activated model.
+      setAiV3ChatModelId(modelId);
+      setAiV3RewriteModelId(null);
+    } catch (e) {
+      console.error("select model failed:", e);
+    }
+  };
+
+
 
   // Close on Escape
   useEffect(() => {
@@ -428,14 +285,14 @@ export function SettingsModal({ open, onClose }: Props) {
                       className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "en" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
                       title={t("languages.en")}
                     >
-                      🇬🇧 {t("languages.en")}
+                      ðŸ‡¬ðŸ‡§ {t("languages.en")}
                     </button>
                     <button
                       onClick={() => setLanguage("de")}
                       className={`tp-action-btn px-3 py-1.5 rounded-md text-sm font-medium ${language === "de" ? "ring-2 ring-[var(--tp-accent)]" : ""}`}
                       title={t("languages.de")}
                     >
-                      🇩🇪 {t("languages.de")}
+                      ðŸ‡©ðŸ‡ª {t("languages.de")}
                     </button>
                   </div>
                 </Section>
@@ -546,6 +403,86 @@ export function SettingsModal({ open, onClose }: Props) {
 
             {tab === "ai" && (
               <>
+                <Section title={t("settings.aiV3.title")}>
+
+                  <p className="mb-3 text-[12.5px]" style={{ color: "var(--tp-t-4)" }}>
+                    {t("settings.aiV3.subtitle")}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {catalog?.models.map((model) => {
+                      const dl = v3Downloads[model.id];
+                      const isActive = dl && ["queued", "downloading", "verifying"].includes(dl.state);
+                      const pct = dl && dl.total > 0 ? Math.round((dl.received / dl.total) * 100) : 0;
+                      return (
+                        <div
+                          key={model.id}
+                          className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                          style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-panel-muted)" }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-[13px] font-medium text-[var(--tp-text-primary)]">
+                                {model.name}
+                              </span>
+                              <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: "var(--tp-panel-elevated)", color: "var(--tp-text-muted)" }}>
+                                {model.tier}
+                              </span>
+                              {model.origin === "eu" && (
+                                <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: "var(--tp-accent)", color: "#fff" }}>
+                                  EU
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                              {(model.sizeBytes / 1e9).toFixed(1)} GB Â· RAM {model.minRamGb}+ GB Â· ctx {model.numCtx}
+                            </div>
+                          </div>
+                          {model.downloaded ? (
+                            <div className="shrink-0 flex items-center gap-2">
+                              {aiV3ChatModelId === model.id || engineStatus?.modelId === model.id ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium" style={{ color: "var(--tp-accent)" }}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> {t("settings.aiV3.active")}
+                                </span>
+                              ) : (
+                                <button
+                                  className="tp-btn inline-flex items-center gap-1.5"
+                                  onClick={() => void useModel(model.id)}
+                                >
+                                  {t("settings.aiV3.use")}
+                                </button>
+                              )}
+                            </div>
+                          ) : dl?.state === "verifying" ? (
+                            <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t("settings.aiV3.verifying")}
+                            </span>
+                          ) : isActive ? (
+                            <div className="shrink-0 flex items-center gap-2">
+                              <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--tp-panel-elevated)" }}>
+                                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--tp-accent)" }} />
+                              </div>
+                              <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>{pct}%</span>
+                              <button className="tp-btn" onClick={() => void cancelDownload(model.id)}>
+                                {t("settings.aiV3.cancel")}
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="tp-btn shrink-0 inline-flex items-center gap-1.5"
+                              onClick={() => void startDownload(model.id)}
+                            >
+                              <HardDriveDownload className="w-3.5 h-3.5" /> {t("settings.aiV3.download")}
+                            </button>
+                          )}
+                          {dl?.error && (
+                            <span className="text-[11px] text-red-400">{dl.error}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Section>
+
                 <Section title={t("settings.ai.aiRuntime")}>
                   <ToggleRow
                     label={t("settings.ai.enableLocalAi")}
@@ -567,68 +504,44 @@ export function SettingsModal({ open, onClose }: Props) {
                   />
                 </Section>
 
-                <Section title={t("settings.ai.provider")}>
-                  <FormRow label={t("settings.ai.aiProvider")}>
-                    <select
-                      className="tp-input"
-                      value={aiProvider}
-                      onChange={(e) => setAiProvider(e.target.value as any)}
-                    >
-                      <option value="ollama">{t("settings.ai.ollama")}</option>
-                      <option value="direct-download">{t("settings.ai.directDownload")}</option>
-                    </select>
-                  </FormRow>
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => void handleEnsureRuntime()}
-                      disabled={aiActionBusy === "ensure-runtime"}
-                      className="tp-btn"
-                    >
-                      {aiActionBusy === "ensure-runtime" ? t("settings.ai.preparingRuntime") : t("settings.ai.setupRuntime")}
-                    </button>
-                    <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
-                      {t("settings.ai.setupRuntimeHint")}
-                    </span>
-                  </div>
-                </Section>
-
                 <Section title={t("settings.ai.modelRouting")}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FormRow label={t("settings.ai.chatModel")}>
                       <select
                         className="tp-input"
-                        value={aiDefaultModelId}
-                        onChange={(e) => setAiDefaultModelId(e.target.value)}
+                        value={aiV3ChatModelId ?? ""}
+                        onChange={(e) => setAiV3ChatModelId(e.target.value || null)}
                       >
-                        {availableRoutingModels.map((id) => {
-                          const installed = aiInstalledModelIds.includes(id);
-                          const label = modelLabelById.get(id) || id;
-                          return (
-                            <option key={`chat-${id}`} value={id}>
-                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
+                        <option value="">{t("settings.aiV3.autoModel")}</option>
+                        {catalog?.models
+                          .filter((m) => m.downloaded && m.tier !== "smoke")
+                          .map((m) => (
+                            <option key={`chat-${m.id}`} value={m.id}>
+                              {m.name}
                             </option>
-                          );
-                        })}
+                          ))}
                       </select>
                     </FormRow>
                     <FormRow label={t("settings.ai.rewriteTranslateModel")}>
                       <select
                         className="tp-input"
-                        value={aiRewriteTranslateModelId}
-                        onChange={(e) => setAiRewriteTranslateModelId(e.target.value)}
+                        value={aiV3RewriteModelId ?? ""}
+                        onChange={(e) => setAiV3RewriteModelId(e.target.value || null)}
                       >
-                        {availableRoutingModels.map((id) => {
-                          const installed = aiInstalledModelIds.includes(id);
-                          const label = modelLabelById.get(id) || id;
-                          return (
-                            <option key={`rw-${id}`} value={id}>
-                              {installed ? label : `${label} ${t("settings.ai.notInstalled")}`}
+                        <option value="">{t("settings.aiV3.autoModel")}</option>
+                        {catalog?.models
+                          .filter((m) => m.downloaded && m.tier !== "smoke")
+                          .map((m) => (
+                            <option key={`rw-${m.id}`} value={m.id}>
+                              {m.name}
                             </option>
-                          );
-                        })}
+                          ))}
                       </select>
                     </FormRow>
                   </div>
+                  <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
+                    {t("settings.aiV3.routingHint")}
+                  </p>
                 </Section>
 
                 <Section title={t("settings.ai.generationParameters")}>
@@ -651,11 +564,11 @@ export function SettingsModal({ open, onClose }: Props) {
                       value={aiTemperature}
                       onChange={(e) => setAiTemperature(Number(e.target.value))}
                     >
-                      <option value={0.1}>{t("settings.ai.creativityOptions.0.1")}</option>
-                      <option value={0.4}>{t("settings.ai.creativityOptions.0.4")}</option>
-                      <option value={0.7}>{t("settings.ai.creativityOptions.0.7")}</option>
-                      <option value={1.0}>{t("settings.ai.creativityOptions.1.0")}</option>
-                      <option value={1.4}>{t("settings.ai.creativityOptions.1.4")}</option>
+                    <option value={0.1}>{t("settings.ai.creativityOptions.0_1")}</option>
+                    <option value={0.4}>{t("settings.ai.creativityOptions.0_4")}</option>
+                    <option value={0.7}>{t("settings.ai.creativityOptions.0_7")}</option>
+                    <option value={1.0}>{t("settings.ai.creativityOptions.1_0")}</option>
+                    <option value={1.4}>{t("settings.ai.creativityOptions.1_4")}</option>
                     </select>
                   </FormRow>
                   <FormRow label={t("settings.ai.translationTargetLanguage")}>
@@ -680,216 +593,6 @@ export function SettingsModal({ open, onClose }: Props) {
                   </FormRow>
                 </Section>
 
-                <Section title={t("settings.ai.modelCatalog")}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[12px]" style={{ color: "var(--tp-t-3)" }}>
-                      {t("settings.ai.modelCatalogHint")}
-                    </span>
-                    <button
-                      onClick={() => void syncInstalledModels()}
-                      disabled={aiActionBusy === "refresh-models"}
-                      className="tp-btn"
-                      style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                    >
-                      <RefreshCw className={`w-3 h-3 ${aiActionBusy === "refresh-models" ? "animate-spin" : ""}`} />
-                      {aiActionBusy === "refresh-models" ? t("settings.ai.refreshing") : t("settings.ai.refresh")}
-                    </button>
-                  </div>
-
-                  {aiInstalledModelIds.length > 0 && (
-                    <div
-                      className="mb-3 rounded-md px-3 py-2"
-                      style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
-                    >
-                      <div className="text-[11px] uppercase tracking-wider mb-1.5 font-semibold" style={{ color: "var(--tp-t-4)" }}>
-                        {t("settings.ai.detectedInstalledModels")}
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {aiInstalledModelIds.map((id) => (
-                          <div key={id} className="flex items-center">
-                            <button
-                              onClick={() => {
-                                setAiDefaultModelId(id);
-                                setAiRewriteTranslateModelId(id);
-                              }}
-                              className={`px-2 py-1 text-[11px] rounded-l border-y border-l transition-colors ${
-                                aiDefaultModelId === id
-                                  ? "border-[var(--tp-accent)] text-white"
-                                  : "border-[var(--tp-b-2)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)]"
-                              }`}
-                              style={aiDefaultModelId === id ? { background: "rgba(45,134,165,0.18)" } : undefined}
-                              title={t("settings.ai.installedModelTooltip")}
-                            >
-                              {id}
-                            </button>
-                            <button
-                              onClick={() => void handleRemoveModel(id)}
-                              disabled={aiActionBusy === `remove:${id}`}
-                              className="px-1.5 py-1 text-[11px] rounded-r border text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 disabled:opacity-50"
-                              style={{ borderColor: "var(--tp-b-2)" }}
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-2">
-                    {AI_MODEL_CATALOG.map((model) => {
-                      const installState = getModelInstallState(model.id);
-                      const installProgress = aiInstallProgress[model.id];
-                      const isInstalling =
-                        installState === "installing" ||
-                        installProgress?.status === "preparing" ||
-                        installProgress?.status === "installing";
-                      const isInstalled = installState === "installed";
-                      const isDefault = aiDefaultModelId === model.id;
-                      const isCanceling = aiActionBusy === `cancel:${model.id}`;
-                      const isRemoving = aiActionBusy === `remove:${model.id}`;
-                      const progressValue = Math.max(0, Math.min(100, installProgress?.progress ?? 0));
-                      const progressText =
-                        installProgress?.detail ||
-                        (isInstalling ? t("settings.ai.downloadProgress", { percent: Math.round(progressValue) }) : undefined);
-
-                      return (
-                        <div
-                          key={model.id}
-                          className="rounded-lg px-3 py-3"
-                          style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-1)" }}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[14px] font-medium" style={{ color: "var(--tp-t-1)" }}>
-                                  {model.label}
-                                </span>
-                                <Badge>{model.tier}</Badge>
-                                {model.recommended && <BadgeAccent>{t("settings.ai.recommended")}</BadgeAccent>}
-                                {model.capabilities?.map((cap) => (
-                                  <Badge key={`${model.id}-${cap}`}>{t(AI_MODEL_CAPABILITY_LABELS[cap])}</Badge>
-                                ))}
-                              </div>
-                              <div className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                                {language === "de" && model.descriptionDe ? model.descriptionDe : model.description}
-                              </div>
-                              <div className="mt-2 flex items-center gap-3 text-[11px] flex-wrap" style={{ color: "var(--tp-t-4)" }}>
-                                <span className="inline-flex items-center gap-1">
-                                  <HardDriveDownload className="w-3 h-3" /> {model.estimatedDisk}
-                                </span>
-                                <span>{t("settings.ai.ramVramLabel", { value: model.recommendedRam })}</span>
-                                <span>{t("settings.ai.contextLabel", { value: model.recommendedContext })}</span>
-                                <span>{t("settings.ai.sourceOllama")}</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {isInstalling && <Loader2 className="w-4 h-4 text-[var(--tp-accent)] animate-spin" />}
-                              {!isInstalling && installState === "error" && (
-                                <AlertCircle className="w-4 h-4 text-amber-400" />
-                              )}
-                              {!isInstalling && isInstalled && (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                              )}
-                            </div>
-                          </div>
-
-                          {isInstalling && (
-                            <div className="mt-2">
-                              <div className="h-1.5 w-full rounded overflow-hidden" style={{ background: "var(--tp-bg-3)" }}>
-                                <div
-                                  className="h-full transition-all duration-300"
-                                  style={{ width: `${Math.max(progressValue, 3)}%`, background: "var(--tp-accent)" }}
-                                />
-                              </div>
-                              {progressText && (
-                                <div className="mt-1 text-[11px] truncate" style={{ color: "var(--tp-t-4)" }}>
-                                  {progressText}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {!isInstalled ? (
-                              <>
-                                <button
-                                  onClick={() => void handleInstallModel(model.id)}
-                                  disabled={isInstalling || isRemoving || aiActionBusy === "refresh-models"}
-                                  className="tp-btn tp-btn-primary"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {isInstalling ? t("settings.ai.installing") : t("settings.ai.install")}
-                                </button>
-                                <button
-                                  onClick={() => void handleImportGguf(model.id)}
-                                  disabled={isInstalling || isRemoving}
-                                  className="tp-btn"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {isInstalling ? t("settings.ai.importing") : t("settings.ai.importGguf")}
-                                </button>
-                                {isInstalling && (
-                                  <button
-                                    onClick={() => void handleCancelInstallModel(model.id)}
-                                    disabled={isCanceling}
-                                    className="tp-btn"
-                                    style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  >
-                                    {isCanceling ? t("settings.ai.cancelling") : t("settings.ai.cancel")}
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => {
-                                    setAiDefaultModelId(model.id);
-                                    setAiRewriteTranslateModelId(model.id);
-                                  }}
-                                  className={`tp-btn ${isDefault ? "tp-btn-primary" : ""}`}
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                  title={t("settings.ai.setDefaultTooltip")}
-                                >
-                                  {isDefault ? t("settings.ai.default") : t("settings.ai.setDefault")}
-                                </button>
-                                <button
-                                  onClick={() => void handleRemoveModel(model.id)}
-                                  disabled={isRemoving || isInstalling}
-                                  className="tp-btn"
-                                  style={{ height: 30, padding: "0 12px", fontSize: 12 }}
-                                >
-                                  {t("settings.ai.remove")}
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-[11px] mt-3" style={{ color: "var(--tp-t-4)" }}>
-                    {t("settings.ai.installHelp")}
-                  </p>
-
-                  {aiInfoMessage && (
-                    <div
-                      className="mt-2 text-[12px] rounded-md px-2 py-1.5"
-                      style={{ background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.3)", color: "#86efac" }}
-                    >
-                      {aiInfoMessage}
-                    </div>
-                  )}
-                  {aiErrorMessage && (
-                    <div
-                      className="mt-2 text-[12px] rounded-md px-2 py-1.5"
-                      style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24" }}
-                    >
-                      {aiErrorMessage}
-                    </div>
-                  )}
-                </Section>
               </>
             )}
 
@@ -1029,27 +732,5 @@ function NumberInput({ value, min, max, onChange }: { value: number; min: number
       </button>
       <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>{t("common.range", { min, max })}</span>
     </div>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded"
-      style={{ border: "1px solid var(--tp-b-2)", color: "var(--tp-t-3)" }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function BadgeAccent({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="text-[11px] uppercase tracking-wider px-1.5 py-0.5 rounded"
-      style={{ border: "1px solid var(--tp-accent)", color: "var(--tp-accent)" }}
-    >
-      {children}
-    </span>
   );
 }

@@ -63,6 +63,7 @@ struct HardwareProbe {
     detected_hardware: Vec<String>,
 }
 
+mod ai;
 mod subject_db;
 
 static AI_INSTALL_STATES: LazyLock<Mutex<HashMap<String, AiInstallStateInternal>>> =
@@ -78,7 +79,7 @@ static OLLAMA_WE_STARTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 static AI_HARDWARE_PROBE: LazyLock<HardwareProbe> = LazyLock::new(probe_hardware);
 
-fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
+pub(crate) fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
     #[allow(unused_mut)]
     let mut command = Command::new(program);
 
@@ -1997,23 +1998,37 @@ pub fn run() {
             subject_db::subject_db_query,
             subject_db::subject_db_delete,
             subject_db::subject_db_diagnose,
-            ai_generate_chat
+            ai_generate_chat,
+            ai::catalog::ai_catalog_info,
+            ai::engine::ai_engine_status,
+            ai::engine::ai_engine_start,
+            ai::engine::ai_engine_stop,
+            ai::downloader::ai_download_model_start,
+            ai::downloader::ai_download_model_progress,
+            ai::downloader::ai_download_model_cancel,
+            ai::client::ai_chat,
+            ai::client::ai_chat_cancel,
+            ai::client::ai_generate_text_v2,
+            ai::client::ai_generate_ready,
+            ai::client::ai_count_tokens,
+            ai::client::ai_structured,
+            ai::engine::ai_select_model,
+            ai::engine::ai_selected_model
         ])
+        .manage(ai::AiState::new())
         .setup(|app| {
             migrate_legacy_app_data(app);
 
-            // Start Ollama at app launch so AI features work immediately
-            std::thread::spawn(|| {
-                std::thread::sleep(std::time::Duration::from_millis(1500));
-                ensure_ollama_server_started();
-            });
+            // AI v3: the engine is lazy-started on first use (src-tauri/src/ai/engine.rs);
+            // nothing is spawned at launch anymore.
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app, event| {
+        .run(|app, event| {
             match event {
                 tauri::RunEvent::Exit | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
+                    ai::engine::kill_on_exit(app);
                     stop_ollama_server();
                 }
                 _ => {}

@@ -25,3 +25,6 @@ dist-ssr
 
 # Mimosa security scanner artifacts
 .mimosa/
+
+# AI v3: engine binaries fetched by scripts/fetch-engines.mjs (never commit)
+src-tauri/resources/engines/

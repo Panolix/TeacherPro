@@ -161,6 +161,8 @@ interface UISettings {
   aiProvider: AiProvider;
   aiDefaultModelId: string;
   aiRewriteTranslateModelId: string;
+  aiV3ChatModelId: string | null;
+  aiV3RewriteModelId: string | null;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -204,6 +206,8 @@ interface AppState {
   aiProvider: AiProvider;
   aiDefaultModelId: string;
   aiRewriteTranslateModelId: string;
+  aiV3ChatModelId: string | null;
+  aiV3RewriteModelId: string | null;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -246,6 +250,10 @@ interface AppState {
   /** Timestamp (ms) of the last successful lesson/mindmap save, for the status bar. */
   lastSavedAt: number | null;
 
+  /** Transient AI status line for the status bar (never persisted). */
+  aiStatusMessage: string | null;
+  setAiStatusMessage: (message: string | null) => void;
+
   editorActions: {
     save: () => void;
     preview: () => void;
@@ -285,6 +293,8 @@ interface AppState {
   setAiProvider: (provider: AiProvider) => void;
   setAiDefaultModelId: (modelId: string) => void;
   setAiRewriteTranslateModelId: (modelId: string) => void;
+  setAiV3ChatModelId: (modelId: string | null) => void;
+  setAiV3RewriteModelId: (modelId: string | null) => void;
   setAiPersistChats: (enabled: boolean) => void;
   setAiChatHistoryLimit: (limit: number) => void;
   setAiTemperature: (temp: number) => void;
@@ -465,6 +475,8 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiProvider: "ollama",
   aiDefaultModelId: DEFAULT_AI_MODEL_ID,
   aiRewriteTranslateModelId: DEFAULT_AI_MODEL_ID,
+  aiV3ChatModelId: null,
+  aiV3RewriteModelId: null,
   aiPersistChats: true,
   aiChatHistoryLimit: 20,
   aiTemperature: 0.7,
@@ -538,6 +550,14 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
         ? source.aiDefaultModelId
         : DEFAULT_UI_SETTINGS.aiDefaultModelId,
     aiRewriteTranslateModelId: rewriteTranslateModelCandidate,
+    aiV3ChatModelId:
+      typeof source.aiV3ChatModelId === "string" && source.aiV3ChatModelId.trim()
+        ? source.aiV3ChatModelId
+        : null,
+    aiV3RewriteModelId:
+      typeof source.aiV3RewriteModelId === "string" && source.aiV3RewriteModelId.trim()
+        ? source.aiV3RewriteModelId
+        : null,
     aiTranslateTargetLanguage:
       typeof source.aiTranslateTargetLanguage === "string" && source.aiTranslateTargetLanguage.trim()
         ? source.aiTranslateTargetLanguage
@@ -1051,6 +1071,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiProvider: DEFAULT_UI_SETTINGS.aiProvider,
   aiDefaultModelId: DEFAULT_UI_SETTINGS.aiDefaultModelId,
   aiRewriteTranslateModelId: DEFAULT_UI_SETTINGS.aiRewriteTranslateModelId,
+  aiV3ChatModelId: DEFAULT_UI_SETTINGS.aiV3ChatModelId,
+  aiV3RewriteModelId: DEFAULT_UI_SETTINGS.aiV3RewriteModelId,
   aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
   aiChatHistoryLimit: DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
   aiTemperature: DEFAULT_UI_SETTINGS.aiTemperature,
@@ -1071,6 +1093,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   subjectDatabases: [],
   lastSavedAt: null,
+  aiStatusMessage: null,
   activeChatDb: null,
   activeChatGrade: null,
   activeChatTopic: null,
@@ -1121,6 +1144,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         aiProvider: normalizedSettings.aiProvider,
         aiDefaultModelId: normalizedSettings.aiDefaultModelId,
         aiRewriteTranslateModelId: normalizedSettings.aiRewriteTranslateModelId,
+        aiV3ChatModelId: normalizedSettings.aiV3ChatModelId,
+        aiV3RewriteModelId: normalizedSettings.aiV3RewriteModelId,
         aiPersistChats: normalizedSettings.aiPersistChats,
         aiChatHistoryLimit: normalizedSettings.aiChatHistoryLimit,
         aiTemperature: normalizedSettings.aiTemperature,
@@ -1245,6 +1270,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ aiRewriteTranslateModelId: modelId });
     void persistUiSettings({ aiRewriteTranslateModelId: modelId });
   },
+  setAiV3ChatModelId: (modelId) => {
+    set({ aiV3ChatModelId: modelId });
+    void persistUiSettings({ aiV3ChatModelId: modelId });
+  },
+  setAiV3RewriteModelId: (modelId) => {
+    set({ aiV3RewriteModelId: modelId });
+    void persistUiSettings({ aiV3RewriteModelId: modelId });
+  },
+  setAiStatusMessage: (message) => {
+    set({ aiStatusMessage: message });
+  },
   setAiPersistChats: (enabled) => {
     set({ aiPersistChats: enabled });
     void persistUiSettings({ aiPersistChats: enabled });
@@ -1367,6 +1403,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             // Device-specific: AI model, provider, and runtime config
             delete (mergedSettings as any).aiDefaultModelId;
             delete (mergedSettings as any).aiRewriteTranslateModelId;
+            delete (mergedSettings as any).aiV3ChatModelId;
+            delete (mergedSettings as any).aiV3RewriteModelId;
             delete (mergedSettings as any).aiProvider;
             delete (mergedSettings as any).aiEnabled;
             delete (mergedSettings as any).aiPersistChats;

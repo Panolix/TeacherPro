@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
@@ -59,12 +58,8 @@ function App() {
     useAppStore.getState().setLessonPaperTone("light");
     useAppStore.getState().setMindmapPaperTone("dark");
 
-    // Start Ollama in background so AI features work immediately when needed
-    setTimeout(() => {
-      invoke("ai_ensure_runtime").catch((err: any) => {
-        console.warn("Ollama not available:", err);
-      });
-    }, 3000);
+    // AI v3: no runtime auto-start. The engine is lazy-started on first AI use
+    // (see src-tauri/src/ai/engine.rs) — nothing runs until the user needs it.
   }, []);
 
   useEffect(() => {

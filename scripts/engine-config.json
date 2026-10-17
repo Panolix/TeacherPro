@@ -1,0 +1,33 @@
+{
+  "$comment": "TeacherPro engine pin. 'pin' is the llama.cpp build tag blessed by the semver release marker (v0.7.0 nightly-tag.txt -> b11669). Bump deliberately per app release; recompute sha256 with: node scripts/fetch-engines.mjs --print-hashes llama-<pin>-bin-win-vulkan-x64.zip ...",
+  "pin": "b11669",
+  "downloadBase": "https://github.com/ggml-org/llama.cpp/releases/download",
+  "platformToVariant": {
+    "win32-x64": "windows-x64-vulkan",
+    "darwin-arm64": "macos-arm64-metal",
+    "darwin-x64": "macos-x64-cpu",
+    "linux-x64": "linux-x64-vulkan"
+  },
+  "engines": {
+    "windows-x64-vulkan": {
+      "asset": "llama-b11669-bin-win-vulkan-x64.zip",
+      "sha256": "2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e",
+      "entry": "llama-server.exe"
+    },
+    "macos-arm64-metal": {
+      "asset": "llama-b11669-bin-macos-arm64.tar.gz",
+      "sha256": "dbed55493d72bc1ba2babc8770d669c2289b5bc4ee9fb2a4dfc158d45b7d13fd",
+      "entry": "llama-server"
+    },
+    "macos-x64-cpu": {
+      "asset": "llama-b11669-bin-macos-x64.tar.gz",
+      "sha256": "cab28238d78158109b48deb27b05d50e0dcef56275d2e76da9ca8281526c7532",
+      "entry": "llama-server"
+    },
+    "linux-x64-vulkan": {
+      "asset": "llama-b11669-bin-ubuntu-vulkan-x64.tar.gz",
+      "sha256": "e8709e5ba6c1b093dea7f3de57f4aba842f9a188fba6b465782d65d6fcfa4d9f",
+      "entry": "llama-server"
+    }
+  }
+}

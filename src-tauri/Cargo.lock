@@ -9,6 +9,7 @@ dependencies = [
  "pdf-extract",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-clipboard-manager",

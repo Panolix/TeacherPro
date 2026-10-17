@@ -12,7 +12,8 @@
     "verify:scrollbars": "node scripts/verify-scrollbars.mjs",
     "verify:i18n": "node scripts/verify-i18n.mjs",
     "verify:typography": "node scripts/verify-typography.mjs",
-    "qa:method-bank": "node scripts/method-bank-qa-checklist.mjs"
+    "qa:method-bank": "node scripts/method-bank-qa-checklist.mjs",
+    "fetch:engines": "node scripts/fetch-engines.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

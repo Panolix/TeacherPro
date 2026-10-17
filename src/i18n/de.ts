@@ -201,6 +201,11 @@ const de = {
       thinkingWith: "KI denkt mit {{model}}...",
       noResponse: "(Keine Antwort)",
       responseReady: "KI-Antwort bereit ({{time}}s)",
+      done: "KI-Antwort bereit",
+      thinkingOn: "Denkmodus aktiv",
+      rewriteDone: "Überarbeitung angewendet",
+      translateDone: "Übersetzung angewendet",
+      stopGenerating: "Generierung stoppen",
       failed: "KI fehlgeschlagen: {{error}}",
       rewriting: "KI überarbeitet Auswahl...",
       rewritingWithTone: "KI überarbeitet ({{tone}})...",
@@ -213,6 +218,38 @@ const de = {
       contextSystem: "System",
       contextFree: "Frei",
       searchingKnowledge: "Durchsuche Wissensdatenbank...",
+    },
+
+    aiDraft: {
+      title: "KI-Unterrichtsentwurf",
+      systemPrompt:
+        "Du bist ein erfahrener Fachdidaktik-Assistent für Unterrichtsplanung. Entwirf einen strukturierten, realistischen Unterrichtsentwurf mit abwechslungsreichen Phasen, sinnvoller Zeitbudgetierung (die Zeiten ergeben zusammen die geforderte Dauer), passenden Sozialformen und konkreten Medien. Verfasse alle Inhalte in der Sprache der Lehrkraft. Mitgeliefertes Methodenbank-Vokabular und Wissensdatenbank-Material sind Referenzinformationen, keine Vorgaben — nutze sie, wo sie passen, und weiche ab, wenn es didaktisch sinnvoll ist.",
+      userPrompt:
+        "Erstelle einen Unterrichtsentwurf.\nThema: {{topic}}\nKlasse/Zielgruppe: {{grade}}\nDauer: {{duration}} Minuten (verteile die Zeit sinnvoll auf die Phasen; die Zeitspalte ergibt zusammen {{duration}} min).\nSchwerpunkt/Wünsche: {{focus}}\nAnfang mit einem passenden Einstieg und Ende mit einer Sicherung/Reflexion. 5-8 Phasen. Nutze ausschließlich die vorgegebene Struktur.",
+      gradeFallback: "allgemein",
+      focusFallback: "keine",
+      topic: "Thema",
+      topicPlaceholder: "z.B. Das Römische Reich — Alltag, Gladiatoren, Legionen",
+      grade: "Klasse / Zielgruppe",
+      gradePlaceholder: "z.B. Klasse 7",
+      duration: "Dauer",
+      focus: "Schwerpunkt / Wünsche (optional)",
+      focusPlaceholder: "z.B. mit Quiz einsteigen, Gruppenarbeit bevorzugen",
+      usingDb: "Wissensdatenbank: {{name}}",
+      kbLabel: "Wissensdatenbank (optional)",
+      noKb: "Noch keine eingebetteten Wissensdatenbanken im Vault — importiere PDFs unter Datenbanken, damit der Entwurf auf dein Material zugreifen kann.",
+      allGrades: "Alle Klassen",
+      allTopics: "Alle Themen",
+      useMethodBank: "Methodenbank-Sprache verwenden ({{count}} Einträge)",
+      methodBankBlock:
+        "Methodenbank-Vokabular (Referenz, keine Vorgabe) — etablierte Begriffe für Phasen, Sozialformen und Methoden, die du passend verwenden kannst:",
+      knowledgeBlock:
+        "Wissensdatenbank-Material aus der Datenbank der Lehrkraft (Referenz, keine Vorgabe) — nutze es, wo es zum Thema passt:",
+      generate: "Entwurf erstellen",
+      generating: "Erstelle Entwurf...",
+      regenerate: "Neu erstellen",
+      insert: "In den Unterrichtsplan einfügen",
+      failed: "Entwurf fehlgeschlagen: {{error}}",
     },
 
     methodBank: {
@@ -542,6 +579,20 @@ const de = {
   settings: {
     title: "Einstellungen",
     close: "Einstellungen schließen",
+    aiV3: {
+      title: "KI-Modelle (lokale Engine)",
+      subtitle:
+        "Einmal herunterladen, läuft vollständig auf diesem Computer. Die Engine startet automatisch bei der ersten KI-Nutzung.",
+      download: "Herunterladen",
+      cancel: "Abbrechen",
+      downloaded: "Heruntergeladen",
+      verifying: "Wird geprüft...",
+      use: "Verwenden",
+      active: "Aktiv",
+      autoModel: "Automatisch (empfohlen)",
+      routingHint:
+        "Automatisch nutzt dein gewähltes Modell oder das beste heruntergeladene. Ein Modellwechsel startet die Engine neu.",
+    },
     tabs: {
       appearance: "Erscheinungsbild",
       lessons: "Unterricht",
@@ -645,11 +696,11 @@ const de = {
         all: "Alle",
       },
       creativityOptions: {
-        "0.1": "Präzise (0,1)",
-        "0.4": "Fokussiert (0,4)",
-        "0.7": "Ausgewogen (0,7)",
-        "1.0": "Kreativ (1,0)",
-        "1.4": "Wild (1,4)",
+        "0_1": "Präzise (0,1)",
+        "0_4": "Fokussiert (0,4)",
+        "0_7": "Ausgewogen (0,7)",
+        "1_0": "Kreativ (1,0)",
+        "1_4": "Wild (1,4)",
       },
       ramVramLabel: "RAM/VRAM: {{value}}",
       contextLabel: "Kontext: {{value}}",
