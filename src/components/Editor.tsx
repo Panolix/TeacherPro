@@ -44,6 +44,8 @@ import { MenuBar } from "./editor/MenuBar";
 import { LessonPdfPreviewModal } from "./editor/LessonPdfPreviewModal";
 import { useLessonPdf } from "./editor/useLessonPdf";
 import { EditorContextMenu } from "./editor/EditorContextMenu";
+import { NotesPanel } from "./editor/NotesPanel";
+import { MethodBankPanel } from "./editor/MethodBankPanel";
 import type { SelectedTextRange, TableContextMenuState } from "./editor/EditorContextMenu";
 import { AiMarkdown } from "./editor/AiMarkdown";
 import { normalizeAiFragmentOutput, parseThinkingFromResponse } from "../utils/aiText";
@@ -63,8 +65,6 @@ import {
   X,
   Brain,
   Trash2,
-  FileText,
-  BookOpen,
   Database,
   Folder,
 } from "lucide-react";
@@ -135,11 +135,6 @@ export function Editor() {
     setSubjectDatabases,
   } = useAppStore();
   const { t } = useTranslation();
-  const getMethodTypeLabel = (type: MethodBankType): string => {
-    if (type === "phase") return t("editor.methodBank.phase");
-    if (type === "socialForm") return t("editor.methodBank.social");
-    return t("editor.methodBank.method");
-  };
   const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
   const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
   const [lessonNotes, setLessonNotes] = useState(activeFileContent?.notes || "");
@@ -162,9 +157,6 @@ export function Editor() {
   const [methodBankItems, setMethodBankItems] = useState<MethodBankItem[]>([]);
   const [methodBankLoading, setMethodBankLoading] = useState(true);
   const [methodBankError, setMethodBankError] = useState<string | null>(null);
-  const [methodBankSearch, setMethodBankSearch] = useState("");
-  const [methodBankTypeFilter, setMethodBankTypeFilter] = useState<MethodBankType | null>(null);
-  const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [draggedMethod, setDraggedMethod] = useState<MethodDropPayload | null>(null);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null);
   const [, setIsEditorDropActive] = useState(false);
@@ -424,7 +416,6 @@ export function Editor() {
         const parsed = parseMethodBankSeed(await response.json());
         if (!isCancelled) {
           setMethodBankItems(parsed);
-          setSelectedMethodId((previous) => previous ?? parsed[0]?.id ?? null);
         }
       } catch (error) {
         if (!isCancelled) {
@@ -1538,38 +1529,6 @@ export function Editor() {
       .then((dbs) => setSubjectDatabases(dbs))
       .catch(() => {});
   }, [chatOpen, vaultPath]);
-
-  const normalizedMethodSearch = methodBankSearch.trim().toLowerCase();
-  const filteredMethodBankItems = methodBankItems.filter((entry) => {
-    if (methodBankTypeFilter && entry.type !== methodBankTypeFilter) {
-      return false;
-    }
-
-    if (!normalizedMethodSearch) {
-      return true;
-    }
-
-    const searchable = `${entry.title}\n${entry.summary}\n${entry.description}\n${entry.duration}\n${entry.tags.join(" ")}`
-      .toLowerCase();
-
-    return searchable.includes(normalizedMethodSearch);
-  });
-
-  useEffect(() => {
-    if (filteredMethodBankItems.length === 0) {
-      setSelectedMethodId(null);
-      return;
-    }
-
-    const hasSelected = filteredMethodBankItems.some((entry) => entry.id === selectedMethodId);
-    if (!hasSelected) {
-      setSelectedMethodId(filteredMethodBankItems[0].id);
-    }
-  }, [filteredMethodBankItems, selectedMethodId]);
-
-  const selectedMethod = selectedMethodId
-    ? filteredMethodBankItems.find((entry) => entry.id === selectedMethodId) || null
-    : null;
 
   const getSlashSuggestions = useCallback(
     (requiredType: string, query: string): MethodBankItem[] => {
@@ -2886,172 +2845,22 @@ export function Editor() {
       />
 
       {/* Notes Panel - Left Side */}
-      <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
-          notesOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex flex-col h-full border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
-          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
-            <FileText className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
-            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">{t("editor.panels.lessonNotes")}</span>
-            <button
-              onClick={() => setLessonNotes("")}
-              title={t("editor.panels.clearNotes")}
-              className={`inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
-                lessonNotes.trim()
-                  ? "text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-red-400"
-                  : "text-[var(--tp-border-strong)] cursor-default pointer-events-none"
-              }`}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setNotesOpen(false)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
-              title={t("editor.panels.closeNotes")}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      <NotesPanel
+        open={notesOpen}
+        notes={lessonNotes}
+        onChange={setLessonNotes}
+        onClose={() => setNotesOpen(false)}
+      />
 
-          <div className="flex-1 p-3 bg-[var(--tp-app-bg)]">
-            <textarea
-              value={lessonNotes}
-              onChange={(event) => setLessonNotes(event.target.value)}
-              className="h-full w-full resize-none overflow-y-auto rounded-lg border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 py-3 text-sm leading-relaxed text-[var(--tp-text-primary)] outline-none focus:border-[var(--tp-accent)] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]"
-            />
-          </div>
-        </div>
-      </div>
+      <MethodBankPanel
+        open={methodBankOpen}
+        onClose={() => setMethodBankOpen(false)}
+        loading={methodBankLoading}
+        error={methodBankError}
+        items={methodBankItems}
+        onInsert={handleInsertMethod}
+      />
 
-      {/* Method Bank Panel - Left Side */}
-      <div
-        className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
-          methodBankOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex h-full flex-col border-r border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] shadow-2xl">
-          <div className="flex shrink-0 items-center gap-2 border-b border-[var(--tp-border-strong)] px-3 py-2">
-            <BookOpen className="h-3.5 w-3.5 shrink-0 text-[var(--tp-accent)]" />
-            <span className="flex-1 truncate text-sm font-semibold text-[var(--tp-text-primary)]">{t("editor.panels.methodBank")}</span>
-            <button
-              onClick={() => setMethodBankOpen(false)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
-              title={t("editor.panels.closeMethodBank")}
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          <div className="shrink-0 space-y-2 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-3">
-            <input
-              type="text"
-              value={methodBankSearch}
-              onChange={(event) => setMethodBankSearch(event.target.value)}
-              placeholder={t("editor.methodBank.searchMethods")}
-              className="h-9 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-sm text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
-            />
-            <div className="flex flex-wrap gap-1.5">
-              {([
-                { key: "phase", label: t("editor.methodBank.phase") },
-                { key: "socialForm", label: t("editor.methodBank.social") },
-                { key: "method", label: t("editor.methodBank.method") },
-              ] as const).map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setMethodBankTypeFilter((previous) => (previous === key ? null : key))}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    methodBankTypeFilter === key
-                      ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/20 text-[var(--tp-accent)]"
-                      : "border-[var(--tp-border-strong)] text-[var(--tp-text-muted)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto bg-[var(--tp-app-bg)] py-3 pl-3 pr-2 [scrollbar-gutter:stable] [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]">
-            {methodBankLoading && (
-              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.loading")}</p>
-            )}
-
-            {!methodBankLoading && methodBankError && (
-              <p className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                {methodBankError}
-              </p>
-            )}
-
-            {!methodBankLoading && !methodBankError && filteredMethodBankItems.length === 0 && (
-              <p className="text-xs text-[var(--tp-text-muted)]">{t("editor.methodBank.noMethodsMatch")}</p>
-            )}
-
-            {!methodBankLoading && !methodBankError && filteredMethodBankItems.length > 0 && (
-              <div className="space-y-1.5">
-                {filteredMethodBankItems.map((entry) => {
-                  const isSelected = selectedMethodId === entry.id;
-                  return (
-                    <button
-                      key={entry.id}
-                      type="button"
-                      draggable={false}
-                      onClick={() => setSelectedMethodId(entry.id)}
-                      onDoubleClick={() => handleInsertMethod(entry)}
-                      title={entry.title}
-                      className={`w-full rounded-md border px-2 py-2 text-left transition-colors ${
-                        isSelected
-                          ? "border-[var(--tp-accent)] bg-[var(--tp-accent)]/15"
-                          : "border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] hover:bg-[var(--tp-bg-4)] hover:border-[var(--tp-accent)]/60"
-                      }`}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="truncate text-[13px] font-semibold text-[var(--tp-text-primary)]">
-                            {entry.title}
-                          </p>
-                          <span className={`shrink-0 text-[11px] font-medium ${METHOD_TYPE_ACCENT[entry.type]}`}>
-                            {getMethodTypeLabel(entry.type)}
-                          </span>
-                        </div>
-                        <p className="mt-0.5 line-clamp-2 text-[12px] text-[var(--tp-text-muted)]">
-                          {entry.summary}
-                        </p>
-                        <p className="mt-1 text-[11px] text-[var(--tp-text-muted)]">{entry.duration}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="shrink-0 border-t border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] p-3">
-            {selectedMethod ? (
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-[var(--tp-text-primary)]">{selectedMethod.title}</p>
-                  <span className={`text-[12px] font-medium ${METHOD_TYPE_ACCENT[selectedMethod.type]}`}>
-                    {getMethodTypeLabel(selectedMethod.type)}
-                  </span>
-                </div>
-                <p className="text-[12px] leading-relaxed text-[var(--tp-text-muted)]">{selectedMethod.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {selectedMethod.tags.map((tag) => (
-                    <span
-                      key={`${selectedMethod.id}-${tag}`}
-                      className="rounded-full border border-[var(--tp-border-strong)] px-2 py-0.5 text-[11px] text-[var(--tp-text-muted)]"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
 
       {/* AI Chat Panel - Left Side */}
       <div
