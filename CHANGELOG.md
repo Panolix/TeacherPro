@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.7.1] - 2026-10-17
+
+### Fixed
+- **Weekly planner dialogs** — "delete all for this day" showed a raw key
+  (`calendar.confirm.moveAllForDate`); key names from code and dictionaries
+  now match. Single-lesson delete no longer prompts; only bulk deletes ask.
+- **Localized dialog buttons** — native confirmations show Ja/Nein in German
+  and Yes/No in English (weekly planner, trash, subject DB).
+- **Missing translation** — `mindmap.emptyFile` added in both languages.
+
+### Improved
+- **Readability pass** — 11px minimum UI text size enforced app-wide,
+  secondary text 12px → 12.5px, brighter muted colors (WCAG AA ~5.2:1),
+  larger/brighter status bar.
+- **Inter UI font** — app chrome uses bundled Inter; paper and mindmaps keep
+  their previous system font stack for unchanged exports.
+- **CI guards** — typography minimum and i18n key parity checks added.
+
+### Internal
+- Planning docs moved to `docs/`, release notes to `release-notes/`, stale
+  duplicate assets removed from the repo root.
+
 ## [2.7.0] - 2026-10-17
 
 ### Fixed
