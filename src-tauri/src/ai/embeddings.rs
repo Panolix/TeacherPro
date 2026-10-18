@@ -16,6 +16,8 @@ use serde::Serialize;
 use tauri::Emitter;
 use tauri::Manager;
 
+use super::lock_unpoisoned;
+
 /// Stored in the SubjectDB `meta` table; changing it triggers a re-index.
 pub const EMBEDDER_ID: &str = "granite-embedding-311m-multilingual-r2-q8";
 
@@ -306,8 +308,9 @@ fn embed_init_lock() -> &'static Mutex<()> {
 }
 
 fn already_ensured(ensured_key: &str) -> bool {
-    let ensured = embed_ensured_static().lock().unwrap();
-    ensured.as_deref() == Some(ensured_key) && embed_model_static().lock().unwrap().is_some()
+    let ensured = lock_unpoisoned(embed_ensured_static());
+    let model_ready = lock_unpoisoned(embed_model_static()).is_some();
+    ensured.as_deref() == Some(ensured_key) && model_ready
 }
 
 /// The bge-m3 era left ~600 MB of ONNX files in the base emb-models dir.
@@ -340,7 +343,7 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
 
     // First caller downloads + builds the session while holding the init lock;
     // concurrent callers block here, then hit the re-check below and return.
-    let _init_guard = embed_init_lock().lock().unwrap();
+    let _init_guard = lock_unpoisoned(embed_init_lock());
     if already_ensured(&ensured_key) {
         return Ok(());
     }
@@ -384,8 +387,8 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to initialize embedding model: {e}"))?;
 
-    *embed_model_static().lock().unwrap() = Some(embedding);
-    *embed_ensured_static().lock().unwrap() = Some(ensured_key);
+    *lock_unpoisoned(embed_model_static()) = Some(embedding);
+    *lock_unpoisoned(embed_ensured_static()) = Some(ensured_key);
     cleanup_legacy_files(app);
     Ok(())
 }
@@ -393,7 +396,7 @@ pub fn ensure_embedder(app: &tauri::AppHandle) -> Result<(), String> {
 /// Embed texts (documents and queries alike — Granite needs no prefixes) into
 /// 768-dim vectors. Blocks the calling thread (spawn_blocking).
 pub fn embed_texts(texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
-    let mut guard = embed_model_static().lock().unwrap();
+    let mut guard = lock_unpoisoned(embed_model_static());
     let model = guard
         .as_mut()
         .ok_or_else(|| "Embedding model not initialized".to_string())?;

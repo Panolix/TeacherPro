@@ -1,7 +1,10 @@
 import { useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { runCloseFlushers } from "./utils/closeFlush";
 import { useAppStore } from "./store";
 
 const ACCENT_COLORS: Record<string, string> = {
@@ -84,10 +87,54 @@ function App() {
     document.documentElement.setAttribute("data-tp-mindmap-paper", "dark");
   }, []);
 
+  // Close coordination with Rust: on a close request Rust prevents the close
+  // and emits `app-close-requested`; we flush pending document saves, then
+  // confirm. Rust force-closes after its grace period if we never confirm.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    let closing = false;
+
+    void getCurrentWindow()
+      .listen("app-close-requested", async () => {
+        if (closing) {
+          return;
+        }
+        closing = true;
+        await runCloseFlushers();
+        try {
+          await invoke("confirm_close_window");
+        } catch (error) {
+          // Let a future close request retry the flush/confirm round-trip.
+          closing = false;
+          console.error("Confirm close failed:", error);
+        }
+      })
+      .then((fn) => {
+        if (disposed) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((error) => {
+        console.error("Could not listen for close requests:", error);
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   return (
     <div className="tp-app-shell flex h-screen w-screen overflow-hidden bg-[#1e1e1e] text-slate-800">
-      <SidebarMinimal />
-      <MainContent />
+      <ErrorBoundary panelName="sidebar">
+        <SidebarMinimal />
+      </ErrorBoundary>
+      <ErrorBoundary panelName="content">
+        <MainContent />
+      </ErrorBoundary>
     </div>
   );
 }

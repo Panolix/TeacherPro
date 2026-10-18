@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 use super::catalog::{self, ModelEntry};
-use super::AiState;
+use super::{lock_unpoisoned, AiState};
 
 pub const DL_QUEUED: &str = "queued";
 pub const DL_DOWNLOADING: &str = "downloading";
@@ -64,7 +64,7 @@ pub struct DownloadProgress {
 }
 
 fn snapshot(job: &DownloadJob) -> DownloadProgress {
-    let p = job.progress.lock().unwrap();
+    let p = lock_unpoisoned(&job.progress);
     DownloadProgress {
         model_id: p.model_id.clone(),
         state: p.status.clone(),
@@ -75,7 +75,7 @@ fn snapshot(job: &DownloadJob) -> DownloadProgress {
 }
 
 fn set_status(job: &DownloadJob, status: &str) {
-    job.progress.lock().unwrap().status = status.to_string();
+    lock_unpoisoned(&job.progress).status = status.to_string();
 }
 
 #[tauri::command]
@@ -105,7 +105,7 @@ pub fn ai_download_model_start(
     }
 
     {
-        let mut guard = state.downloads.lock().unwrap();
+        let mut guard = lock_unpoisoned(&state.downloads);
         if let Some(job) = guard.get(model.id) {
             let snap = snapshot(job);
             if matches!(
@@ -125,7 +125,7 @@ pub fn ai_download_model_start(
     }
 
     let job = {
-        let guard = state.downloads.lock().unwrap();
+        let guard = lock_unpoisoned(&state.downloads);
         guard.get(model.id).unwrap().clone()
     };
 
@@ -143,7 +143,7 @@ pub fn ai_download_model_progress(
     state: tauri::State<'_, AiState>,
     model_id: String,
 ) -> Result<DownloadProgress, String> {
-    let guard = state.downloads.lock().unwrap();
+    let guard = lock_unpoisoned(&state.downloads);
     let job = guard
         .get(&model_id)
         .ok_or_else(|| format!("No download job for: {model_id}"))?;
@@ -155,7 +155,7 @@ pub fn ai_download_model_cancel(
     state: tauri::State<'_, AiState>,
     model_id: String,
 ) -> Result<DownloadProgress, String> {
-    let guard = state.downloads.lock().unwrap();
+    let guard = lock_unpoisoned(&state.downloads);
     let job = guard
         .get(&model_id)
         .ok_or_else(|| format!("No download job for: {model_id}"))?;
@@ -214,7 +214,7 @@ fn run_download(
         }
     }
 
-    let mut p = job.progress.lock().unwrap();
+    let mut p = lock_unpoisoned(&job.progress);
     p.status = DL_COMPLETED.to_string();
     p.received = p.total;
 }
@@ -315,7 +315,7 @@ fn perform_download(
 
         let received = if resumed { existing } else { 0 };
         {
-            let mut p = job.progress.lock().unwrap();
+            let mut p = lock_unpoisoned(&job.progress);
             p.total = base + total;
             p.received = base + received;
         }
@@ -337,7 +337,7 @@ fn perform_download(
             file.write_all(&buffer[..read])
                 .map_err(|e| format!("Write failed: {e}"))?;
             received += read as u64;
-            job.progress.lock().unwrap().received = base + received;
+            lock_unpoisoned(&job.progress).received = base + received;
         }
         drop(reader);
         drop(file);
@@ -384,7 +384,7 @@ fn verify_sha256(file: &PathBuf, expected: &str) -> Result<(), String> {
 }
 
 fn fail(job: &DownloadJob, message: String) {
-    let mut p = job.progress.lock().unwrap();
+    let mut p = lock_unpoisoned(&job.progress);
     if message == "cancelled" {
         p.status = DL_CANCELLED.to_string();
         p.error = None;
@@ -401,7 +401,7 @@ const ENGINE_PACK_KEY: &str = "engine-cuda";
 fn pack_progress(app: &tauri::AppHandle, state: &tauri::State<'_, AiState>) -> DownloadProgress {
     let installed = catalog::cuda_pack_installed(app);
     if installed {
-        if let Some(job) = state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+        if let Some(job) = lock_unpoisoned(&state.downloads).get(ENGINE_PACK_KEY) {
             let snap = snapshot(job);
             if snap.state != DL_CANCELLED {
                 return snap;
@@ -415,7 +415,7 @@ fn pack_progress(app: &tauri::AppHandle, state: &tauri::State<'_, AiState>) -> D
             error: None,
         };
     }
-    match state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+    match lock_unpoisoned(&state.downloads).get(ENGINE_PACK_KEY) {
         Some(job) => snapshot(job),
         None => DownloadProgress {
             model_id: ENGINE_PACK_KEY.to_string(),
@@ -444,7 +444,7 @@ pub fn ai_engine_pack_start(
         return Ok(pack_progress(&app, &state));
     }
     {
-        let mut guard = state.downloads.lock().unwrap();
+        let mut guard = lock_unpoisoned(&state.downloads);
         if let Some(job) = guard.get(ENGINE_PACK_KEY) {
             let snap = snapshot(job);
             if matches!(
@@ -463,10 +463,7 @@ pub fn ai_engine_pack_start(
         );
     }
     let job = {
-        state
-            .downloads
-            .lock()
-            .unwrap()
+        lock_unpoisoned(&state.downloads)
             .get(ENGINE_PACK_KEY)
             .unwrap()
             .clone()
@@ -484,7 +481,7 @@ pub fn ai_engine_pack_cancel(
     app: AppHandle,
     state: tauri::State<'_, AiState>,
 ) -> Result<DownloadProgress, String> {
-    if let Some(job) = state.downloads.lock().unwrap().get(ENGINE_PACK_KEY) {
+    if let Some(job) = lock_unpoisoned(&state.downloads).get(ENGINE_PACK_KEY) {
         job.cancel.store(true, Ordering::Relaxed);
     }
     Ok(pack_progress(&app, &state))
@@ -506,7 +503,7 @@ fn run_engine_pack(dest_dir: PathBuf, pack: &'static catalog::EnginePack, job: D
         fail(&job, e);
         return;
     }
-    let mut p = job.progress.lock().unwrap();
+    let mut p = lock_unpoisoned(&job.progress);
     p.status = DL_COMPLETED.to_string();
     p.received = p.total;
 }

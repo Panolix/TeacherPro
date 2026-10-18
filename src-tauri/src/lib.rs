@@ -1,7 +1,10 @@
 ﻿use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{LazyLock, Mutex};
+use std::time::Duration;
+use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_fs::FsExt;
 
@@ -119,6 +122,134 @@ fn validated_pdf_path(path: &str) -> Result<PathBuf, String> {
     Ok(candidate)
 }
 
+/// Normalized string form of a path for tolerant prefix checks when
+/// canonicalization is not available (exotic mounts, subst drives, network
+/// paths): separators unified, case-folded, trailing separators trimmed.
+#[cfg(windows)]
+fn normalized_path_string(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_lowercase()
+}
+
+#[cfg(not(windows))]
+fn normalized_path_string(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .trim_end_matches('/')
+        .to_string()
+}
+
+/// Whether `child` (any form) denotes a path at or below `parent` (any form).
+/// Used as the fallback when `fs::canonicalize` fails for either side.
+fn path_string_below(child: &Path, parent: &Path) -> bool {
+    let child_str = normalized_path_string(child);
+    let parent_str = normalized_path_string(parent);
+    if parent_str.is_empty() {
+        return false;
+    }
+    child_str == parent_str
+        || child_str.starts_with(&format!("{parent_str}\\"))
+        || child_str.starts_with(&format!("{parent_str}/"))
+}
+
+/// Verify that a frontend-supplied vault directory points at the vault that
+/// was registered via `register_vault_root`. Used by the subject_db commands,
+/// whose target root comes straight from the webview — without this check a
+/// commanded `subject_db_delete` could run `remove_dir_all` under any path
+/// the webview can name.
+pub(crate) fn validated_vault_path(vault_path: &str) -> Result<PathBuf, String> {
+    let candidate = PathBuf::from(vault_path.trim());
+    if !candidate.is_dir() {
+        return Err("Vault path is not a directory.".to_string());
+    }
+
+    let roots: Vec<PathBuf> = match VAULT_ROOT.lock() {
+        Ok(guard) => match guard.as_ref() {
+            Some(root) => vec![
+                root.clone(),
+                std::fs::canonicalize(root).unwrap_or_else(|_| root.clone()),
+            ],
+            None => return Err("No vault is registered yet.".to_string()),
+        },
+        Err(_) => return Err("Vault registry is not accessible.".to_string()),
+    };
+
+    // Preferred: judge against the canonicalized on-disk location (defeats
+    // `..` segments and symlinks). Fallback: normalized string prefixes, so
+    // setups where canonicalize fails keep working.
+    let resolved = std::fs::canonicalize(&candidate).ok();
+    let contained = roots.iter().any(|root| match &resolved {
+        Some(resolved) => resolved.starts_with(root),
+        None => path_string_below(&candidate, root),
+    });
+    if !contained {
+        return Err("Vault path is outside the registered vault.".to_string());
+    }
+    Ok(resolved.unwrap_or(candidate))
+}
+
+/// Whether a path about to be granted to the webview fs scope stays inside
+/// the registered vault root or the OS temp directory. Handles paths that do
+/// not exist yet (about to be created): canonicalizes the deepest existing
+/// ancestor and requires every remaining component to be a plain name —
+/// never `..`, never one containing a path separator.
+fn grant_path_contained(path: &Path) -> bool {
+    let mut base = path.to_path_buf();
+    loop {
+        if base.exists() {
+            break;
+        }
+        match (base.parent(), base.file_name()) {
+            (Some(parent), Some(name)) => {
+                let name_lossy = name.to_string_lossy();
+                if name_lossy == ".." || name_lossy.contains('/') || name_lossy.contains('\\') {
+                    return false;
+                }
+                base = parent.to_path_buf();
+            }
+            _ => return false,
+        }
+    }
+
+    let temp_dir = std::env::temp_dir();
+    if path_below_root(&base, &temp_dir) {
+        return true;
+    }
+
+    if let Ok(guard) = VAULT_ROOT.lock() {
+        if let Some(root) = guard.as_ref() {
+            if path_below_root(&base, root) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Containment check for an existing base path against a root: prefer the
+/// canonicalized comparison, fall back to normalized string prefixes.
+fn path_below_root(base: &Path, root: &Path) -> bool {
+    if let (Ok(resolved), Ok(root_canonical)) =
+        (std::fs::canonicalize(base), std::fs::canonicalize(root))
+    {
+        if resolved.starts_with(&root_canonical) {
+            return true;
+        }
+    }
+    if let Ok(resolved) = std::fs::canonicalize(base) {
+        if resolved.starts_with(root) {
+            return true;
+        }
+    }
+    // Fallback for setups where canonicalize fails on either side.
+    path_string_below(base, root)
+        || std::fs::canonicalize(base)
+            .map(|resolved| resolved.starts_with(root) || path_string_below(&resolved, root))
+            .unwrap_or(false)
+}
+
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -147,12 +278,21 @@ fn allow_fs_scopes(window: tauri::Window, paths: Vec<String>) -> Result<(), Stri
 
         let raw = PathBuf::from(trimmed);
 
+        // Containment: the webview may only grant itself paths inside the
+        // registered vault (or temp). Arbitrary locations the user picked in
+        // a native dialog (PDF export destination, material import source)
+        // are recorded in the fs scope automatically by the dialog plugin,
+        // so this command no longer needs to grant outside the vault — and
+        // therefore no longer can.
+        let canonical = std::fs::canonicalize(&raw).unwrap_or_else(|_| raw.clone());
+        if !grant_path_contained(&canonical) && !grant_path_contained(&raw) {
+            return Err("Path is outside the registered vault.".to_string());
+        }
+
         // Tauri canonicalizes checked paths when they exist but not when they
         // are about to be created, and scope patterns are never canonicalized.
         // Grant both forms so existing and new files work, including paths that
         // contain symlinked components.
-        let canonical = std::fs::canonicalize(&raw).unwrap_or_else(|_| raw.clone());
-
         let grant = |path: &Path| -> Result<(), String> {
             let result = if path.is_dir() {
                 scope.allow_directory(path, true)
@@ -355,6 +495,25 @@ fn migrate_legacy_app_data(app: &tauri::App) {
     }
 }
 
+/// Set by `confirm_close_window` once the webview finished its close flush.
+static CLOSE_CONFIRMED: AtomicBool = AtomicBool::new(false);
+/// Ensures the force-close grace timer runs at most once per close request.
+static CLOSE_GRACE_SPAWNED: AtomicBool = AtomicBool::new(false);
+/// How long a close request waits for the webview flush before force-closing.
+const CLOSE_FLUSH_GRACE: Duration = Duration::from_secs(6);
+
+/// Called by the webview after it flushed pending document saves in response
+/// to `app-close-requested`. Destroys the window (destroy does not emit
+/// another CloseRequested, so the flush cannot loop).
+#[tauri::command]
+fn confirm_close_window(app: tauri::AppHandle) -> Result<(), String> {
+    CLOSE_CONFIRMED.store(true, Ordering::Relaxed);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.destroy();
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -364,6 +523,32 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .on_window_event(|window, event| {
+            // Close coordination: the webview first gets a chance to flush
+            // pending autosaves, then asks back via `confirm_close_window`
+            // (which destroys the window). The grace timer force-closes a
+            // hung webview so the window can always be closed.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                CLOSE_CONFIRMED.store(false, Ordering::Relaxed);
+                let _ = window.emit("app-close-requested", ());
+                if !CLOSE_GRACE_SPAWNED.swap(true, Ordering::Relaxed) {
+                    let handle = window.app_handle().clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(CLOSE_FLUSH_GRACE);
+                        if !CLOSE_CONFIRMED.load(Ordering::Relaxed) {
+                            if let Some(window) = handle.get_webview_window("main") {
+                                let _ = window.destroy();
+                            }
+                        }
+                        CLOSE_GRACE_SPAWNED.store(false, Ordering::Relaxed);
+                    });
+                }
+                // The engine is on its way out with the window — kill it now
+                // (previously the only thing close did).
+                ai::engine::kill_on_exit(window.app_handle());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             open_file_in_default_app,
@@ -371,6 +556,7 @@ pub fn run() {
             register_vault_root,
             allow_fs_scopes,
             print_pdf_file,
+            confirm_close_window,
             subject_db::subject_db_list,
             subject_db::subject_db_scan_import,
             subject_db::subject_db_add_pdfs,
@@ -410,11 +596,8 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            match event {
-                tauri::RunEvent::Exit | tauri::RunEvent::WindowEvent { event: tauri::WindowEvent::CloseRequested { .. }, .. } => {
-                    ai::engine::kill_on_exit(app);
-                }
-                _ => {}
+            if let tauri::RunEvent::Exit = event {
+                ai::engine::kill_on_exit(app);
             }
         });
 }

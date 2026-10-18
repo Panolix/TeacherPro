@@ -316,14 +316,31 @@ interface AppState {
    * Write a complete lesson payload to an explicit path without touching the
    * active-document state. Used by the Editor's switch/unmount flush, which
    * must persist the outgoing lesson even though the store has already moved
-   * to a different active file.
+   * to a different active file. `silent` suppresses the failure alert (used
+   * by the close flush, where a blocking alert could stall the close).
    */
-  saveLessonAtPath: (filePath: string, lessonData: LessonData) => Promise<boolean>;
+  saveLessonAtPath: (
+    filePath: string,
+    lessonData: LessonData,
+    options?: { silent?: boolean },
+  ) => Promise<boolean>;
   openLesson: (fileName: string) => Promise<void>;
   createNewMindmap: (subFolder?: string) => Promise<void>;
   deleteMindmap: (fileName: string) => Promise<void>;
   renameMindmap: (oldFileName: string, newName: string) => Promise<void>;
   saveActiveMindmap: (nodes: any[], edges: any[]) => Promise<void>;
+  /**
+   * Write a complete mindmap payload to an explicit path without touching the
+   * active-document state. Used by the MindmapView switch/unmount/close
+   * flush: those run after the store may already point at a different file,
+   * so the flush must target the outgoing path explicitly.
+   */
+  saveMindmapAtPath: (
+    filePath: string,
+    nodes: any[],
+    edges: any[],
+    options?: { silent?: boolean },
+  ) => Promise<boolean>;
   openMindmap: (fileName: string) => Promise<void>;
   addMaterialFiles: (targetSubFolder?: string) => Promise<string[]>;
   addMaterialDirectory: (targetSubFolder?: string) => Promise<string | null>;
@@ -388,6 +405,57 @@ async function writeTextFileAtomic(path: string, contents: string): Promise<void
       // Best effort — a leftover temp file is harmless.
     }
     await writeTextFile(path, contents);
+  }
+}
+
+/**
+ * Keep two rolling backups of a document before an in-place write replaces
+ * it. Without this, autosave overwrites the only copy — a stray select-all +
+ * delete + autosave would destroy content with no recovery point (the trash
+ * only helps when files are deleted, not when they are overwritten).
+ * Backups live in `<vault>/.teacherpro/document-backups/` keyed by the
+ * vault-relative path (separators flattened). Best-effort: a backup failure
+ * must never block the actual save.
+ */
+async function backupDocumentBeforeWrite(vaultPath: string, filePath: string): Promise<void> {
+  try {
+    if (!(await exists(filePath))) {
+      return;
+    }
+    const previousContent = await readTextFile(filePath);
+
+    const vaultNorm = vaultPath.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+    const fileNorm = filePath.replace(/\\/g, "/");
+    const relativePath = fileNorm.startsWith(vaultNorm)
+      ? fileNorm.slice(vaultNorm.length)
+      : fileNorm;
+    // The readable key flattens separators, but flattening alone can collide
+    // (e.g. "A B.json" vs "A_B.json") — append a short hash of the exact
+    // relative path so every document gets its own backup slots.
+    let hash = 5381;
+    for (let i = 0; i < relativePath.length; i++) {
+      hash = ((hash * 33) ^ relativePath.charCodeAt(i)) >>> 0;
+    }
+    const hashHex = hash.toString(16).padStart(8, "0");
+    const readableKey = relativePath
+      .replace(/[\/\\]/g, "__")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(0, 140);
+
+    const backupsDir = await join(vaultPath, SETTINGS_BACKUP_DIR, "document-backups");
+    await mkdir(backupsDir, { recursive: true });
+    const bak1 = await join(backupsDir, `${readableKey}-${hashHex}.bak-1`);
+    const bak2 = await join(backupsDir, `${readableKey}-${hashHex}.bak-2`);
+
+    if (await exists(bak2)) {
+      await remove(bak2);
+    }
+    if (await exists(bak1)) {
+      await rename(bak1, bak2);
+    }
+    await writeTextFile(bak1, previousContent);
+  } catch (error) {
+    console.warn("Could not create document backup", error);
   }
 }
 
@@ -1062,10 +1130,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
       const savedVault = await store.get<{ path: string }>("vault");
-      await grantVaultScope(savedVault?.path ?? null);
 
-      // Tell the Rust side which vault is active so IPC commands that open or
-      // reveal files can verify the target stays inside it.
+      // Tell the Rust side which vault is active BEFORE granting the fs
+      // scope: the grant command only accepts paths inside the registered
+      // vault, so registration must come first.
       if (savedVault?.path) {
         try {
           await invoke("register_vault_root", { path: savedVault.path });
@@ -1073,6 +1141,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           console.warn("Could not register vault root", error);
         }
       }
+      await grantVaultScope(savedVault?.path ?? null);
+
       const savedSettings = await store.get<Partial<UISettings>>("uiSettings");
       let loadedSettings = savedSettings || null;
 
@@ -1313,12 +1383,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
 
       if (selected && typeof selected === "string") {
-        await grantVaultScope(selected);
         try {
           await invoke("register_vault_root", { path: selected });
         } catch (error) {
           console.warn("Could not register vault root", error);
         }
+        await grantVaultScope(selected);
         set({ vaultPath: selected, activeFilePath: null, activeFileContent: null, currentView: "editor" });
         
         // Save persistent store
@@ -1683,6 +1753,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         finalFileName = extractBaseName(nextPath);
       }
 
+      await backupDocumentBeforeWrite(vaultPath, savePath);
       await writeTextFileAtomic(savePath, JSON.stringify(nextLessonData, null, 2));
 
       if (activeFilePath && sameVaultPath(activeFilePath, sourcePath)) {
@@ -1844,6 +1915,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      await backupDocumentBeforeWrite(vaultPath, savePath);
       await writeTextFileAtomic(savePath, JSON.stringify(newLessonData, null, 2));
 
       // Only touch the active-document state if the user is still on this
@@ -1884,7 +1956,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  saveLessonAtPath: async (filePath: string, lessonData: LessonData): Promise<boolean> => {
+  saveLessonAtPath: async (
+    filePath: string,
+    lessonData: LessonData,
+    options?: { silent?: boolean },
+  ): Promise<boolean> => {
     const { vaultPath } = get();
     if (!vaultPath || !filePath) return false;
 
@@ -1895,6 +1971,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
+      await backupDocumentBeforeWrite(vaultPath, filePath);
       await writeTextFileAtomic(filePath, JSON.stringify(lessonData, null, 2));
 
       // Patch the search indexes when the flushed path lives in Lesson Plans.
@@ -1918,7 +1995,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       return true;
     } catch (error) {
       console.error("Failed to flush lesson save:", error);
-      alertT("alerts.saveLesson", { error: String(error) });
+      if (!options?.silent) {
+        alertT("alerts.saveLesson", { error: String(error) });
+      }
       return false;
     }
   },
@@ -2077,6 +2156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         edges
       };
 
+      await backupDocumentBeforeWrite(vaultPath, activeFilePath);
       await writeTextFileAtomic(activeFilePath, JSON.stringify(newMindmapData, null, 2));
 
       // Only update the active-document state if the user is still on this
@@ -2089,6 +2169,45 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       console.error("Failed to save mindmap:", error);
       alertT("alerts.saveMindmap", { error: String(error) });
+    }
+  },
+
+  saveMindmapAtPath: async (
+    filePath: string,
+    nodes: any[],
+    edges: any[],
+    options?: { silent?: boolean },
+  ): Promise<boolean> => {
+    const { vaultPath } = get();
+    if (!vaultPath || !filePath) return false;
+
+    try {
+      // The outgoing mindmap may have been deleted or renamed in the meantime
+      // — never resurrect a file the user got rid of.
+      if (!(await exists(filePath))) {
+        return false;
+      }
+
+      await backupDocumentBeforeWrite(vaultPath, filePath);
+      await writeTextFileAtomic(
+        filePath,
+        JSON.stringify({ version: 1, nodes, edges } satisfies MindmapData, null, 2),
+      );
+
+      // Echo the saved graph back only if the user is still on this mindmap —
+      // an in-flight flush must never clobber a newly opened file.
+      const currentActivePath = get().activeFilePath;
+      if (currentActivePath && sameVaultPath(currentActivePath, filePath)) {
+        set({ activeMindmapContent: { version: 1, nodes, edges } });
+      }
+      set({ lastSavedAt: Date.now() });
+      return true;
+    } catch (error) {
+      console.error("Failed to flush mindmap save:", error);
+      if (!options?.silent) {
+        alertT("alerts.saveMindmap", { error: String(error) });
+      }
+      return false;
     }
   },
 

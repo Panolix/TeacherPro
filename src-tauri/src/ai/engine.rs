@@ -13,7 +13,7 @@ use tauri::{AppHandle, Manager};
 use uuid::Uuid;
 
 use super::catalog::{self, ModelEntry};
-use super::AiState;
+use super::{lock_unpoisoned, AiState};
 
 pub const STATUS_IDLE: &str = "idle";
 pub const STATUS_STARTING: &str = "starting";
@@ -137,7 +137,7 @@ pub fn snapshot(engine: &EngineState) -> EngineStatus {
 }
 
 fn with_state<T>(state: &tauri::State<'_, AiState>, f: impl FnOnce(&mut EngineState) -> T) -> T {
-    let mut guard = state.engine.lock().unwrap();
+    let mut guard = lock_unpoisoned(&state.engine);
     f(&mut guard)
 }
 
@@ -543,7 +543,7 @@ pub fn kill_on_exit(app: &AppHandle) {
 #[allow(dead_code)]
 pub fn connection(app: &AppHandle) -> Option<(&'static ModelEntry, u16, String)> {
     let state = app.state::<AiState>();
-    let guard = state.engine.lock().unwrap();
+    let guard = lock_unpoisoned(&state.engine);
     if guard.status != STATUS_READY {
         return None;
     }

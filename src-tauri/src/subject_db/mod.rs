@@ -156,6 +156,9 @@ fn read_existing_sources(vault_path: &str, subject: &str, grade: &str, topic: &s
 
 #[tauri::command]
 pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let db_dir = subject_db_dir(&vault_path);
     if !db_dir.exists() { return Ok(Vec::new()); }
 
@@ -266,6 +269,9 @@ pub async fn subject_db_scan_import(
     app: tauri::AppHandle,
     vault_path: String,
 ) -> Result<ImportResult, String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let db_dir = subject_db_dir(&vault_path);
     if !db_dir.exists() {
         std::fs::create_dir_all(&db_dir).map_err(|e| format!("Failed to create SubjectDBs: {e}"))?;
@@ -540,6 +546,9 @@ pub async fn subject_db_add_pdfs(
     topic: Option<String>,
     file_paths: Vec<String>,
 ) -> Result<(), String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let subject = validate_segment(&subject, "subject")?;
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
@@ -586,6 +595,9 @@ pub async fn subject_db_delete_file(
     topic: Option<String>,
     filename: String,
 ) -> Result<(), String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let subject = validate_segment(&subject, "subject")?;
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
@@ -632,6 +644,9 @@ pub async fn subject_db_query(
     query: String,
     top_k: u32,
 ) -> Result<Vec<ScoredChunk>, String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let subject = validate_segment(&subject, "subject")?;
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
@@ -709,6 +724,9 @@ pub async fn subject_db_delete(
     grade: Option<String>,
     topic: Option<String>,
 ) -> Result<(), String> {
+    let vault_path = crate::validated_vault_path(&vault_path)?
+        .to_string_lossy()
+        .to_string();
     let subject = validate_segment(&subject, "subject")?;
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;

@@ -39,6 +39,7 @@ import { UnderlineColor } from "./extensions/UnderlineColor";
 import { formatIsoToEuropeanDate, parseEuropeanDateToDate, parseEuropeanDateToIso } from "../utils/dates";
 import { normalizeColorForPicker } from "../utils/colors";
 import { snapSelectionInsideTextblock } from "../utils/editorSelection";
+import { registerCloseFlusher } from "../utils/closeFlush";
 import { AppLink, WordStyleTextAlign } from "./editor/editorExtensions";
 import { MenuBar } from "./editor/MenuBar";
 import { LessonPdfPreviewModal } from "./editor/LessonPdfPreviewModal";
@@ -730,15 +731,17 @@ export function Editor() {
   }, [clearAutosaveTimer, runAutosave]);
 
   // Flush pending edits for the lesson the editor currently holds. Runs when
-  // the active lesson changes or the editor unmounts — effect cleanup executes
-  // BEFORE the incoming lesson's content is loaded, so the editor still shows
-  // the outgoing document here.
-  const flushPendingAutosave = useCallback(() => {
+  // the active lesson changes, the editor unmounts, or the window is closing
+  // (via the close-flush registry) — effect cleanup executes BEFORE the
+  // incoming lesson's content is loaded, so the editor still shows the
+  // outgoing document here. Returns the write promise so the close flow can
+  // await the flush before destroying the window.
+  const flushPendingAutosave = useCallback((): Promise<boolean> => {
     clearAutosaveTimer();
 
     const outgoingPath = autosavePathRef.current;
     if (!outgoingPath) {
-      return;
+      return Promise.resolve(false);
     }
 
     const inputs = autosaveInputsRef.current;
@@ -756,12 +759,12 @@ export function Editor() {
         plannedFor: effectivePlannedFor ?? null,
       })
     ) {
-      return;
+      return Promise.resolve(false);
     }
 
     const payload = buildAutosavePayload();
     if (!payload || payload.snapshot === lastSavedSnapshotRef.current) {
-      return;
+      return Promise.resolve(false);
     }
 
     const baseMetadata = inputs.baseMetadata ?? {
@@ -784,10 +787,17 @@ export function Editor() {
       content: payload.json,
     };
 
-    void (async () => {
-      await saveLessonAtPath(outgoingPath, lessonData);
-    })();
+    // `silent`: a blocking alert() during app close could stall the flush and
+    // trip the Rust-side force-close timer.
+    return saveLessonAtPath(outgoingPath, lessonData, { silent: true });
   }, [buildAutosavePayload, clearAutosaveTimer, metaIsDirty, saveLessonAtPath]);
+
+  // Register the flush for the window-close flow (App.tsx runs the registry
+  // before confirming the close). Effect re-runs when the flush identity
+  // changes; the registry swap is cheap and idempotent.
+  useEffect(() => {
+    return registerCloseFlusher(() => flushPendingAutosave());
+  }, [flushPendingAutosave]);
 
   // Deps intentionally exclude activeFileContent (matches the original
   // behavior): a save or a re-open of the already-active lesson replaces the

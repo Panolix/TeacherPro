@@ -36,12 +36,22 @@ impl AiState {
     }
 
     pub fn selected(&self) -> Option<String> {
-        let guard = self.selected_model.lock().unwrap();
+        let guard = lock_unpoisoned(&self.selected_model);
         guard.clone()
     }
 
     pub fn set_selected(&self, id: Option<String>) {
-        let mut guard = self.selected_model.lock().unwrap();
+        let mut guard = lock_unpoisoned(&self.selected_model);
         *guard = id;
     }
+}
+
+/// Lock a `Mutex` without poisoning semantics: if a panic happened in some
+/// other thread while the lock was held, recover the (possibly inconsistent)
+/// data instead of panicking in every subsequent caller. A poisoned AI lock
+/// would otherwise permanently brick the engine/downloader/embedder subsystem
+/// for the rest of the session — the data behind these mutexes is always
+/// rebuildable state, so recovery is strictly better than a cascade panic.
+pub(crate) fn lock_unpoisoned<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }

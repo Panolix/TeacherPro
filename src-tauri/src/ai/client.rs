@@ -12,7 +12,7 @@ use tauri::{AppHandle, Manager};
 
 use super::catalog;
 use super::engine::{self, STATUS_READY};
-use super::AiState;
+use super::{lock_unpoisoned, AiState};
 
 const FLUSH_INTERVAL_MS: u128 = 50;
 #[derive(Deserialize, Serialize, Clone)]
@@ -129,9 +129,46 @@ struct ErrorResponse {
     error: serde_json::Value,
 }
 
+/// Resolve the requested model (explicit > selected > auto-downloaded order),
+/// switching the engine if a different model is already loaded. Blocking:
+/// engine startup and model switching wait up to the 120 s health timeout,
+/// so this must only run on the blocking pool (see run_blocking).
+fn prepare_chat_connection(
+    app: &AppHandle,
+    model_id: Option<&str>,
+) -> Result<(&'static catalog::ModelEntry, u16, String), String> {
+    let target = match model_id {
+        Some(id) => Some(catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?),
+        None => {
+            let selected = app.state::<AiState>().selected();
+            selected.as_deref().and_then(catalog::find_model)
+        }
+    };
+    let (_, port, key) = {
+        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
+        match target {
+            Some(want) if want.id != loaded.id => {
+                engine::start_engine(app, Some(want.id), None)?;
+                engine::wait_for_ready(app)?;
+                engine::connection(app).ok_or("Engine connection missing after switch.")?
+            }
+            _ => (loaded, port, key),
+        }
+    };
+    let model = target.unwrap_or_else(|| {
+        engine::connection(app)
+            .map(|(m, _, _)| m)
+            .unwrap_or(catalog::SMOKE_MODEL)
+    });
+    Ok((model, port, key))
+}
+
+/// Async command contract: sync Tauri commands run on the main thread, where
+/// the (up to 120 s) engine-start wait would freeze the UI. The stream itself
+/// already ran on its own thread; the connection setup now does too.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub fn ai_chat(
+pub async fn ai_chat(
     app: AppHandle,
     state: tauri::State<'_, AiState>,
     request_id: String,
@@ -142,37 +179,44 @@ pub fn ai_chat(
     model_id: Option<String>,
 ) -> Result<(), String> {
     let cancel = Arc::new(AtomicBool::new(false));
-    state
-        .stream_cancels
-        .lock()
-        .unwrap()
-        .insert(request_id.clone(), cancel.clone());
+    lock_unpoisoned(&state.stream_cancels).insert(request_id.clone(), cancel.clone());
 
-    // Resolve the requested model (explicit > selected > auto-downloaded order),
-    // switching the engine if a different model is already loaded.
-    let target = match model_id.as_deref() {
-        Some(id) => Some(catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?),
-        None => {
-            let selected = app.state::<AiState>().selected();
-            selected.as_deref().and_then(catalog::find_model)
-        }
+    let prepared = {
+        let app_for_ready = app.clone();
+        run_blocking(move || {
+            prepare_chat_connection(&app_for_ready, model_id.as_deref())
+        })
+        .await?
     };
-    let (_, port, key) = {
-        let (loaded, port, key) = engine::ensure_ready_for_request(&app)?;
-        match target {
-            Some(want) if want.id != loaded.id => {
-                engine::start_engine(&app, Some(want.id), None)?;
-                engine::wait_for_ready(&app)?;
-                engine::connection(&app).ok_or("Engine connection missing after switch.")?
+    let (model, port, key) = prepared;
+
+    // A cancel that arrived while engine prep was running (up to the 120 s
+    // readiness wait) removed the flag — the stream below must not spawn
+    // uncancellable. Emit the same "done/cancelled" terminal event run_stream
+    // would have, so the frontend listener resolves instead of hanging.
+    // (Request ids are unique per call, so an entry being present with a
+    // different Arc cannot happen in practice.)
+    {
+        let cancels = lock_unpoisoned(&state.stream_cancels);
+        let present = cancels.get(&request_id);
+        match present {
+            Some(_) => {}
+            None => {
+                emit_event(
+                    &app,
+                    &request_id,
+                    StreamEvent {
+                        kind: "done".into(),
+                        text: None,
+                        usage: None,
+                        finish: None,
+                        error: Some("cancelled".into()),
+                    },
+                );
+                return Ok(());
             }
-            _ => (loaded, port, key),
         }
-    };
-    let model = target.unwrap_or_else(|| {
-        engine::connection(&app)
-            .map(|(m, _, _)| m)
-            .unwrap_or(catalog::SMOKE_MODEL)
-    });
+    }
 
     let body = build_chat_body(
         model.id,
@@ -196,7 +240,7 @@ pub fn ai_chat(
 /// Drop the cancel flag → thread closes the connection → server aborts the slot.
 #[tauri::command]
 pub fn ai_chat_cancel(state: tauri::State<'_, AiState>, request_id: String) -> Result<(), String> {
-    if let Some(cancel) = state.stream_cancels.lock().unwrap().remove(&request_id) {
+    if let Some(cancel) = lock_unpoisoned(&state.stream_cancels).remove(&request_id) {
         cancel.store(true, Ordering::Relaxed);
     }
     Ok(())
@@ -309,7 +353,7 @@ fn run_stream(
 fn cleanup_stream(app: &AppHandle, request_id: &str, cancel: &Arc<AtomicBool>) {
     cancel.store(true, Ordering::Relaxed);
     if let Some(ai) = app.try_state::<AiState>() {
-        ai.stream_cancels.lock().unwrap().remove(request_id);
+        lock_unpoisoned(&ai.stream_cancels).remove(request_id);
     }
 }
 
@@ -356,8 +400,26 @@ pub struct GenerateResult {
 }
 
 #[tauri::command]
-pub fn ai_generate_text_v2(
+/// One-shot (non-streaming) generation. Async contract: the request waits up
+/// to the 600 s HTTP timeout, and sync Tauri commands run on the main thread
+/// — that would freeze the whole UI for the duration of every rewrite/manual
+/// draft. The blocking work therefore runs on the blocking pool instead.
+pub async fn ai_generate_text_v2(
     app: AppHandle,
+    model_id: Option<String>,
+    prompt: String,
+    system_prompt: Option<String>,
+    temperature: Option<f64>,
+    max_tokens: Option<u32>,
+) -> Result<GenerateResult, String> {
+    run_blocking(move || {
+        generate_text_sync(&app, model_id, prompt, system_prompt, temperature, max_tokens)
+    })
+    .await
+}
+
+fn generate_text_sync(
+    app: &AppHandle,
     model_id: Option<String>,
     prompt: String,
     system_prompt: Option<String>,
@@ -373,7 +435,7 @@ pub fn ai_generate_text_v2(
                 .and_then(catalog::find_model)
                 .or_else(|| {
                     catalog::auto_start_order().find(|m| {
-                        catalog::model_file_path(&app, m)
+                        catalog::model_file_path(app, m)
                             .map(|p| p.is_file())
                             .unwrap_or(false)
                     })
@@ -382,10 +444,10 @@ pub fn ai_generate_text_v2(
         }
     };
 
-    let (model, port, key) = engine::ensure_ready_for_request(&app)?;
+    let (model, port, key) = engine::ensure_ready_for_request(app)?;
     if model.id != target_model.id {
-        engine::start_engine(&app, Some(target_model.id), None)?;
-        engine::wait_for_ready(&app)?;
+        engine::start_engine(app, Some(target_model.id), None)?;
+        engine::wait_for_ready(app)?;
     }
 
     let mut messages = Vec::new();
@@ -476,14 +538,21 @@ fn strip_think_fallback(text: &str) -> String {
 #[tauri::command]
 pub fn ai_generate_ready(app: AppHandle) -> Result<bool, String> {
     let ai = app.state::<AiState>();
-    let guard = ai.engine.lock().unwrap();
+    let guard = lock_unpoisoned(&ai.engine);
     Ok(guard.status == STATUS_READY)
 }
 
 /// Exact token counts via the engine tokenizer (replaces chars÷4 estimates).
+/// Async contract: a single call issues one tokenize request per input text
+/// with a 60 s timeout each — on the main thread that would freeze the UI for
+/// the whole batch, so the serial loop runs on the blocking pool.
 #[tauri::command]
-pub fn ai_count_tokens(app: AppHandle, texts: Vec<String>) -> Result<Vec<u64>, String> {
-    let (model, port, key) = engine::ensure_ready_for_request(&app)?;
+pub async fn ai_count_tokens(app: AppHandle, texts: Vec<String>) -> Result<Vec<u64>, String> {
+    run_blocking(move || count_tokens_sync(&app, texts)).await
+}
+
+fn count_tokens_sync(app: &AppHandle, texts: Vec<String>) -> Result<Vec<u64>, String> {
+    let (model, port, key) = engine::ensure_ready_for_request(app)?;
     let url = format!("http://127.0.0.1:{port}/tokenize");
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))
@@ -515,12 +584,29 @@ pub fn ai_count_tokens(app: AppHandle, texts: Vec<String>) -> Result<Vec<u64>, S
 
 /// Grammar-enforced structured generation: the model cannot produce output
 /// that violates `schema` (llama-server compiles it to a GBNF grammar).
+/// Async contract: like generation, this blocks up to the 600 s HTTP timeout,
+/// so the work runs on the blocking pool off the main thread.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 #[allow(unused_variables)]
-pub fn ai_structured(
+pub async fn ai_structured(
     app: AppHandle,
     _request_id: String,
+    messages: Vec<ChatMsg>,
+    schema: serde_json::Value,
+    temperature: Option<f64>,
+    max_tokens: Option<u32>,
+    model_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    run_blocking(move || {
+        structured_sync(&app, messages, schema, temperature, max_tokens, model_id)
+    })
+    .await
+}
+
+#[allow(unused_variables)]
+fn structured_sync(
+    app: &AppHandle,
     messages: Vec<ChatMsg>,
     schema: serde_json::Value,
     temperature: Option<f64>,
@@ -535,12 +621,12 @@ pub fn ai_structured(
         }
     };
     let (model, port, key) = {
-        let (loaded, port, key) = engine::ensure_ready_for_request(&app)?;
+        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
         match target {
             Some(want) if want.id != loaded.id => {
-                engine::start_engine(&app, Some(want.id), None)?;
-                engine::wait_for_ready(&app)?;
-                engine::connection(&app).ok_or("Engine connection missing after switch.")?
+                engine::start_engine(app, Some(want.id), None)?;
+                engine::wait_for_ready(app)?;
+                engine::connection(app).ok_or("Engine connection missing after switch.")?
             }
             _ => (loaded, port, key),
         }

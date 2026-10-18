@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.9.0] - 2026-10-18
+
+### Fixed
+- **UI no longer freezes during AI** — AI chat, rewrites, drafts and token
+  counting ran as synchronous commands on the main thread and blocked the
+  whole window for their duration (up to the 120 s engine-start wait or the
+  600 s generation timeout). All four commands now run on the blocking pool.
+- **Closing the window can no longer lose edits** — the last autosave window
+  (up to 1.8 s of typing) was discarded on close. The window now stays open
+  while pending saves flush, then closes; a safety timer force-closes a hung
+  webview after 6 s.
+- **A crashed panel no longer white-screens the app** — React error bounds
+  now wrap the sidebar, the content area and the app root; a crashed panel
+  shows a "Try again / Reload" card instead of a blank window.
+- **Cancelling AI while the engine was still starting** left the chat waiting
+  forever; the cancel is now honoured and the chat resolves immediately.
+
+### Added
+- **Mindmap autosave** — mindmaps save automatically 1.8 s after the last
+  change, mirroring the lesson editor. The save button still works; the
+  flush also runs when switching views, switching mindmaps and on app close.
+- **Mindmap undo/redo** — Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) for add, delete,
+  connect, colour and rename operations (50 steps). Text inputs keep their
+  native undo.
+- **Rolling document backups** — before every in-place lesson or mindmap
+  write, the previous version is copied to
+  `<vault>/.teacherpro/document-backups/` (`<name>.bak-1`, `.bak-2`).
+  Accidental select-all + delete + autosave is now recoverable.
+
+### Improved
+- **Hardened sandbox** — the webview can no longer grant itself filesystem
+  access outside the vault (or temp). Native file dialogs still work
+  everywhere because picked paths are recorded automatically by the dialog
+  plugin; all knowledge-base commands now additionally verify the vault root
+  against the registered vault on the Rust side.
+- **Panic-proof AI subsystem** — a panic while an AI lock was held no longer
+  permanently bricks engine/downloads/embeddings for the session; locks
+  recover instead of cascading.
+- **Recent list** — the "Verlauf löschen" text button is now the same trash
+  icon used in the trash header.
+
+### Internal
+- Version drift fix: release automation now syncs versions from the tag, and
+  this release is the first tagged with repo and release in agreement.
+
 ## [2.7.1] - 2026-10-17
 
 ### Fixed

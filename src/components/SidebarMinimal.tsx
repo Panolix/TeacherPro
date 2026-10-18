@@ -1403,10 +1403,11 @@ export function SidebarMinimal() {
                 {recents.length > 0 && (
                   <button
                     onClick={clearRecents}
-                    className="text-[11px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] transition-colors"
+                    aria-label={t('sidebar.tooltips.clearRecents')}
                     title={t('sidebar.tooltips.clearRecents')}
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[var(--tp-text-muted)] hover:text-red-400 hover:bg-red-900/20 transition-colors"
                   >
-                    {t('sidebar.recent.clear')}
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 )}
               </div>

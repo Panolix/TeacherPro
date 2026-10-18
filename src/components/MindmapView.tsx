@@ -33,6 +33,7 @@ import {
   savePdfToVault,
 } from "../utils/pdfExport";
 import { buildContextMenuClassName, clampContextMenuPosition } from "../utils/contextMenu";
+import { registerCloseFlusher } from "../utils/closeFlush";
 import { type as osType } from "@tauri-apps/plugin-os";
 
 type ContextTarget =
@@ -311,7 +312,7 @@ function findAvailablePosition(
 export function MindmapView() {
   const {
     activeMindmapContent,
-    saveActiveMindmap,
+    saveMindmapAtPath,
     activeFilePath,
     createNewMindmap,
     vaultPath,
@@ -354,6 +355,166 @@ export function MindmapView() {
   const lastSavedNodesRef = useRef<Node[] | null>(null);
   const lastSavedEdgesRef = useRef<Edge[] | null>(null);
 
+  // ── Autosave machinery (mirrors the lesson editor) ──
+  // Mindmaps previously only saved via the explicit save button, so a crash
+  // or hard window close discarded every unsaved node edit.
+  const nodesRef = useRef<Node[]>([]);
+  const edgesRef = useRef<Edge[]>([]);
+  useEffect(() => {
+    nodesRef.current = nodes;
+    edgesRef.current = edges;
+  });
+  const mindmapSaveTimerRef = useRef<number | null>(null);
+  const mindmapDirtyRef = useRef(false);
+  // Serialized graph state that matches the last persisted version (updated
+  // on load, on save, and on flush) — the dirty check compares against it.
+  const mindmapSnapshotRef = useRef<string>("");
+  // The vault path whose graph the component currently holds (bound at load,
+  // like the lesson editor's autosavePathRef). Flushes must target this path —
+  // reading the live store during a switch would write the outgoing graph
+  // into the incoming document.
+  const mindmapPathRef = useRef<string | null>(null);
+
+  const flushMindmapAutosave = useCallback((): Promise<boolean> => {
+    if (mindmapSaveTimerRef.current !== null) {
+      window.clearTimeout(mindmapSaveTimerRef.current);
+      mindmapSaveTimerRef.current = null;
+    }
+    // The flush target is the path this component's graph belongs to (bound
+    // at load, like the lesson editor's autosavePathRef) — NOT the store's
+    // live activeFilePath, which may already point at a different document
+    // when this flush runs on a switch/unmount/close.
+    const path = mindmapPathRef.current;
+    if (!path || !mindmapDirtyRef.current) {
+      return Promise.resolve(false);
+    }
+    const nodesSnapshot = nodesRef.current;
+    const edgesSnapshot = edgesRef.current;
+    const snapshot = JSON.stringify({ nodes: nodesSnapshot, edges: edgesSnapshot });
+    if (snapshot === mindmapSnapshotRef.current) {
+      mindmapDirtyRef.current = false;
+      return Promise.resolve(false);
+    }
+    // Pre-register the echo guard so the store's echo of THIS save is
+    // recognized by the sync effect (mirrors handleSave below).
+    lastSavedNodesRef.current = nodesSnapshot;
+    lastSavedEdgesRef.current = edgesSnapshot;
+    return saveMindmapAtPath(path, nodesSnapshot, edgesSnapshot, { silent: true }).then((ok) => {
+      if (ok) {
+        mindmapSnapshotRef.current = snapshot;
+        mindmapDirtyRef.current = false;
+      }
+      return ok;
+    });
+  }, [saveMindmapAtPath]);
+
+  // Keep the flush target bound to the live active path (renames move it);
+  // bound here — like the lesson editor's autosavePathRef — so flushes never
+  // write the outgoing graph into a different document.
+  useEffect(() => {
+    if (mindmapPathRef.current !== activeFilePath) {
+      mindmapPathRef.current = activeFilePath;
+    }
+  }, [activeFilePath]);
+
+  // Register the flush for the window-close flow (App.tsx runs the registry
+  // before confirming the close).
+  useEffect(() => {
+    return registerCloseFlusher(() => flushMindmapAutosave());
+  }, [flushMindmapAutosave]);
+
+  // Flush the outgoing mindmap when switching views, switching mindmaps, or
+  // unmounting. Cleanups run before any new effects load the incoming graph,
+  // so the refs still hold the outgoing document here.
+  useEffect(() => {
+    return () => {
+      void flushMindmapAutosave();
+    };
+  }, [activeFilePath, flushMindmapAutosave]);
+
+  // ── Undo/redo for graph mutations ──
+  // Structural edits (add/delete/connect/color/rename, Delete-key removal)
+  // snapshot the pre-mutation graph onto the past stack; undo moves the live
+  // graph to the future stack and applies the past top (and vice versa), so
+  // every step restores exactly one mutation. Position drags are intentionally
+  // not snapshotted (noisy, non-destructive).
+  const pastRef = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const futureRef = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const HISTORY_LIMIT = 50;
+
+  const pushHistory = useCallback(() => {
+    // Deleting a node fires remove changes for both nodes and edges in the
+    // same synchronous pass — both handlers would push the identical
+    // pre-mutation graph, making the first undo a no-op. Skip duplicates by
+    // comparing against the last pushed snapshot.
+    const last = pastRef.current[pastRef.current.length - 1];
+    if (last && last.nodes === nodesRef.current && last.edges === edgesRef.current) {
+      return;
+    }
+    pastRef.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    if (pastRef.current.length > HISTORY_LIMIT) {
+      pastRef.current.shift();
+    }
+    // A new mutation invalidates everything that could have been redone.
+    futureRef.current = [];
+  }, []);
+
+  const undo = useCallback(() => {
+    const entry = pastRef.current.pop();
+    if (!entry) {
+      return;
+    }
+    futureRef.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    setNodes(entry.nodes);
+    setEdges(entry.edges);
+    // An undo changes the graph — it must persist like any other edit.
+    mindmapDirtyRef.current = true;
+  }, []);
+
+  const redo = useCallback(() => {
+    const entry = futureRef.current.pop();
+    if (!entry) {
+      return;
+    }
+    pastRef.current.push({ nodes: nodesRef.current, edges: edgesRef.current });
+    setNodes(entry.nodes);
+    setEdges(entry.edges);
+    mindmapDirtyRef.current = true;
+  }, []);
+
+  // Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z). Ignored while typing in inputs or
+  // the node-rename field so text editing keeps its native undo behavior.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "z") {
+        event.preventDefault();
+        if (event.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      } else if (key === "y") {
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   // Sync state when active file changes
   useEffect(() => {
     if (activeMindmapContent) {
@@ -367,15 +528,50 @@ export function MindmapView() {
       }
       lastSavedNodesRef.current = null;
       lastSavedEdgesRef.current = null;
+      mindmapPathRef.current = activeFilePath;
       setNodes(activeMindmapContent.nodes || []);
       setEdges(activeMindmapContent.edges || []);
+      // Seed the dirty-check baseline with the loaded content and reset the
+      // undo history — a freshly opened mindmap has nothing to undo.
+      mindmapSnapshotRef.current = JSON.stringify({
+        nodes: activeMindmapContent.nodes || [],
+        edges: activeMindmapContent.edges || [],
+      });
+      mindmapDirtyRef.current = false;
+      pastRef.current = [];
+      futureRef.current = [];
     } else {
       lastSavedNodesRef.current = null;
       lastSavedEdgesRef.current = null;
+      mindmapPathRef.current = null;
       setNodes([]);
       setEdges([]);
+      mindmapSnapshotRef.current = "";
+      mindmapDirtyRef.current = false;
+      pastRef.current = [];
+      futureRef.current = [];
     }
   }, [activeMindmapContent]);
+
+  // Debounced autosave: schedule 1.8s after the last graph mutation, mirroring
+  // the lesson editor's cadence. Skips load/echo passes via the snapshot.
+  useEffect(() => {
+    if (!activeFilePath) {
+      return;
+    }
+    const snapshot = JSON.stringify({ nodes, edges });
+    if (snapshot === mindmapSnapshotRef.current) {
+      return;
+    }
+    mindmapDirtyRef.current = true;
+    if (mindmapSaveTimerRef.current !== null) {
+      window.clearTimeout(mindmapSaveTimerRef.current);
+    }
+    mindmapSaveTimerRef.current = window.setTimeout(() => {
+      mindmapSaveTimerRef.current = null;
+      void flushMindmapAutosave();
+    }, 1800);
+  }, [nodes, edges, activeFilePath, flushMindmapAutosave]);
 
   useEffect(() => {
     const closeContextMenu = () => setContextMenu(null);
@@ -458,12 +654,22 @@ export function MindmapView() {
   }, [contextMenu, nodes]);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<Node>[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
-    [],
+    (changes: NodeChange<Node>[]) => {
+      if (changes.some((change) => change.type === "remove")) {
+        pushHistory();
+      }
+      setNodes((nds) => applyNodeChanges(changes, nds));
+    },
+    [pushHistory],
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<Edge>[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
-    [],
+    (changes: EdgeChange<Edge>[]) => {
+      if (changes.some((change) => change.type === "remove")) {
+        pushHistory();
+      }
+      setEdges((eds) => applyEdgeChanges(changes, eds));
+    },
+    [pushHistory],
   );
   const onConnect = useCallback((params: Connection) => {
     if (!params.source || !params.target) {
@@ -474,6 +680,7 @@ export function MindmapView() {
       return;
     }
 
+    pushHistory();
     setEdges((existing) => {
       const duplicate = existing.some(
         (edge) => edge.source === params.source && edge.target === params.target,
@@ -492,15 +699,24 @@ export function MindmapView() {
         existing,
       );
     });
-  }, []);
+  }, [pushHistory]);
 
   const handleSave = () => {
+    if (!activeFilePath) {
+      return;
+    }
+    const snapshot = JSON.stringify({ nodes, edges });
     lastSavedNodesRef.current = nodes;
     lastSavedEdgesRef.current = edges;
-    saveActiveMindmap(nodes, edges);
+    void saveMindmapAtPath(activeFilePath, nodes, edges).then((ok) => {
+      if (ok) {
+        mindmapSnapshotRef.current = snapshot;
+      }
+    });
   };
 
   const addNodeAt = useCallback((preferredPosition?: { x: number; y: number }) => {
+    pushHistory();
     setNodes((existing) => {
       const position = findAvailablePosition(preferredPosition, existing);
       const newNode: Node = {
@@ -512,7 +728,7 @@ export function MindmapView() {
 
       return existing.concat(newNode);
     });
-  }, []);
+  }, [pushHistory]);
 
   const handleAddNode = () => {
     addNodeAt();
@@ -822,6 +1038,7 @@ export function MindmapView() {
 
   const saveEdit = () => {
     if (editingNodeId && editValue.trim() !== "") {
+      pushHistory();
       setNodes((nds) =>
         nds.map((n) => {
           if (n.id === editingNodeId) {
@@ -905,6 +1122,7 @@ export function MindmapView() {
       style: { ...NODE_STYLE },
     };
 
+    pushHistory();
     setNodes((existing) => existing.concat(newNode));
     setEdges((existing) =>
       addEdge(
@@ -951,6 +1169,7 @@ export function MindmapView() {
     }
 
     const { nodeId } = contextMenu.target;
+    pushHistory();
     setNodes((existing) => existing.filter((node) => node.id !== nodeId));
     setEdges((existing) =>
       existing.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
@@ -964,6 +1183,7 @@ export function MindmapView() {
     }
 
     const { nodeId } = contextMenu.target;
+    pushHistory();
     setNodes((existing) =>
       existing.map((node) => {
         if (node.id !== nodeId) {
