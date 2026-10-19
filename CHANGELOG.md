@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.9.1] - 2026-10-19
+
+### Fixed
+- **Models can be removed from disk** — Settings → AI Features now has a
+  delete action for downloaded models. It confirms first, unloads the engine if
+  that model is running, clears the active selection, and removes the GGUF,
+  partial download and optional MTP draft files.
+- **"Use" routes both AI tasks** — activating a model now sets both the chat
+  model and the rewrite/translate model instead of leaving the latter on
+  "Automatic".
+- **Knowledge-base scope no longer leaks between lessons** — opening a new or
+  different lesson clears the previous DB selection; save-driven renames of the
+  same lesson keep it. The draft generator resets too.
+- **Citation chips are visible** — they used an undefined `--tp-text-secondary`
+  variable and rendered dark-on-dark until selected. The variable is fixed, and
+  source chips now only list excerpts actually sent to the model.
+- **OCR page order** — scanned PDF pages are sorted numerically, so page 10 no
+  longer comes before page 2 and later citations point at the correct page.
+- **Top-bar label toggle** — "Aktionsbutton-Beschriftungen anzeigen" now
+  actually hides/shows the editor action labels.
+- **Target-model context budget** — chat now resolves the real context window
+  of the model that will serve the request, reserves output tokens and trims
+  history to fit. The previous hardcoded 32k cap and fake context-growth logic
+  are gone.
+
+### Improved
+- **Unified teacher-assistant prompt** — lesson questions, general questions
+  and source-grounded research are handled by one prompt; replies follow the
+  user's language instead of forcing German.
+- **Retrieval contract** — the model receives a language-neutral
+  `<knowledge_base>` block with explicit `found`, `no_matches` or
+  `search_failed` state and a consistent `[file, p.N]` citation format.
+- **Context bar** — now includes the question segment and uses the real total
+  context for segment widths.
+
 ## [2.9.0] - 2026-10-18
 
 ### Fixed
