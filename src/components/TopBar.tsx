@@ -224,6 +224,7 @@ function TopAct({
   iconOnly?: boolean;
   disabled?: boolean;
 }) {
+  const showActionButtonLabels = useAppStore((s) => s.showActionButtonLabels);
   const isAccent = Boolean(primary || active);
   return (
     <button
@@ -240,7 +241,7 @@ function TopAct({
       }}
     >
       {icon}
-      {!iconOnly && label && (
+      {!iconOnly && label && showActionButtonLabels && (
         <span className="hidden @min-[1000px]:inline">{label}</span>
       )}
     </button>

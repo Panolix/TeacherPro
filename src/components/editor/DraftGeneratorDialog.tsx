@@ -316,7 +316,7 @@ export function DraftGeneratorDialog({
             />
           </label>
           <div>
-            <span className="text-[13px] font-medium" style={{ color: "var(--tp-text-secondary)" }}>
+            <span className="text-[13px] font-medium" style={{ color: "var(--tp-text-soft)" }}>
               {t("editor.aiDraft.kbLabel")}
             </span>
             {subjectDatabases.length > 0 ? (
@@ -358,7 +358,7 @@ export function DraftGeneratorDialog({
             <div className="rounded-lg border p-3" style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-bg-2)" }}>
               <div className="text-[13px] font-semibold text-[var(--tp-text-primary)]">{result.title}</div>
               {result.objectives.length > 0 && (
-                <ul className="mt-2 list-disc pl-5 text-[12.5px] text-[var(--tp-text-secondary)]">
+                <ul className="mt-2 list-disc pl-5 text-[12.5px] text-[var(--tp-text-soft)]">
                   {result.objectives.map((o, i) => (
                     <li key={`obj-${i}`}>{o}</li>
                   ))}

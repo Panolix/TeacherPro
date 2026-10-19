@@ -75,6 +75,19 @@ interface SlashMenuState {
   selectedIndex: number;
 }
 
+// Conservative ratio for German/English: exact counts from the engine
+// tokenizer replace this where available.
+const CHARS_PER_TOKEN_ESTIMATE = 3.5;
+const MAX_LESSON_CONTEXT_CHARS = 500_000;
+
+function escapeXmlAttr(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 
 /**
  * Split a raw model response into thinking content and actual response.
@@ -377,6 +390,9 @@ export function Editor() {
   // Per-lesson chat cache for session-level persistence.
   const chatStoreRef = useRef<Record<string, AiChatMessage[]>>({});
   const prevFilePathRef = useRef<string | null>(null);
+  const prevLessonCreatedAtRef = useRef<string | null>(
+    activeFileContent?.metadata?.createdAt ?? null,
+  );
 
   // Save/restore chat messages when the active lesson changes.
   useEffect(() => {
@@ -388,6 +404,22 @@ export function Editor() {
       if (prevPath && aiPersistChats) {
         chatStoreRef.current[prevPath] = chatMessages;
       }
+      // A path change can also be a save-driven rename of the *same* lesson.
+      // Only reset the knowledge-base scope when the lesson actually changed.
+      const nextCreatedAt = activeFileContent?.metadata?.createdAt ?? null;
+      const sameLesson = Boolean(
+        prevLessonCreatedAtRef.current &&
+          nextCreatedAt &&
+          prevLessonCreatedAtRef.current === nextCreatedAt,
+      );
+      if (!sameLesson) {
+        setActiveChatDb(null);
+        setActiveChatGrade(null);
+        setActiveChatTopic(null);
+        setActiveChatFile(null);
+        ragChunksRef.current = [];
+      }
+      prevLessonCreatedAtRef.current = nextCreatedAt;
       // Restore or clear messages for the new lesson.
       if (nextPath && aiPersistChats && chatStoreRef.current[nextPath]) {
         setChatMessages(chatStoreRef.current[nextPath]);
@@ -1325,7 +1357,10 @@ export function Editor() {
     const structured = nodeToText(editor.getJSON()).trim();
 
     // Cap lesson context to preserve room for metadata + history + user prompt.
-    const safeMaxChars = Math.max(5000, Math.min(10000, Math.floor(maxChars)));
+    const safeMaxChars = Math.max(
+      1000,
+      Math.min(MAX_LESSON_CONTEXT_CHARS, Math.floor(maxChars)),
+    );
     const body = structured.length <= safeMaxChars
       ? structured
       : `${structured.slice(0, safeMaxChars)}\n\n[Content truncated at ${safeMaxChars} characters]`;
@@ -1333,9 +1368,10 @@ export function Editor() {
     return body || "(no body content yet)";
   }, [editor]);
 
-  // Token estimation (1 token ≈ 4 chars for German/English)
+  // Token estimation (conservative ratio for German/English; exact counts are
+  // fetched from the engine tokenizer when available).
   const estimateTokens = useCallback((str: string): number => {
-    return Math.ceil(str.length / 4);
+    return Math.ceil(str.length / CHARS_PER_TOKEN_ESTIMATE);
   }, []);
 
   const handleSubmitChat = useCallback(async (overrideText?: string) => {
@@ -1362,18 +1398,70 @@ export function Editor() {
     setAiStatusMessage(t("editor.chat.thinkingOn"));
 
     try {
-      // v3: engine context comes from the live engine status; exact token
-      // counts from /tokenize when the engine is reachable.
-      let maxNumCtx = 16384;
+      // Resolve the model that will actually serve this request (explicit >
+      // selected > auto), so budgeting uses its real context window rather
+      // than the model currently loaded in the engine.
+      let modelNumCtx = 16384;
+      let modelSupportsThinkingNow = modelSupportsThinking;
       try {
-        const engine = await tauriInvoke<{ ctx: number | null }>("ai_engine_status");
-        if (engine.ctx && engine.ctx > 0) maxNumCtx = engine.ctx;
+        const info = await tauriInvoke<{
+          id: string | null;
+          numCtx: number;
+          supportsThinking: boolean;
+        }>("ai_effective_model", { modelId: aiV3ChatModelId ?? null });
+        if (info.numCtx > 0) modelNumCtx = info.numCtx;
+        modelSupportsThinkingNow = info.supportsThinking;
       } catch {
-        /* engine idle — keep default */
+        /* fall back to conservative defaults */
       }
-      const modelMaxCtx = 32768;
-      const chatContextCharLimit = Math.max(5000, Math.floor(maxNumCtx * 0.6));
-      const contextText = buildLessonContextText(chatContextCharLimit);
+
+      // Thinking mode needs room for reasoning plus the answer. Reserve at
+      // most 40% of the window for output and keep the server's 8192 cap.
+      // This is only an upper bound: the model decides how much it needs.
+      const thinkMode = aiThinkingEnabled && modelSupportsThinkingNow;
+      const desiredNumPredict = thinkMode ? 8192 : 4096;
+      const effectiveNumPredict = Math.max(
+        512,
+        Math.min(desiredNumPredict, 8192, Math.floor(modelNumCtx * 0.4)),
+      );
+      const promptBudget = Math.max(1024, modelNumCtx - effectiveNumPredict - 256);
+
+      const effectiveSystemPrompt = aiSystemPrompt || t("aiPrompts.chatSystem");
+
+      // Build conversation history (capped at the configured limit, then by
+      // tokens so a long conversation cannot starve the lesson/RAG budget).
+      const historyCandidates = chatMessages.slice(-aiChatHistoryLimit);
+      const systemTokens = estimateTokens(effectiveSystemPrompt);
+      const userTokens = estimateTokens(userText);
+      const maxHistoryTokens = Math.floor(promptBudget * 0.25);
+      const recentMessages: typeof historyCandidates = [];
+      let historyTokens = 0;
+      for (let i = historyCandidates.length - 1; i >= 0; i -= 1) {
+        const message = historyCandidates[i];
+        const messageTokens = estimateTokens(message.text);
+        if (recentMessages.length > 0 && historyTokens + messageTokens > maxHistoryTokens) {
+          break;
+        }
+        recentMessages.unshift(message);
+        historyTokens += messageTokens;
+      }
+
+      // Allocate the remaining prompt budget: lesson first, then knowledge
+      // base excerpts. When a DB is attached, cap the lesson at 60% so the
+      // retrieved passages always get room; unused lesson room flows to RAG.
+      const contextBudget = Math.max(
+        512,
+        promptBudget - systemTokens - userTokens - historyTokens - 64,
+      );
+      const hasKnowledgeBase = Boolean(activeChatDb && vaultPath);
+      const lessonTokenBudget = hasKnowledgeBase
+        ? Math.max(256, Math.floor(contextBudget * 0.6))
+        : contextBudget;
+      const lessonCharBudget = Math.max(
+        1000,
+        Math.floor(lessonTokenBudget * CHARS_PER_TOKEN_ESTIMATE),
+      );
+      const contextText = buildLessonContextText(lessonCharBudget);
 
       // Build metadata header
       const metaLines: string[] = [];
@@ -1384,17 +1472,22 @@ export function Editor() {
 
       const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
       const lessonTokens = estimateTokens(lessonBlock);
+      const lessonContext = `<lesson_plan>\n${lessonBlock}\n</lesson_plan>`;
 
-      // Fetch RAG chunks if a DB is selected
+      // Fetch RAG chunks if a DB is selected.
       let ragContext = "";
       let ragTokens = 0;
       let ragResults: ScoredChunk[] = [];
-      if (activeChatDb && vaultPath) {
+      let ragState: "none" | "found" | "no_matches" | "failed" = "none";
+      const ragScopeLabel = [activeChatDb, activeChatGrade, activeChatTopic, activeChatFile]
+        .filter(Boolean)
+        .join(" > ");
+
+      if (hasKnowledgeBase) {
         setAiStatusMessage(t("editor.chat.searchingKnowledge"));
         try {
-          const budgetForRag = Math.floor(maxNumCtx * 0.75) - lessonTokens - estimateTokens(userText) - 500;
-          const maxRagChars = Math.max(0, budgetForRag * 4);
-          const topK = Math.min(10, Math.max(1, Math.floor(maxRagChars / 600)));
+          const ragTokenBudget = Math.max(0, contextBudget - lessonTokens);
+          const topK = Math.max(1, Math.min(12, Math.floor(ragTokenBudget / 220)));
 
           if (topK > 0) {
             const results = await tauriInvoke<ScoredChunk[]>("subject_db_query", {
@@ -1406,83 +1499,98 @@ export function Editor() {
               query: userText,
               topK: topK,
             });
-            ragChunksRef.current = results;
-            ragResults = results;
+            ragChunksRef.current = [];
+            ragResults = [];
 
             if (results.length > 0) {
-              const parts: string[] = [];
+              const excerpts: string[] = [];
+              const includedResults: ScoredChunk[] = [];
+              let usedTokens = 0;
               for (const r of results) {
-                const header = `[${r.source}, S.${r.page}] (${r.grade} > ${r.topic})`;
-                parts.push(`${header}\n${r.text}`);
+                const excerpt = `\n<excerpt source="${escapeXmlAttr(r.source)}" page="${r.page}" subject="${escapeXmlAttr(r.subject)}" grade="${escapeXmlAttr(r.grade)}" topic="${escapeXmlAttr(r.topic)}">\n[${r.source}, p.${r.page}]\n${r.text}\n</excerpt>`;
+                const excerptTokens = estimateTokens(excerpt);
+                if (excerpts.length > 0 && usedTokens + excerptTokens > ragTokenBudget) break;
+                excerpts.push(excerpt);
+                includedResults.push(r);
+                usedTokens += excerptTokens;
               }
-              const scopeLabel = [activeChatDb, activeChatGrade, activeChatTopic, activeChatFile]
-                .filter(Boolean)
-                .join(" > ");
-              ragContext = `\n\n📚 Wissen aus "${scopeLabel}":\n${parts.join("\n\n---\n\n")}`;
-              ragTokens = estimateTokens(ragContext);
+              ragChunksRef.current = includedResults;
+              ragResults = includedResults;
+              if (excerpts.length > 0) {
+                ragContext = `\n<knowledge_base status="found" matches="${excerpts.length}" scope="${escapeXmlAttr(ragScopeLabel)}">${excerpts.join("")}\n</knowledge_base>`;
+                ragTokens = estimateTokens(ragContext);
+                ragState = "found";
+              } else {
+                ragState = "no_matches";
+              }
             } else {
-              const scopeLabel = [activeChatDb, activeChatGrade, activeChatTopic, activeChatFile]
-                .filter(Boolean)
-                .join(" > ");
-              console.warn(`RAG: no chunks found in ${scopeLabel}`);
+              ragState = "no_matches";
             }
+          } else {
+            ragState = "no_matches";
           }
-          logDebug("ai", "rag-results", `db=${activeChatDb} | grade=${activeChatGrade ?? "-"} | topic=${activeChatTopic ?? "-"} | file=${activeChatFile ?? "-"} | found=${ragChunksRef.current.length > 0} | results=${ragChunksRef.current.length}`);
+
+          if (ragState === "no_matches") {
+            setAiStatusMessage(t("editor.chat.noKnowledgeMatches", { scope: ragScopeLabel }));
+            console.warn(`RAG: no chunks found in ${ragScopeLabel}`);
+          } else if (ragState === "found") {
+            setAiStatusMessage(t("editor.chat.thinkingOn"));
+          }
+          logDebug("ai", "rag-results", `db=${activeChatDb} | grade=${activeChatGrade ?? "-"} | topic=${activeChatTopic ?? "-"} | file=${activeChatFile ?? "-"} | state=${ragState} | results=${ragChunksRef.current.length}`);
         } catch (e) {
+          ragState = "failed";
+          setAiStatusMessage(t("editor.chat.knowledgeSearchFailed"));
           console.error("RAG query failed:", e);
           logDebug("ai", "rag-error", String(e));
         }
       }
 
-      // Build conversation history (capped at history limit).
-      const recentMessages = chatMessages.slice(-aiChatHistoryLimit);
-      const historyTokens = recentMessages.reduce((sum, msg) => sum + estimateTokens(msg.text), 0);
-
-      const effectiveSystemPrompt = aiSystemPrompt || t("aiPrompts.chatSystem");
-      const systemTokens = estimateTokens(effectiveSystemPrompt);
-
-      // If RAG is active and we need more context than the default, increase it up to the model's max
-      const totalNeeded = lessonTokens + historyTokens + ragTokens + systemTokens + estimateTokens(userText) + 500;
-      if (ragTokens > 0 && totalNeeded > maxNumCtx && modelMaxCtx > maxNumCtx) {
-        const newCtx = Math.min(totalNeeded + 4096, modelMaxCtx);
-        logDebug("ai", "ctx-increase", `default=${maxNumCtx} needed=${totalNeeded} increased=${newCtx}`);
-        maxNumCtx = newCtx;
-      }
-
-      // Prepare messages array for native chat API
-      const contextIntro = ragContext
-        ? "Below is the current lesson plan and retrieved knowledge from the teacher's database. Read both carefully before responding."
-        : "Below is the current lesson plan. Read it carefully before responding.";
-      const contextWithRag = ragContext
-        ? `${contextIntro}\n\n---\n${lessonBlock}${ragContext}\n---`
-        : `${contextIntro}\n\n---\n${lessonBlock}\n---`;
+      // Knowledge-base state is attached to the final user turn so the stable
+      // lesson/history prefix stays cache-friendly across follow-up messages.
+      const retrievalBlock =
+        ragState === "found"
+          ? ragContext
+          : ragState === "no_matches"
+            ? `\n<knowledge_base status="no_matches" scope="${escapeXmlAttr(ragScopeLabel)}" />`
+            : ragState === "failed"
+              ? `\n<knowledge_base status="search_failed" scope="${escapeXmlAttr(ragScopeLabel)}" />`
+              : "";
+      const questionContent = retrievalBlock
+        ? `${retrievalBlock}\n\n${userText}`
+        : userText;
 
       const messages: ChatMessage[] = [
         { role: "system", content: effectiveSystemPrompt },
-        { role: "user", content: contextWithRag },
-        { role: "assistant", content: "I have reviewed the context and am ready to help." },
+        { role: "user", content: lessonContext },
+        { role: "assistant", content: t("editor.chat.contextReceived") },
         ...recentMessages.map((msg) => ({
           role: msg.role as "user" | "assistant",
           content: msg.text,
         })),
-        { role: "user", content: userText },
+        { role: "user", content: questionContent },
       ];
 
-      // Update context budget for the visual bar
+      // Update the context bar before the exact tokenizer answers.
+      // questionContent already contains the retrieval block, so RAG tokens
+      // stay a display-only segment and are not added twice.
+      const estimatePromptTokens =
+        lessonTokens + historyTokens + systemTokens + estimateTokens(questionContent) + 64;
       setChatContextBudget({
-        totalTokens: maxNumCtx,
+        totalTokens: modelNumCtx,
         usedByLesson: lessonTokens,
         usedByHistory: historyTokens,
         usedByRag: ragTokens,
         usedBySystem: systemTokens,
-        freeTokens: maxNumCtx - lessonTokens - historyTokens - ragTokens - systemTokens - estimateTokens(userText) - 100,
+        usedByUser: userTokens,
+        freeTokens: Math.max(0, modelNumCtx - estimatePromptTokens - effectiveNumPredict),
       });
 
-      // Exact token counts via the engine tokenizer (fallback: chars/4 estimate)
+      // Exact token counts via the engine tokenizer (fallback: conservative
+      // character estimate).
       let exactCounts: number[] | null = null;
       try {
         exactCounts = await tauriInvoke<number[]>("ai_count_tokens", {
-          texts: [lessonBlock, ragContext, effectiveSystemPrompt, userText, ...recentMessages.map((m) => m.text)],
+          texts: [lessonContext, ragContext, effectiveSystemPrompt, questionContent, userText, ...recentMessages.map((m) => m.text)],
         });
       } catch {
         /* engine idle — estimates are fine for the bar */
@@ -1491,31 +1599,41 @@ export function Editor() {
         exactCounts && exactCounts[index] !== undefined ? exactCounts[index] : estimateTokens(str);
 
       // Refresh the context bar with exact counts once the engine tokenizer answered
-      const lessonTokensExact = countExact(0, lessonBlock);
+      const lessonTokensExact = countExact(0, lessonContext);
       const ragTokensExact = countExact(1, ragContext);
       const systemTokensExact = countExact(2, effectiveSystemPrompt);
-      const userTokensExact = countExact(3, userText);
+      const userTokensExact = countExact(3, questionContent);
+      const userOnlyTokensExact = countExact(4, userText);
       const historyTokensExact = recentMessages.reduce(
-        (sum, msg, i) => sum + (exactCounts?.[4 + i] ?? estimateTokens(msg.text)),
+        (sum, msg, i) => sum + (exactCounts?.[5 + i] ?? estimateTokens(msg.text)),
         0,
       );
+      const promptTokensExact =
+        lessonTokensExact + systemTokensExact + userTokensExact + historyTokensExact + 64;
+
+      // Never let prompt + answer exceed the target model's real window.
+      const availableOutputTokens = modelNumCtx - promptTokensExact - 64;
+      if (availableOutputTokens < 256) {
+        throw new Error(t("editor.chat.contextTooLong"));
+      }
+      const finalNumPredict = Math.max(
+        256,
+        Math.min(effectiveNumPredict, availableOutputTokens),
+      );
       setChatContextBudget({
-        totalTokens: maxNumCtx,
+        totalTokens: modelNumCtx,
         usedByLesson: lessonTokensExact,
         usedByHistory: historyTokensExact,
         usedByRag: ragTokensExact,
         usedBySystem: systemTokensExact,
-        freeTokens: maxNumCtx - lessonTokensExact - historyTokensExact - ragTokensExact - systemTokensExact - userTokensExact - 100,
+        usedByUser: userOnlyTokensExact,
+        freeTokens: Math.max(0, modelNumCtx - promptTokensExact - finalNumPredict),
       });
-
-      // Thinking mode needs more predict tokens (thinking ~1-2K + response)
-      const thinkMode = aiThinkingEnabled && modelSupportsThinking;
-      const effectiveNumPredict = thinkMode ? Math.max(1024, 4096) : 1024;
 
       logDebug(
         "ai",
         "chat-invoke",
-        `model=${aiV3ChatModelId ?? "auto"} | ctx=${maxNumCtx} | predict=${effectiveNumPredict} | messages=${messages.length} | rag=${ragTokens > 0 ? `+${ragTokens}` : "off"} | history=${historyTokens} | lesson=${lessonTokens} | think=${String(thinkMode)}`,
+        `model=${aiV3ChatModelId ?? "auto"} | ctx=${modelNumCtx} | predict=${finalNumPredict} | messages=${messages.length} | rag=${ragState}${ragTokens > 0 ? ` +${ragTokens}` : ""} | prompt=${promptTokensExact} | history=${historyTokens} | lesson=${lessonTokens} | think=${String(thinkMode)}`,
       );
 
       const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1591,7 +1709,7 @@ export function Editor() {
               requestId,
               messages,
               temperature: aiTemperature,
-              maxTokens: effectiveNumPredict,
+              maxTokens: finalNumPredict,
               thinking: thinkMode,
               modelId: aiV3ChatModelId ?? undefined,
             });
@@ -2943,6 +3061,7 @@ export function Editor() {
 
       {/* AI Lesson Draft Generator (opt-in) */}
       <DraftGeneratorDialog
+        key={activeFilePath ?? "no-lesson"}
         open={draftDialogOpen}
         onClose={() => setDraftDialogOpen(false)}
         editor={editor}

@@ -7,6 +7,7 @@ const BAR_COLORS: Record<string, string> = {
   history: "bg-amber-400",
   rag: "bg-emerald-400",
   system: "bg-violet-400",
+  user: "bg-sky-400",
   free: "bg-gray-600",
 };
 
@@ -21,8 +22,8 @@ export function ChatContextBar() {
 
   if (!chatContextBudget) return null;
 
-  const { totalTokens, usedByLesson, usedByHistory, usedByRag, usedBySystem, freeTokens } = chatContextBudget;
-  const used = usedByLesson + usedByHistory + usedByRag + usedBySystem;
+  const { totalTokens, usedByLesson, usedByHistory, usedByRag, usedBySystem, usedByUser, freeTokens } = chatContextBudget;
+  const used = usedByLesson + usedByHistory + usedByRag + usedBySystem + usedByUser;
   const pct = totalTokens > 0 ? Math.min(100, Math.round((used / totalTokens) * 100)) : 0;
 
   const segments: Array<{ key: string; label: string; value: number; color: string }> = [];
@@ -30,8 +31,9 @@ export function ChatContextBar() {
   if (usedByHistory > 0) segments.push({ key: "history", label: t("editor.chat.contextHistory"), value: usedByHistory, color: BAR_COLORS.history });
   if (usedByRag > 0) segments.push({ key: "rag", label: t("editor.chat.contextRag"), value: usedByRag, color: BAR_COLORS.rag });
   if (usedBySystem > 0) segments.push({ key: "system", label: t("editor.chat.contextSystem"), value: usedBySystem, color: BAR_COLORS.system });
+  if (usedByUser > 0) segments.push({ key: "user", label: t("editor.chat.contextUser"), value: usedByUser, color: BAR_COLORS.user });
 
-  const totalWidth = Math.max(1, used);
+  const totalWidth = Math.max(1, totalTokens);
 
   return (
     <div className="px-3 py-1.5 border-b border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)/50]">

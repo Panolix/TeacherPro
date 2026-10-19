@@ -12,7 +12,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 use super::catalog::{self, ModelEntry};
-use super::{lock_unpoisoned, AiState};
+use super::{engine, lock_unpoisoned, AiState};
 
 pub const DL_QUEUED: &str = "queued";
 pub const DL_DOWNLOADING: &str = "downloading";
@@ -161,6 +161,61 @@ pub fn ai_download_model_cancel(
         .ok_or_else(|| format!("No download job for: {model_id}"))?;
     job.cancel.store(true, Ordering::Relaxed);
     Ok(snapshot(job))
+}
+
+/// Delete a downloaded model (GGUF + optional MTP draft head + partial files)
+/// from disk. Stops the engine if it has the model loaded and clears the
+/// session selection so auto-start does not try to load a missing file.
+#[tauri::command]
+pub fn ai_delete_model(
+    app: AppHandle,
+    state: tauri::State<'_, AiState>,
+    model_id: String,
+) -> Result<(), String> {
+    let model =
+        catalog::find_model(&model_id).ok_or_else(|| format!("Unknown model: {model_id}"))?;
+    let models_dir = catalog::models_dir(&app)?;
+    let dest = models_dir.join(model.filename);
+
+    // Stop and forget any in-flight download for this model.
+    {
+        let mut guard = lock_unpoisoned(&state.downloads);
+        if let Some(job) = guard.remove(model.id) {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+    }
+
+    // Unload the model before its file disappears.
+    let loaded = lock_unpoisoned(&state.engine).model_id.as_deref() == Some(model.id);
+    if loaded {
+        engine::shutdown(&app);
+    }
+    if state.selected().as_deref() == Some(model.id) {
+        state.set_selected(None);
+    }
+
+    remove_file_if_present(&dest)?;
+
+    let mut part_name = dest.into_os_string();
+    part_name.push(".part");
+    remove_file_if_present(&PathBuf::from(part_name))?;
+
+    if let Some(mtp_file) = model.mtp_file {
+        let mtp_dest = models_dir.join(mtp_file);
+        remove_file_if_present(&mtp_dest)?;
+        let mut mtp_part_name = mtp_dest.into_os_string();
+        mtp_part_name.push(".part");
+        remove_file_if_present(&PathBuf::from(mtp_part_name))?;
+    }
+
+    Ok(())
+}
+
+fn remove_file_if_present(path: &Path) -> Result<(), String> {
+    if !path.is_file() {
+        return Ok(());
+    }
+    std::fs::remove_file(path).map_err(|e| format!("Failed to delete {}: {e}", path.display()))
 }
 
 fn run_download(

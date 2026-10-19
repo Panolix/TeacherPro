@@ -215,8 +215,13 @@
       contextHistory: "History",
       contextRag: "Knowledge",
       contextSystem: "System",
+      contextUser: "Question",
       contextFree: "Free",
       searchingKnowledge: "Searching knowledge database...",
+      noKnowledgeMatches: "No matching passages found in {{scope}}.",
+      knowledgeSearchFailed: "Knowledge base search failed.",
+      contextReceived: "Context received.",
+      contextTooLong: "The lesson plan and conversation are too long for the selected model's context window. Try a model with a larger context or shorten the lesson/chat.",
       sources: "Sources",
     },
 
@@ -589,6 +594,9 @@
       verifying: "Verifying...",
       use: "Use",
       active: "Active",
+      delete: "Delete from disk",
+      deleteConfirmTitle: "Delete AI model",
+      deleteConfirm: "Delete \"{{name}}\" from disk? You can download it again later.",
       autoModel: "Auto (recommended)",
       routingHint:
         "Auto uses your selected model, or the best downloaded one. Switching models restarts the engine.",
@@ -764,7 +772,7 @@
   aiPrompts: {
     rewriteSystem: "You rewrite text. Change the wording and apply the requested tone. Return ONLY the rewritten text without extra explanations, quotation marks, or formatting.",
     translateSystem: "You translate the following text into {{language}}. Return ONLY the translation without extra explanations, quotation marks, or formatting.",
-    chatSystem: "You are a helpful AI assistant for teachers, specialized in lesson planning and pedagogy. You receive the complete content of a lesson plan (lesson table) including metadata such as teacher name, subject, and date. Additionally, knowledge database content (e.g. from curricula, textbooks, worksheets) may be provided in the format 📚 Knowledge from [subject]: [source, page]. This knowledge database content has been uploaded by the teacher and is available for answering questions. Your tasks include: Summarizing the lesson, Identifying key themes and concepts, Checking learning objectives for coherence and appropriateness, Suggesting improvements or alternatives for phases, methods, or social forms, Suggesting follow-up activities or discussion questions. Do NOT ask the teacher to paste their lesson content — it is already provided. Respond directly and helpfully. Keep responses focused and actionable.",
+    chatSystem: "You are TeacherPro's AI assistant for teachers. You help with lesson planning, pedagogy, general questions, and research over the teacher's own documents. The current lesson plan, when provided, is inside <lesson_plan> tags. Use it when the question relates to the lesson; if the user asks a general or unrelated question, answer it directly without forcing a lesson connection. Knowledge-base excerpts may be provided inside <knowledge_base> tags. When an excerpt directly addresses the question, prefer it for subject-specific facts and cite it as [filename, p.N], copying the source and page exactly as given. Never invent sources, page numbers, or citations. If the excerpts do not answer the question, say so briefly and answer from general knowledge, clearly separating the two. If the knowledge-base status is no_matches or search_failed, say that you could not find relevant material in the knowledge base and answer from general knowledge. If no knowledge base is attached or no excerpts are provided, use the lesson plan and general knowledge, and state when you are uncertain. The lesson plan is already provided; do not ask the teacher to paste it again. Match the scope of the request: if the user asks for a plan, give the complete plan with objectives, phases and time, activities, social forms, media, differentiation, and assessment; if they ask a general or factual question, answer concisely; if the request is ambiguous, give a short framework and offer to expand. Keep answers focused, practical, and in the same language as the user's latest message unless they ask for another language.",
   },
 
   subjectDb: {

@@ -227,7 +227,7 @@ export function AiChatPanel({
                             <span
                               key={`${c.source}-${c.page}-${i}`}
                               title={c.source}
-                              className="inline-flex max-w-full items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--tp-text-secondary)]"
+                              className="inline-flex max-w-full items-center truncate rounded-full bg-[var(--tp-panel-muted)] px-2 py-0.5 text-[11px] text-[var(--tp-text-muted)]"
                             >
                               {c.source}, S.{c.page}
                             </span>

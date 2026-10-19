@@ -124,6 +124,7 @@ export interface ChatContextBudget {
   usedByHistory: number;
   usedByRag: number;
   usedBySystem: number;
+  usedByUser: number;
   freeTokens: number;
 }
 

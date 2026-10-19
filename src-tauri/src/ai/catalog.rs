@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::AiState;
 use serde::Serialize;
 use tauri::Manager;
 
@@ -523,5 +524,58 @@ pub fn ai_catalog_info(app: tauri::AppHandle) -> Result<CatalogInfo, String> {
             .as_ref()
             .map(|p| p.main_size + p.cudart_size)
             .unwrap_or(0),
+    })
+}
+
+/// Resolve the model that a chat request will actually use (explicit >
+/// selected > first downloaded in auto order) together with its real context
+/// window. The frontend needs this before `ai_chat` switches the engine:
+/// `ai_engine_status` may still describe the previously loaded model.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveModelInfo {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub num_ctx: u32,
+    pub supports_thinking: bool,
+    pub downloaded: bool,
+}
+
+#[tauri::command]
+pub fn ai_effective_model(
+    app: tauri::AppHandle,
+    model_id: Option<String>,
+) -> Result<EffectiveModelInfo, String> {
+    let selected = app.state::<AiState>().selected();
+    let target = model_id
+        .as_deref()
+        .and_then(find_model)
+        .or_else(|| selected.as_deref().and_then(find_model))
+        .or_else(|| {
+            auto_start_order().find(|m| {
+                model_file_path(&app, m)
+                    .map(|p| p.is_file())
+                    .unwrap_or(false)
+            })
+        });
+
+    Ok(match target {
+        Some(model) => EffectiveModelInfo {
+            id: Some(model.id.to_string()),
+            name: Some(model.name.to_string()),
+            num_ctx: model.num_ctx,
+            supports_thinking: model.supports_thinking,
+            downloaded: model_file_path(&app, model)
+                .map(|p| p.is_file())
+                .unwrap_or(false),
+        },
+        None => EffectiveModelInfo {
+            id: None,
+            name: None,
+            // No model is available yet; this only feeds pre-flight budgeting.
+            num_ctx: 16384,
+            supports_thinking: true,
+            downloaded: false,
+        },
     })
 }

@@ -13,8 +13,10 @@ import {
   Loader2,
   CheckCircle2,
   Database,
+  Trash2,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore, type AccentColor } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { SubjectDbManager } from "./SubjectDbManager";
@@ -147,6 +149,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [v3Downloads, setV3Downloads] = useState<Record<string, DownloadProgressDto>>({});
   const [hardware, setHardware] = useState<HardwareInfoDto | null>(null);
   const [packProgress, setPackProgress] = useState<DownloadProgressDto | null>(null);
+  const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
 
   useEffect(() => {
     if (tab !== "ai") return;
@@ -240,12 +243,38 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   };
 
+  const deleteModel = async (modelId: string) => {
+    const model = catalog?.models.find((m) => m.id === modelId);
+    const confirmed = await ask(
+      t("settings.aiV3.deleteConfirm", { name: model?.name ?? modelId }),
+      { title: t("settings.aiV3.deleteConfirmTitle"), kind: "warning" },
+    );
+    if (!confirmed) return;
+    setDeletingModelId(modelId);
+    try {
+      await invoke("ai_delete_model", { modelId });
+      if (aiV3ChatModelId === modelId) setAiV3ChatModelId(null);
+      if (aiV3RewriteModelId === modelId) setAiV3RewriteModelId(null);
+      setV3Downloads((prev) => {
+        const next = { ...prev };
+        delete next[modelId];
+        return next;
+      });
+      setEngineStatus(await invoke<EngineStatusDto>("ai_engine_status"));
+      setCatalog(await invoke<CatalogInfoDto>("ai_catalog_info"));
+    } catch (e) {
+      console.error("delete model failed:", e);
+    } finally {
+      setDeletingModelId(null);
+    }
+  };
+
   const useModel = async (modelId: string) => {
     try {
       setEngineStatus(await invoke<EngineStatusDto>("ai_select_model", { modelId }));
       // Persisted routing: chat + rewrite default to the activated model.
       setAiV3ChatModelId(modelId);
-      setAiV3RewriteModelId(null);
+      setAiV3RewriteModelId(modelId);
     } catch (e) {
       console.error("select model failed:", e);
     }
@@ -538,6 +567,19 @@ export function SettingsModal({ open, onClose }: Props) {
                                   {t("settings.aiV3.use")}
                                 </button>
                               )}
+                              <button
+                                className="tp-btn inline-flex items-center justify-center"
+                                title={t("settings.aiV3.delete")}
+                                aria-label={t("settings.aiV3.delete")}
+                                disabled={deletingModelId === model.id}
+                                onClick={() => void deleteModel(model.id)}
+                              >
+                                {deletingModelId === model.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
                             </div>
                           ) : dl?.state === "verifying" ? (
                             <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px]" style={{ color: "var(--tp-t-4)" }}>
