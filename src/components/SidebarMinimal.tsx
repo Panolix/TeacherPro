@@ -161,12 +161,13 @@ export function SidebarMinimal() {
     mindmapSearchIndex,
     vaultItemOrder,
     setVaultItemOrder,
+    sidebarOpen: pushPanelOpen,
+    setSidebarOpen: setPushPanelOpen,
   } = useAppStore();
 
   const { t } = useTranslation();
 
   // Panel state
-  const [pushPanelOpen, setPushPanelOpen] = useState(true);
   const [activePanel, setActivePanel] = useState<PanelType>("explorer");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -896,7 +897,7 @@ export function SidebarMinimal() {
       setActivePanel(panel);
       setPushPanelOpen(true);
     }
-  }, [activePanel, pushPanelOpen]);
+  }, [activePanel, pushPanelOpen, setPushPanelOpen]);
 
   // Toggle folder expansion
   const toggleFolder = (folderPath: string) => {
@@ -1316,7 +1317,11 @@ export function SidebarMinimal() {
               e.dataTransfer.effectAllowed = "copy";
               e.dataTransfer.setData(
                 "application/teacherpro-material",
-                JSON.stringify({ relativePath: entry.relativePath, itemType: "folder" }),
+                JSON.stringify({
+                  relativePath: entry.relativePath,
+                  itemType: "folder",
+                  isDirectory: true,
+                }),
               );
               e.dataTransfer.setData("application/teacherpro-file", entry.relativePath);
               e.dataTransfer.setData("text/plain", entry.relativePath);

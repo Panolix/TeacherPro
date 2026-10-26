@@ -1,4 +1,5 @@
 import { FileText, Trash2, X } from "lucide-react";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "../../i18n/useTranslation";
 
 interface Props {
@@ -29,9 +30,16 @@ export function NotesPanel({ open, notes, onChange, onClose }: Props) {
             <button
               onClick={() => {
                 if (!notes.trim()) return;
-                if (window.confirm(t("editor.panels.clearNotesConfirm"))) {
-                  onChange("");
-                }
+                void ask(t("editor.panels.clearNotesConfirm"), {
+                  title: t("editor.panels.clearNotes"),
+                  kind: "warning",
+                })
+                  .then((confirmed) => {
+                    if (confirmed) onChange("");
+                  })
+                  .catch((error) => {
+                    console.error("Could not confirm clearing notes:", error);
+                  });
               }}
               title={t("editor.panels.clearNotes")}
               aria-label={t("editor.panels.clearNotes")}

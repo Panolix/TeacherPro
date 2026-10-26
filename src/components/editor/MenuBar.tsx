@@ -742,8 +742,7 @@ export const MenuBar = ({
       </button>
       <button
         onClick={() => {
-          // Select all first to ensure clear formatting works
-          editor.chain().focus().selectAll().clearNodes().unsetAllMarks().run();
+          editor.chain().focus().unsetAllMarks().clearNodes().run();
         }}
         className={railBtn(false)}
         title={t("editor.toolbar.clearFormatting")}

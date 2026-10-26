@@ -303,7 +303,7 @@ export function AiChatPanel({
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
-                      void onSend();
+                      if (!busy) void onSend();
                     }
                   }}
                   placeholder={t("editor.panels.messageAi")}

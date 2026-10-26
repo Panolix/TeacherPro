@@ -436,25 +436,36 @@ fn print_pdf_file(path: String) -> Result<(), String> {
             .map_err(|error| format!("Failed to spool print file: {error}"))?;
         let spool_target = spool_path.to_string_lossy().to_string();
 
-        command_for("open")
+        let open_status = command_for("open")
             .args(["-a", "Preview"])
             .arg(&spool_target)
             .status()
             .map_err(|error| format!("Failed to open print preview: {error}"))?;
+        if !open_status.success() {
+            return Err("Failed to open the PDF in Preview.".to_string());
+        }
 
-        // Print the spooled document once Preview has it frontmost. The
-        // script waits up to ~10 s for the document to appear. The only
-        // string in the AppleScript source is the fixed spool file name
-        // prefix, so there is nothing to inject.
+        // Print the spooled document once Preview has loaded it. Search all
+        // open documents by the fixed spool prefix so an unrelated PDF the
+        // user already had open can never be printed by mistake. The only
+        // string in the AppleScript source is that prefix, so there is
+        // nothing to inject.
         let script = "tell application \"Preview\"\n\
              activate\n\
+             set targetDoc to missing value\n\
              repeat 40 times\n\
-             if (count of documents) > 0 then\n\
-             if (name of front document) contains \"teacherpro-print-\" then exit repeat\n\
+             repeat with d in (every document)\n\
+             if (name of d) contains \"teacherpro-print-\" then\n\
+             set targetDoc to d\n\
+             exit repeat\n\
              end if\n\
+             end repeat\n\
+             if targetDoc is not missing value then exit repeat\n\
              delay 0.25\n\
              end repeat\n\
-             print front document with print dialog\n\
+             if targetDoc is not missing value then\n\
+             print targetDoc with print dialog\n\
+             end if\n\
              end tell";
 
         spawn_detached(command_for("osascript").arg("-e").arg(script))?;

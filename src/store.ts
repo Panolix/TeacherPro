@@ -758,6 +758,39 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
   };
 }
 
+function applyUiSettingsToState(settings: UISettings): Partial<AppState> {
+  return {
+    themeMode: settings.themeMode,
+    accentColor: settings.accentColor,
+    lessonPaperTone: settings.lessonPaperTone,
+    mindmapPaperTone: settings.mindmapPaperTone,
+    defaultLessonTableBodyRows: settings.defaultLessonTableBodyRows,
+    sidebarOpen: settings.sidebarOpen,
+    lessonZoomMode: settings.lessonZoomMode,
+    lessonZoomFixed: settings.lessonZoomFixed,
+    sidebarSearchCollapsed: settings.sidebarSearchCollapsed,
+    expandedMaterialFolders: settings.expandedMaterialFolders,
+    expandedTrashFolders: settings.expandedTrashFolders,
+    calendarCollapsed: settings.calendarCollapsed,
+    sectionCollapsed: settings.sectionCollapsed,
+    debugMode: settings.debugMode,
+    defaultTeacherName: settings.defaultTeacherName,
+    showActionButtonLabels: settings.showActionButtonLabels,
+    subjects: settings.subjects,
+    aiEnabled: settings.aiEnabled,
+    aiV3ChatModelId: settings.aiV3ChatModelId,
+    aiV3RewriteModelId: settings.aiV3RewriteModelId,
+    aiPersistChats: settings.aiPersistChats,
+    aiChatHistoryLimit: settings.aiChatHistoryLimit,
+    aiTemperature: settings.aiTemperature,
+    aiSystemPrompt: settings.aiSystemPrompt,
+    aiThinkingEnabled: settings.aiThinkingEnabled,
+    aiTranslateTargetLanguage: settings.aiTranslateTargetLanguage,
+    trashAutoClearDays: settings.trashAutoClearDays,
+    language: settings.language,
+  };
+}
+
 async function writeUiSettingsBackup(vaultPath: string, uiSettings: UISettings): Promise<void> {
   const backupDirPath = await join(vaultPath, SETTINGS_BACKUP_DIR);
   await mkdir(backupDirPath, { recursive: true });
@@ -1390,35 +1423,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       const normalizedSettings = normalizeUiSettings(loadedSettings);
-      set({
-        themeMode: normalizedSettings.themeMode,
-        accentColor: normalizedSettings.accentColor,
-        lessonPaperTone: normalizedSettings.lessonPaperTone,
-        mindmapPaperTone: normalizedSettings.mindmapPaperTone,
-        defaultLessonTableBodyRows: normalizedSettings.defaultLessonTableBodyRows,
-        sidebarOpen: normalizedSettings.sidebarOpen,
-        lessonZoomMode: normalizedSettings.lessonZoomMode,
-        lessonZoomFixed: normalizedSettings.lessonZoomFixed,
-        sidebarSearchCollapsed: normalizedSettings.sidebarSearchCollapsed,
-        expandedMaterialFolders: normalizedSettings.expandedMaterialFolders,
-        expandedTrashFolders: normalizedSettings.expandedTrashFolders,
-        calendarCollapsed: normalizedSettings.calendarCollapsed,
-        sectionCollapsed: normalizedSettings.sectionCollapsed,
-        debugMode: normalizedSettings.debugMode,
-        defaultTeacherName: normalizedSettings.defaultTeacherName,
-        showActionButtonLabels: normalizedSettings.showActionButtonLabels,
-        subjects: normalizedSettings.subjects,
-        aiEnabled: normalizedSettings.aiEnabled,
-        aiV3ChatModelId: normalizedSettings.aiV3ChatModelId,
-        aiV3RewriteModelId: normalizedSettings.aiV3RewriteModelId,
-        aiPersistChats: normalizedSettings.aiPersistChats,
-        aiChatHistoryLimit: normalizedSettings.aiChatHistoryLimit,
-        aiTemperature: normalizedSettings.aiTemperature,
-        aiSystemPrompt: normalizedSettings.aiSystemPrompt,
-        aiThinkingEnabled: normalizedSettings.aiThinkingEnabled,
-        aiTranslateTargetLanguage: normalizedSettings.aiTranslateTargetLanguage,
-        language: normalizedSettings.language,
-      });
+      set(applyUiSettingsToState(normalizedSettings));
 
       if (!savedSettings && loadedSettings) {
         await store.set("uiSettings", normalizedSettings);
@@ -1663,6 +1668,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           const normalizedSettings = normalizeUiSettings(mergedSettings);
           await store.set("uiSettings", normalizedSettings);
           await store.save();
+          set(applyUiSettingsToState(normalizedSettings));
 
           await writeUiSettingsBackup(selected, normalizedSettings);
         } catch(e) {
@@ -1942,84 +1948,88 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   rescheduleLesson: async (fileName: string, plannedDate: Date) => {
-    const { vaultPath, activeFilePath, defaultTeacherName, lessonSubjectIndex, subjects } = get();
+    const { vaultPath, defaultTeacherName, lessonSubjectIndex, subjects } = get();
     if (!vaultPath) return null;
     if (!(await flushBeforeDocumentChange())) return null;
 
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const sourcePath = await join(lessonPlansFolder, fileName);
-      const sourceText = await readTextFile(sourcePath);
-      const rawContent = JSON.parse(sourceText);
-      const indexedSubject = lessonSubjectIndex[fileName]?.trim() || "";
-      const filenameSubjectFallback = fallbackSubjectFromLessonFileName(fileName, subjects);
-      const fallbackSubject = indexedSubject || filenameSubjectFallback;
+      const nextLessonData = await enqueueDocumentWrite(async () => {
+        const sourceText = await readTextFile(sourcePath);
+        const rawContent = JSON.parse(sourceText);
+        const indexedSubject = lessonSubjectIndex[fileName]?.trim() || "";
+        const filenameSubjectFallback = fallbackSubjectFromLessonFileName(fileName, subjects);
+        const fallbackSubject = indexedSubject || filenameSubjectFallback;
 
-      let lessonData: LessonData;
+        let lessonData: LessonData;
 
-      if (rawContent.type === "doc" && !rawContent.version) {
-        lessonData = {
-          version: 1,
-          metadata: {
-            teacher: defaultTeacherName,
-            createdAt: new Date().toISOString(),
-            plannedFor: null,
-            subject: fallbackSubject,
-          },
-          notes: "",
-          content: rawContent,
-        };
-      } else {
-        lessonData = rawContent as LessonData;
-        if (typeof lessonData.notes !== "string") {
+        if (rawContent.type === "doc" && !rawContent.version) {
           lessonData = {
-            ...lessonData,
+            version: 1,
+            metadata: {
+              teacher: defaultTeacherName,
+              createdAt: new Date().toISOString(),
+              plannedFor: null,
+              subject: fallbackSubject,
+            },
             notes: "",
+            content: rawContent,
           };
+        } else {
+          lessonData = rawContent as LessonData;
+          if (typeof lessonData.notes !== "string") {
+            lessonData = {
+              ...lessonData,
+              notes: "",
+            };
+          }
         }
-      }
 
-      const rawMetadata = lessonData.metadata as Partial<LessonMetadata> | undefined;
-      const normalizedMetadata: LessonMetadata = {
-        teacher:
-          typeof rawMetadata?.teacher === "string"
-            ? rawMetadata.teacher
-            : defaultTeacherName,
-        createdAt:
-          typeof rawMetadata?.createdAt === "string" && rawMetadata.createdAt.trim()
-            ? rawMetadata.createdAt
-            : new Date().toISOString(),
-        plannedFor:
-          typeof rawMetadata?.plannedFor === "string" && rawMetadata.plannedFor.trim()
-            ? rawMetadata.plannedFor
-            : null,
-        subject:
-          typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
-            ? rawMetadata.subject
-            : fallbackSubject,
-        calendarOrder:
-          typeof rawMetadata?.calendarOrder === "number" &&
-          Number.isFinite(rawMetadata.calendarOrder)
-            ? rawMetadata.calendarOrder
-            : undefined,
-      };
+        const rawMetadata = lessonData.metadata as Partial<LessonMetadata> | undefined;
+        const normalizedMetadata: LessonMetadata = {
+          teacher:
+            typeof rawMetadata?.teacher === "string"
+              ? rawMetadata.teacher
+              : defaultTeacherName,
+          createdAt:
+            typeof rawMetadata?.createdAt === "string" && rawMetadata.createdAt.trim()
+              ? rawMetadata.createdAt
+              : new Date().toISOString(),
+          plannedFor:
+            typeof rawMetadata?.plannedFor === "string" && rawMetadata.plannedFor.trim()
+              ? rawMetadata.plannedFor
+              : null,
+          subject:
+            typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
+              ? rawMetadata.subject
+              : fallbackSubject,
+          calendarOrder:
+            typeof rawMetadata?.calendarOrder === "number" &&
+            Number.isFinite(rawMetadata.calendarOrder)
+              ? rawMetadata.calendarOrder
+              : undefined,
+        };
 
-      const nextLessonData: LessonData = {
-        ...lessonData,
-        metadata: {
-          ...normalizedMetadata,
-          plannedFor: createPlannedForIso(plannedDate),
-        },
-      };
+        const updatedLessonData: LessonData = {
+          ...lessonData,
+          metadata: {
+            ...normalizedMetadata,
+            plannedFor: createPlannedForIso(plannedDate),
+          },
+        };
 
-      await backupDocumentBeforeWrite(vaultPath, sourcePath);
-      await writeTextFileAtomic(sourcePath, JSON.stringify(nextLessonData, null, 2));
+        await backupDocumentBeforeWrite(vaultPath, sourcePath);
+        await writeTextFileAtomic(
+          sourcePath,
+          JSON.stringify(updatedLessonData, null, 2),
+        );
+        return updatedLessonData;
+      });
 
-      if (activeFilePath && sameVaultPath(activeFilePath, sourcePath)) {
-        set({
-          activeFilePath: sourcePath,
-          activeFileContent: nextLessonData,
-        });
+      const currentActivePath = get().activeFilePath;
+      if (currentActivePath && sameVaultPath(currentActivePath, sourcePath)) {
+        set({ activeFileContent: nextLessonData });
       }
 
       await get().refreshVault();
@@ -2342,6 +2352,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           },
         }));
       }
+
+      // Echo the saved snapshot back to the store. The unmount/switch flush
+      // writes through this path, so without this the editor can remount from
+      // an older activeFileContent and overwrite the freshly saved text.
+      const currentActivePath = get().activeFilePath;
+      if (currentActivePath && sameVaultPath(currentActivePath, filePath)) {
+        set({ activeFileContent: lessonData });
+      }
       set({ lastSavedAt: Date.now() });
       return true;
     } catch (error) {
@@ -2403,6 +2421,11 @@ export const useAppStore = create<AppState>((set, get) => ({
                   : null,
               subject:
                 typeof rawMetadata.subject === "string" ? rawMetadata.subject : "",
+              calendarOrder:
+                typeof rawMetadata.calendarOrder === "number" &&
+                Number.isFinite(rawMetadata.calendarOrder)
+                  ? rawMetadata.calendarOrder
+                  : undefined,
             },
             notes: typeof rawLesson.notes === "string" ? rawLesson.notes : "",
             content: rawLesson.content ?? { type: "doc", content: [] },
@@ -2708,6 +2731,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       const folderName = extractBaseName(selected);
       const destinationPath = await ensureUniqueTargetPath(materialsFolder, folderName);
+      // Importing a folder into itself (the vault, Materials, or an ancestor)
+      // would make the recursive copy rediscover its own destination and grow
+      // until the path limit is hit.
+      if (relativePathWithin(destinationPath, selected) !== null) {
+        alertT("alerts.importFolder", { error: tr("alerts.moveIntoItself") });
+        return null;
+      }
       await copyDirectoryRecursive(selected, destinationPath);
 
       await get().refreshVault();

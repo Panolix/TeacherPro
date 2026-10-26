@@ -479,11 +479,19 @@ fn generate_text_sync(
         }
     };
 
-    let (model, port, key) = engine::ensure_ready_for_request(app)?;
-    if model.id != target_model.id {
-        engine::start_engine(app, Some(target_model.id), None)?;
-        engine::wait_for_ready(app)?;
-    }
+    // Switching models kills the old child and spawns a new engine on a new
+    // ephemeral port with a new API key, so the connection tuple must be
+    // re-read after the switch instead of reusing the pre-switch values.
+    let (model, port, key) = {
+        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
+        if loaded.id != target_model.id {
+            engine::start_engine(app, Some(target_model.id), None)?;
+            engine::wait_for_ready(app)?;
+            engine::connection(app).ok_or("Engine connection missing after switch.")?
+        } else {
+            (loaded, port, key)
+        }
+    };
 
     let mut messages = Vec::new();
     if let Some(sys) = system_prompt.as_deref().filter(|s| !s.is_empty()) {
@@ -498,13 +506,13 @@ fn generate_text_sync(
     });
 
     let body = build_chat_body(
-        target_model.id,
+        model.id,
         &messages,
         temperature,
         max_tokens,
         Some(false),
-        target_model.supports_thinking,
-        target_model.thinking_control,
+        model.supports_thinking,
+        model.thinking_control,
         false,
     );
 

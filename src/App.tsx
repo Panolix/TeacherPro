@@ -11,6 +11,8 @@ import { t as translate } from "./i18n/translations";
 const ACCENT_COLORS: Record<string, string> = {
   blue: "#2d86a5",
   emerald: "#059669",
+  indigo: "#3b82f6",
+  violet: "#a855f7",
   rose: "#e11d48",
   amber: "#d97706",
 };

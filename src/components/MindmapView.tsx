@@ -257,9 +257,11 @@ function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload
       const parsed = JSON.parse(structuredPayload) as {
         relativePath?: string;
         isDirectory?: boolean;
+        itemType?: "file" | "folder";
       };
       relativePath = parsed.relativePath || "";
-      itemType = parsed.isDirectory ? "folder" : "file";
+      itemType =
+        parsed.isDirectory || parsed.itemType === "folder" ? "folder" : "file";
     } catch {
       relativePath = "";
     }
@@ -787,7 +789,7 @@ export function MindmapView() {
 
       return existing.concat(newNode);
     });
-  }, [pushHistory]);
+  }, [pushHistory, t]);
 
   const handleAddNode = () => {
     addNodeAt();

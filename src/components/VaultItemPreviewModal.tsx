@@ -345,25 +345,34 @@ function MindmapPreview({ nodes, edges }: { nodes: any[]; edges: any[] }) {
 
   useEffect(() => {
     // Convert mindmap data to ReactFlow format
-    const convertedNodes: Node[] = (nodes || []).map((n: any) => ({
-      id: n.id || String(Math.random()),
-      position: { x: n.position?.x || 0, y: n.position?.y || 0 },
-      data: { 
-        label: n.data?.label || t("mindmap.newIdea"),
-        style: n.data?.style || {}
-      },
-      style: {
-        background: n.data?.style?.backgroundColor || "#2d2d2d",
-        color: n.data?.style?.color || "#e5e7eb",
-        border: "1px solid #404040",
-        borderRadius: "8px",
-        padding: "10px 14px",
-        fontSize: "14px",
-        fontWeight: 500,
-        minWidth: 120,
-        ...n.data?.style,
-      },
-    }));
+    const convertedNodes: Node[] = (nodes || []).map((n: any) => {
+      const savedStyle =
+        n.style && typeof n.style === "object"
+          ? n.style
+          : n.data?.style && typeof n.data.style === "object"
+            ? n.data.style
+            : {};
+      return {
+        id: n.id || String(Math.random()),
+        position: { x: n.position?.x || 0, y: n.position?.y || 0 },
+        data: {
+          label: n.data?.label || t("mindmap.newIdea"),
+          style: savedStyle,
+        },
+        style: {
+          background:
+            savedStyle.background || savedStyle.backgroundColor || "#2d2d2d",
+          color: savedStyle.color || "#e5e7eb",
+          border: "1px solid #404040",
+          borderRadius: "8px",
+          padding: "10px 14px",
+          fontSize: "14px",
+          fontWeight: 500,
+          minWidth: 120,
+          ...savedStyle,
+        },
+      };
+    });
 
     const convertedEdges: Edge[] = (edges || []).map((e: any) => ({
       id: e.id || `${e.source}-${e.target}`,

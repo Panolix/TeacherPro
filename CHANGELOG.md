@@ -1,5 +1,70 @@
 # Changelog
 
+## [2.9.5] - 2026-10-26
+
+### Fixed
+- **Stale lesson text after switching views** - the unmount/switch flush now
+  writes the saved snapshot back to the active document. Returning to a lesson
+  no longer shows older text that can overwrite the freshly saved content.
+- **Trash retention setting ignored at startup** - `trashAutoClearDays` is now
+  loaded with the other UI settings. Choosing "Never" no longer falls back to
+  the 30-day default and permanently deletes old trash entries on launch.
+- **AI rewrite/translate after a model switch** - the AI client re-reads the
+  engine port and per-spawn API key after switching models instead of reusing
+  the dead connection.
+- **Windows Subject DB path escape** - names containing `:` are rejected on
+  Windows, so drive-relative components like `C:` or `C:foo` can no longer make
+  `PathBuf::join` escape the vault.
+- **Sidebar collapse/reopen** - the sidebar now uses the persisted store state,
+  so the TopBar expand button works and the state survives restarts. Opening
+  Notes, AI Chat or the Method Bank no longer force-opens the explorer.
+- **Folder drag/drop** - material folder drags now carry `isDirectory` and both
+  drop parsers accept `itemType`, so folders insert as folders in lessons and
+  mindmaps.
+- **Clear notes button** - uses the native dialog plugin instead of
+  `window.confirm`, which is blocked in the Tauri webview.
+- **Clear formatting scope** - the eraser now only clears the current selection
+  instead of selecting the whole document first.
+- **AI chat double-send** - Enter is ignored while a response is streaming, and
+  a synchronous guard prevents a second request from replacing the active
+  stream.
+- **Chat context bar reset** - clearing the chat or switching lessons clears the
+  stale token budget display.
+- **Subject DB add controls** - adding a grade/topic from a collapsed row now
+  expands the parent and shows the inline input.
+- **Indigo/Violet accent presets** - both now map to real colors instead of
+  falling back to blue.
+- **Mindmap preview colors** - preview reads the saved node `style`, with a
+  legacy `data.style` fallback.
+- **Calendar order after editing** - opening a lesson preserves
+  `metadata.calendarOrder`, so the first save no longer erases manual ordering.
+- **Reschedule races** - rescheduling reads and writes inside the document write
+  queue and only updates the active editor when that lesson is still open.
+- **Recursive material import** - importing the vault, Materials, or an ancestor
+  folder into itself is blocked instead of copying until the path limit.
+- **Uppercase `.PDF` imports** - scanning and listing now treat the extension
+  case-insensitively.
+- **Grade-level PDF deletion** - deleting a loose PDF now removes only its
+  synthetic topic index rows, not same-named PDFs in real topic folders.
+- **macOS print targeting** - printing finds the spooled TeacherPro PDF by name
+  instead of printing whichever Preview document is frontmost.
+- **CUDA pack removal on Windows** - the engine is stopped before deleting the
+  pack, avoiding locked file failures.
+- **Window startup permissions** - `window.show()` and `setFocus()` now have
+  the required Tauri permissions.
+
+### Changed
+- Method Bank QA preflight now expects the enabled drag/drop path.
+- Sidebar panel state is persisted through the existing UI settings instead of
+  local component state.
+
+### Security
+- Hardened Subject DB folder validation on Windows against drive-relative path
+  components.
+
+### Tests
+- Added a Windows-only Rust test for drive-relative Subject DB names.
+
 ## [2.9.4] - 2026-10-26
 
 ### Added

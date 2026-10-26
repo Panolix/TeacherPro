@@ -112,13 +112,25 @@ fn validate_segment(raw: &str, field: &str) -> Result<String, String> {
         return Err(format!("Invalid {field}."));
     }
     #[cfg(windows)]
-    if raw.contains('\\') {
+    if raw.contains('\\') || raw.contains(':') {
+        // A drive-relative component such as `C:` or `C:foo` has a Windows
+        // path prefix: PathBuf::join replaces the vault root with it instead
+        // of appending, so it must never pass as a plain folder name.
         return Err(format!("Invalid {field}."));
     }
     Ok(raw.to_string())
 }
 
 // ── Helpers ──────────────────────────────────────────────────
+
+/// Case-insensitive PDF extension check. Users frequently import `.PDF`
+/// files; the listing already accepts them, so scanning must too.
+fn is_pdf_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.eq_ignore_ascii_case("pdf"))
+        .unwrap_or(false)
+}
 
 /// Collect immediate subdirectories, sorted by name.
 fn collect_dirs(path: &Path) -> Result<Vec<std::fs::DirEntry>, String> {
@@ -139,8 +151,7 @@ fn list_pdf_files(dir: &Path, existing_sources: &HashSet<String>) -> Result<Vec<
     for entry in std::fs::read_dir(dir).map_err(|e| format!("read_dir failed: {e}"))? {
         let entry = entry.map_err(|e| format!("entry failed: {e}"))?;
         let path = entry.path();
-        if !path.is_file() { continue; }
-        if path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase() != "pdf" { continue; }
+        if !path.is_file() || !is_pdf_path(&path) { continue; }
         let name = entry.file_name().to_string_lossy().to_string();
         let is_embedded = existing_sources.contains(&name);
         files.push(SubjectDbFile { name, is_embedded, chunk_count: if is_embedded { 1 } else { 0 } });
@@ -222,7 +233,11 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
             // Grade-pdfs live in the DB with topic = stem; check per-topic counts.
             let mut grade_pdfs = list_pdf_files_in_dir(&grade_path);
             for pdf in &mut grade_pdfs {
-                let stem = pdf.name.trim_end_matches(".pdf").to_string();
+                let stem = Path::new(&pdf.name)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(&pdf.name)
+                    .to_string();
                 let embedded = sqlite_counts
                     .keys()
                     .any(|(s, g, t)| s == &subject_name && g == &grade_name && (t == &pdf.name || t == &stem));
@@ -265,7 +280,7 @@ fn list_pdf_files_in_dir(dir: &Path) -> Vec<SubjectDbFile> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for e in entries.flatten() {
             let p = e.path();
-            if p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("pdf") {
+            if p.is_file() && is_pdf_path(&p) {
                 files.push(SubjectDbFile {
                     name: e.file_name().to_string_lossy().to_string(),
                     is_embedded: false,
@@ -390,7 +405,7 @@ async fn process_topic_folder(
     let mut pdf_files: Vec<_> = std::fs::read_dir(topic_path)
         .map_err(|e| format!("read topic dir: {e}"))?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().and_then(|ext| ext.to_str()) == Some("pdf"))
+        .filter(|e| e.path().is_file() && is_pdf_path(&e.path()))
         .collect();
     pdf_files.sort_by_key(|e| e.file_name());
 
@@ -434,7 +449,7 @@ async fn process_loose_pdfs(
     let mut pdf_files: Vec<_> = std::fs::read_dir(folder_path)
         .map_err(|e| format!("read dir: {e}"))?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && e.path().extension().and_then(|ext| ext.to_str()) == Some("pdf"))
+        .filter(|e| e.path().is_file() && is_pdf_path(&e.path()))
         .collect();
     pdf_files.sort_by_key(|e| e.file_name());
 
@@ -628,16 +643,32 @@ pub async fn subject_db_delete_file(
             .map_err(|e| format!("Failed to delete file: {e}"))?;
     }
 
-    // Purge index rows for this source file. topic=None intentionally matches
-    // every topic under the grade: loose grade-level PDFs are stored with
-    // topic = filename stem, and subject-level files with grade = topic = stem.
+    // Purge index rows for this source file. Loose grade-level PDFs are
+    // stored with topic = filename stem, and subject-level files with
+    // grade = topic = stem. Resolve that synthetic hierarchy instead of
+    // deleting by source name across every topic (which would also remove a
+    // same-named PDF that lives in a real topic folder).
     {
+        let stem = Path::new(&filename)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(str::to_string);
+        let index_grade = match (&grade, &topic) {
+            (Some(g), _) => Some(g.clone()),
+            (None, _) => stem.clone(),
+        };
+        let index_topic = match (&grade, &topic) {
+            (Some(_), Some(t)) => Some(t.clone()),
+            (Some(_), None) => stem.clone(),
+            (None, Some(t)) => Some(t.clone()),
+            (None, None) => stem.clone(),
+        };
         let conn = store_sqlite::open(&vault_path)?;
         store_sqlite::delete_document_by_source(
             &conn,
             &subject,
-            grade.as_deref(),
-            topic.as_deref(),
+            index_grade.as_deref(),
+            index_topic.as_deref(),
             &filename,
         )?;
     }
@@ -786,6 +817,15 @@ mod tests {
         assert_eq!(validate_segment("Math", "subject").unwrap(), "Math");
         assert_eq!(validate_segment("Grade-7 A", "grade").unwrap(), "Grade-7 A");
         assert_eq!(validate_segment("Unit 1.2 (basics)", "topic").unwrap(), "Unit 1.2 (basics)");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_windows_drive_relative_names() {
+        assert!(validate_segment("C:", "subject").is_err());
+        assert!(validate_segment("C:foo", "grade").is_err());
+        assert!(validate_segment("D:\\outside", "topic").is_err());
+        assert!(validate_segment("file:name.pdf", "filename").is_err());
     }
 
     #[test]

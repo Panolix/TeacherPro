@@ -19,7 +19,7 @@ const editorMarkers = [
   "insertMethodTextAtSelection",
   "handleInsertMethod",
   "refreshSlashMenu",
-  "lessonEditorDragDropEnabled = false",
+  "lessonEditorDragDropEnabled = true",
 ];
 
 let hasFailure = false;
@@ -62,7 +62,7 @@ console.log("[ ] 3. With cursor in a lesson-table body row, double-click a Phase
 console.log("[ ] 4. With cursor in a lesson-table body row, double-click a Method row -> inserts in LTA column.");
 console.log("[ ] 5. With cursor in a lesson-table body row, double-click a Social Form row -> inserts in Social Form column.");
 console.log("[ ] 6. With cursor outside lesson table, Method Bank double-click does nothing.");
-console.log("[ ] 7. Lesson editor drag/drop from Method Bank and Materials is disabled (no insertion on drag).");
+console.log("[ ] 7. Lesson editor drag/drop from Method Bank and Materials inserts at the drop position.");
 console.log("[ ] 8. Type '/' in a table header cell -> no Method Bank slash menu should appear.");
 console.log("[ ] 9. Type '/' in table body Phase/LTA/Social cells -> filtered slash suggestions appear.");
 console.log("[ ] 10. Enter/Tab in slash menu inserts selected title and closes menu.");

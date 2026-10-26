@@ -164,7 +164,18 @@ export function SubjectDbManager() {
   };
 
   // ── Add folder inline ──
-  const startAdding = (state: AddingState) => { setAdding(state); setInputValue(""); };
+  const startAdding = (state: AddingState) => {
+    setAdding(state);
+    setInputValue("");
+    if (state.subject) {
+      const subject = state.subject;
+      setExpandedSubjects((prev) => ({ ...prev, [subject]: true }));
+      if (state.grade) {
+        const gradeKey = `${subject}::${state.grade}`;
+        setExpandedGrades((prev) => ({ ...prev, [gradeKey]: true }));
+      }
+    }
+  };
   const cancelAdding = () => { setAdding(null); setInputValue(""); };
 
   const confirmAdd = async () => {

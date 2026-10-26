@@ -131,7 +131,6 @@ export function Editor() {
     aiPersistChats,
     aiTranslateTargetLanguage,
     defaultLessonTableBodyRows,
-    setSidebarOpen,
     setEditorActions,
     setDocumentSaveState,
     lessonZoomMode,
@@ -271,37 +270,34 @@ export function Editor() {
     setChatOpen((previous) => {
       const next = !previous;
       if (next) {
-        setSidebarOpen(true);
         setNotesOpen(false);
         setMethodBankOpen(false);
       }
       return next;
     });
-  }, [setSidebarOpen]);
+  }, []);
 
   const toggleNotesPanel = useCallback(() => {
     setNotesOpen((previous) => {
       const next = !previous;
       if (next) {
-        setSidebarOpen(true);
         setChatOpen(false);
         setMethodBankOpen(false);
       }
       return next;
     });
-  }, [setSidebarOpen]);
+  }, []);
 
   const toggleMethodBankPanel = useCallback(() => {
     setMethodBankOpen((previous) => {
       const next = !previous;
       if (next) {
-        setSidebarOpen(true);
         setChatOpen(false);
         setNotesOpen(false);
       }
       return next;
     });
-  }, [setSidebarOpen]);
+  }, []);
 
   const closeEditorSidePanels = useCallback(() => {
     setChatOpen(false);
@@ -320,6 +316,7 @@ export function Editor() {
   });
   const ragChunksRef = useRef<ScoredChunk[]>([]);
   const activeStreamIdRef = useRef<string | null>(null);
+  const chatBusyRef = useRef(false);
 
   const stopAiStreaming = useCallback(async () => {
     const id = activeStreamIdRef.current;
@@ -440,6 +437,7 @@ export function Editor() {
     setActiveChatGrade(null);
     setActiveChatTopic(null);
     setActiveChatFile(null);
+    setChatContextBudget(null);
     ragChunksRef.current = [];
   }, [
     chatDocumentId,
@@ -447,6 +445,7 @@ export function Editor() {
     setActiveChatGrade,
     setActiveChatTopic,
     setActiveChatFile,
+    setChatContextBudget,
   ]);
 
   useEffect(() => {
@@ -1521,9 +1520,10 @@ export function Editor() {
     }
 
     const userText = (overrideText ?? chatInput).trim();
-    if (!userText) {
+    if (!userText || chatBusyRef.current) {
       return;
     }
+    chatBusyRef.current = true;
 
     const userMessage: AiChatMessage = {
       id: `user-${Date.now()}`,
@@ -1886,6 +1886,7 @@ export function Editor() {
         },
       ]);
     } finally {
+      chatBusyRef.current = false;
       setIsChatBusy(false);
     }
   }, [aiEnabled, aiV3ChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
@@ -3233,7 +3234,10 @@ export function Editor() {
         open={chatOpen}
         onClose={() => setChatOpen(false)}
         messages={chatMessages}
-        onClearMessages={() => setChatMessages([])}
+        onClearMessages={() => {
+          setChatMessages([]);
+          setChatContextBudget(null);
+        }}
         input={chatInput}
         onInputChange={setChatInput}
         onSend={handleSubmitChat}

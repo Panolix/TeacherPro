@@ -13,9 +13,11 @@ export function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDrop
       const parsed = JSON.parse(structuredPayload) as {
         relativePath?: string;
         isDirectory?: boolean;
+        itemType?: "file" | "folder";
       };
       relativePath = parsed.relativePath || "";
-      itemType = parsed.isDirectory ? "folder" : "file";
+      itemType =
+        parsed.isDirectory || parsed.itemType === "folder" ? "folder" : "file";
     } catch {
       relativePath = "";
     }

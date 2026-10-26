@@ -322,6 +322,9 @@ export function SettingsModal({ open, onClose }: Props) {
 
   const removePack = async () => {
     try {
+      // Windows locks the running llama-server/DLLs, so stop the engine
+      // before deleting the pack directory.
+      try { await invoke("ai_engine_stop"); } catch { /* engine may be stopped */ }
       await invoke("ai_engine_pack_remove");
       setPackProgress(null);
       await refreshAfterPackChange();
