@@ -35,7 +35,7 @@ tempfile = "3"
 tauri-plugin-clipboard-manager = "2.5.0"
 rusqlite = { version = "0.32", features = ["bundled"] }
 fastembed = "4"
-zip = "2"
+zip = "9"
 whatlang = "0.16"
 
 [target.'cfg(windows)'.dependencies]
