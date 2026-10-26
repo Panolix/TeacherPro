@@ -612,27 +612,80 @@ fn perform_engine_pack(
     Ok(())
 }
 
+const MAX_ZIP_ENTRIES: usize = 10_000;
+const MAX_ZIP_ENTRY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_ZIP_TOTAL_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
 /// Extract every file in the archive into `dest`, flattened by basename
 /// (llama.cpp Windows zips keep all binaries at the archive root anyway).
 fn extract_zip_flat(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file)
         .map_err(|e| format!("Invalid zip {}: {e}", zip_path.display()))?;
+    if archive.len() > MAX_ZIP_ENTRIES {
+        return Err(format!(
+            "Archive {} has too many entries ({}).",
+            zip_path.display(),
+            archive.len()
+        ));
+    }
+
+    let mut total_uncompressed: u64 = 0;
+    let mut total_written: u64 = 0;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
         if entry.is_dir() {
             continue;
         }
-        let Some(name) = entry.name().rsplit('/').next().map(str::to_string) else {
+
+        // enclosed_name rejects `..`, absolute paths and (on Windows) drive /
+        // UNC prefixes. Flatten only after that check, then re-validate the
+        // basename to be extra strict about backslash tricks.
+        let Some(enclosed) = entry.enclosed_name() else {
+            return Err(format!("Unsafe archive entry: {}", entry.name()));
+        };
+        let Some(name) = enclosed.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        if name.is_empty() {
-            continue;
+        if name.is_empty()
+            || name == "."
+            || name == ".."
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains(':')
+        {
+            return Err(format!("Unsafe archive entry: {}", entry.name()));
         }
-        let out_path = dest.join(&name);
+
+        let size = entry.size();
+        if size > MAX_ZIP_ENTRY_BYTES
+            || total_uncompressed.saturating_add(size) > MAX_ZIP_TOTAL_BYTES
+        {
+            return Err(format!(
+                "Archive {} exceeds the extraction size limit.",
+                zip_path.display()
+            ));
+        }
+        total_uncompressed = total_uncompressed.saturating_add(size);
+
+        let out_path = dest.join(name);
         let mut out =
             std::fs::File::create(&out_path).map_err(|e| format!("extract {name}: {e}"))?;
-        std::io::copy(&mut entry, &mut out).map_err(|e| format!("extract {name}: {e}"))?;
+        let mut limited = std::io::Read::take(&mut entry, MAX_ZIP_ENTRY_BYTES + 1);
+        let written =
+            std::io::copy(&mut limited, &mut out).map_err(|e| format!("extract {name}: {e}"))?;
+        if written > MAX_ZIP_ENTRY_BYTES {
+            let _ = std::fs::remove_file(&out_path);
+            return Err(format!("Archive entry {name} exceeds the size limit."));
+        }
+        total_written = total_written.saturating_add(written);
+        if total_written > MAX_ZIP_TOTAL_BYTES {
+            let _ = std::fs::remove_file(&out_path);
+            return Err(format!(
+                "Archive {} exceeds the total extraction size limit.",
+                zip_path.display()
+            ));
+        }
     }
     Ok(())
 }

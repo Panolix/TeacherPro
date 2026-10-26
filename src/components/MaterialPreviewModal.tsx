@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
+import { createImageBlobUrl } from "../utils/filePreview";
 
 type PreviewKind = "pdf" | "image" | "text" | null;
 
@@ -46,6 +46,17 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
     };
   }, [blobUrl]);
 
+  // Closing the modal must release the preview blob, not only changing files
+  // or unmounting the always-mounted sidebar dialog.
+  useEffect(() => {
+    if (open || !blobUrl) {
+      return;
+    }
+    URL.revokeObjectURL(blobUrl);
+    setBlobUrl(null);
+    setSrc(null);
+  }, [open, blobUrl]);
+
   // Load preview content whenever modal opens for a new file
   useEffect(() => {
     if (!open || !relativePath || !vaultPath) {
@@ -83,7 +94,13 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
             URL.revokeObjectURL(url);
           }
         } else if (previewKind === "image") {
-          if (!cancelled) setSrc(convertFileSrc(fullPath));
+          const url = await createImageBlobUrl(fullPath);
+          if (!cancelled) {
+            setBlobUrl(url);
+            setSrc(url);
+          } else {
+            URL.revokeObjectURL(url);
+          }
         } else if (previewKind === "text") {
           const content = await readTextFile(fullPath);
           if (!cancelled) setText(content);
@@ -136,6 +153,9 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
       <div
         ref={modalRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={fileName}
         className="tp-preview-surface w-full max-w-5xl h-[88vh] rounded-xl shadow-2xl overflow-hidden flex flex-col"
         style={{ background: "#161616", border: "1px solid #333" }}
         onMouseDown={(e) => e.stopPropagation()}

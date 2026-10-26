@@ -40,6 +40,7 @@
 
   // Non-React code (store.ts): vault operation alerts.
   alerts: {
+    saveBeforeSwitch: "The current document could not be saved. Continue and discard the unsaved changes?",
     invalidFolderName: "Invalid folder name",
     folderExists: "A folder with that name already exists",
     createFolder: "Error creating folder: {{error}}",
@@ -67,6 +68,7 @@
     deleteTrashError: "Error deleting trash entry: {{error}}",
     nameEmptyOrSeparators: "Name cannot be empty or contain path separators.",
     itemNameExists: "An item with that name already exists here.",
+    itemNameExistsInRoot: 'An item named "{{name}}" already exists in {{root}}.',
     renameError: "Error renaming: {{error}}",
     moveIntoItself: "Cannot move a folder into itself.",
     moveError: "Error moving: {{error}}",
@@ -166,6 +168,7 @@
       methodBank: "Method Bank",
       lessonNotes: "Lesson Notes",
       clearNotes: "Clear notes",
+      clearNotesConfirm: "Clear this lesson's notes? This cannot be undone.",
       closeNotes: "Close Notes",
       closeMethodBank: "Close Method Bank",
       closeAiChat: "Close AI Chat",
@@ -258,6 +261,7 @@
     },
 
     methodBank: {
+      insert: "Insert",
       searchMethods: "Search methods...",
       phase: "Phase",
       social: "Social",
@@ -710,7 +714,7 @@
   },
 
   statusBar: {
-    vaultSynced: "Vault synced",
+    vaultSynced: "Vault open",
     noVault: "No vault",
     zoomOut: "Zoom out (Cmd/Ctrl -)",
     zoomPresets: "Zoom presets",
@@ -718,6 +722,10 @@
     fitToWidth: "Fit to width",
     fit: "Fit",
     saved: "Saved {{time}}",
+    saving: "Saving…",
+    unsaved: "Unsaved changes",
+    saveFailed: "Save failed",
+    closeSaveFailed: "Some changes could not be saved. Close anyway and discard them?",
   },
 
   materialPreview: {

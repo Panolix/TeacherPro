@@ -55,6 +55,10 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
 
   return (
       <div
+        inert={!open}
+        aria-hidden={!open}
+        role="dialog"
+        aria-label={t("editor.panels.methodBank")}
         className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -76,6 +80,7 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
             <input
               type="text"
               value={search}
+              aria-label={t("editor.methodBank.searchMethods")}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("editor.methodBank.searchMethods")}
               className="h-9 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-sm text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
@@ -127,6 +132,12 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
                       draggable={false}
                       onClick={() => setSelectedId(entry.id)}
                       onDoubleClick={() => onInsert(entry)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          onInsert(entry);
+                        }
+                      }}
                       title={entry.title}
                       className={`w-full rounded-md border px-2 py-2 text-left transition-colors ${
                         isSelected
@@ -175,6 +186,13 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
                     </span>
                   ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onInsert(selectedItem)}
+                  className="mt-1 w-full rounded-md bg-[var(--tp-accent)] px-3 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
+                >
+                  {t("editor.methodBank.insert")}
+                </button>
               </div>
             ) : null}
           </div>

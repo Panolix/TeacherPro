@@ -256,18 +256,63 @@ export function SidebarMinimal() {
   }, []);
 
   const submitRename = useCallback(async () => {
-    if (!renameModal) return;
+    if (!renameModal || !vaultPath) return;
     const newName = renameInput.trim();
     if (renameModal.material) {
       await renameMaterialEntry(renameModal.relativePath, newName);
     } else {
+      if (!newName || newName.includes("/") || newName.includes("\\")) {
+        alert(t("alerts.nameEmptyOrSeparators"));
+        return;
+      }
+
+      const segs = renameModal.relativePath.split("/").filter(Boolean);
+      if (segs.length === 0) {
+        setRenameModal(null);
+        setRenameInput("");
+        return;
+      }
+      const lastSeg = segs[segs.length - 1];
+      const isJson = lastSeg.toLowerCase().endsWith(".json");
+      const finalName =
+        isJson && !newName.toLowerCase().endsWith(".json") ? `${newName}.json` : newName;
+      const parentSegs = segs.slice(0, -1);
+
+      // Preflight every root before renaming any of them. This avoids a
+      // partial rename when one root already contains the target name.
+      const rootsToRename: VaultRoot[] = [];
       for (const r of renameModal.roots) {
+        const oldPath = await join(vaultPath, r, ...segs);
+        if (!(await exists(oldPath))) {
+          continue;
+        }
+        const newPath = await join(vaultPath, r, ...parentSegs, finalName);
+        if (await exists(newPath)) {
+          alert(
+            t("alerts.itemNameExistsInRoot", {
+              name: finalName,
+              root: r,
+            }),
+          );
+          return;
+        }
+        rootsToRename.push(r);
+      }
+
+      for (const r of rootsToRename) {
         await renameVaultPath(r, renameModal.relativePath, newName);
       }
     }
     setRenameModal(null);
     setRenameInput("");
-  }, [renameModal, renameInput, renameMaterialEntry, renameVaultPath]);
+  }, [
+    renameModal,
+    renameInput,
+    renameMaterialEntry,
+    renameVaultPath,
+    vaultPath,
+    t,
+  ]);
 
   // Build context menu entries for a file
   const buildFileMenu = useCallback(
@@ -753,10 +798,11 @@ export function SidebarMinimal() {
     }
   }, [addMaterialDirectory]);
 
-  // Insert material at current cursor position (must be inside a lesson table body row)
+  // Insert a material at the editor cursor or as a new mindmap node.
   const insertMaterialAtCursor = useCallback(
     (relativePath: string, isDirectory: boolean) => {
-      if (currentView !== "editor" || !activeFilePath) return;
+      if (!activeFilePath) return;
+      if (currentView !== "editor" && currentView !== "mindmap") return;
       setPendingMaterialDrop({
         relativePath,
         isDirectory,
@@ -1340,6 +1386,7 @@ export function SidebarMinimal() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label={t('sidebar.search.placeholder')}
                     placeholder={t('sidebar.search.placeholder')}
                     className="flex-1 min-w-0 bg-transparent outline-none border-none text-[12.5px]"
                     style={{ color: "var(--tp-t-1)" }}
@@ -1584,13 +1631,18 @@ export function SidebarMinimal() {
       {renameModal && (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-          onClick={() => setRenameModal(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              setRenameModal(null);
+            }
+          }}
         >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] pointer-events-none" />
           <div
             className="relative w-[min(420px,calc(100vw-1.5rem))] rounded-xl shadow-2xl overflow-hidden"
             style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-2)" }}
-            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--tp-b-1)" }}>
               <h3 className="text-[14px] font-semibold" style={{ color: "var(--tp-t-1)" }}>

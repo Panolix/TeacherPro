@@ -10,12 +10,14 @@ import {
   exists,
   copyFile,
   remove,
-  stat,
 } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
 import { t } from "./i18n/translations";
+import { isTrashEntryExpired } from "./utils/trash";
+import { enqueueDocumentWrite } from "./utils/documentWriteQueue";
+import { flushOpenDocuments } from "./utils/closeFlush";
 
 export interface LessonMetadata {
   teacher: string;
@@ -209,6 +211,7 @@ interface AppState {
   trashAutoClearDays: number | null;
   language: "en" | "de";
   lessonSubjectIndex: Record<string, string>;
+  lessonPlannedDateIndex: Record<string, string | null>;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
   pendingMaterialDrop: PendingMaterialDropRef | null;
@@ -242,6 +245,9 @@ interface AppState {
 
   /** Timestamp (ms) of the last successful lesson/mindmap save, for the status bar. */
   lastSavedAt: number | null;
+  /** Dirty/saving state of the document currently in the editor/mindmap. */
+  documentSaveState: "idle" | "dirty" | "saving" | "saved" | "error";
+  setDocumentSaveState: (state: AppState["documentSaveState"]) => void;
 
   /** Transient AI status line for the status bar (never persisted). */
   aiStatusMessage: string | null;
@@ -467,6 +473,34 @@ async function backupDocumentBeforeWrite(vaultPath: string, filePath: string): P
  */
 const sameVaultPath = (a: string, b: string) =>
   a.replace(/\\/g, "/") === b.replace(/\\/g, "/");
+
+const normalizeVaultPath = (path: string) =>
+  path.replace(/\\/g, "/").replace(/\/+$/, "");
+
+/**
+ * Returns the child-relative suffix when `candidate` is `parent` itself or
+ * lives below it, otherwise null. Used to keep the active document bound to a
+ * file when its parent folder is renamed, moved or deleted.
+ */
+function relativePathWithin(candidate: string, parent: string): string | null {
+  const normalizedCandidate = normalizeVaultPath(candidate);
+  const normalizedParent = normalizeVaultPath(parent);
+  if (normalizedCandidate === normalizedParent) {
+    return "";
+  }
+  if (normalizedCandidate.startsWith(`${normalizedParent}/`)) {
+    return normalizedCandidate.slice(normalizedParent.length + 1);
+  }
+  return null;
+}
+
+function appendRelativePath(base: string, relative: string): string {
+  if (!relative) {
+    return base;
+  }
+  const separator = base.includes("\\") ? "\\" : "/";
+  return `${base.replace(/[\\/]+$/, "")}${separator}${relative.replace(/\//g, separator)}`;
+}
 
 const MIN_DEFAULT_LESSON_TABLE_BODY_ROWS = 1;
 const MAX_DEFAULT_LESSON_TABLE_BODY_ROWS = 12;
@@ -794,9 +828,16 @@ async function buildMindmapSearchIndex(vaultPath: string, mindmapEntries: DirEnt
   return Object.fromEntries(pairs);
 }
 
-async function buildLessonSubjectIndex(vaultPath: string, lessonTree: MaterialEntry[]): Promise<Record<string, string>> {
+async function buildLessonMetadataIndex(
+  vaultPath: string,
+  lessonTree: MaterialEntry[],
+): Promise<{
+  subjects: Record<string, string>;
+  plannedDates: Record<string, string | null>;
+}> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-  const result: Record<string, string> = {};
+  const subjects: Record<string, string> = {};
+  const plannedDates: Record<string, string | null> = {};
 
   // Walk the full tree recursively so nested lessons (e.g. "History/Lesson.json")
   // are indexed by their full relativePath — the same key CalendarView uses.
@@ -810,17 +851,27 @@ async function buildLessonSubjectIndex(vaultPath: string, lessonTree: MaterialEn
       const filePath = await join(lessonPlansFolder, entry.relativePath);
       try {
         const text = await readTextFile(filePath);
-        const parsed = JSON.parse(text) as { metadata?: { subject?: unknown } };
-        const subject = typeof parsed?.metadata?.subject === "string" ? parsed.metadata.subject.trim() : "";
-        result[entry.relativePath] = subject;
+        const parsed = JSON.parse(text) as {
+          metadata?: { subject?: unknown; plannedFor?: unknown };
+        };
+        subjects[entry.relativePath] =
+          typeof parsed?.metadata?.subject === "string"
+            ? parsed.metadata.subject.trim()
+            : "";
+        plannedDates[entry.relativePath] =
+          typeof parsed?.metadata?.plannedFor === "string" &&
+          parsed.metadata.plannedFor.trim()
+            ? parsed.metadata.plannedFor
+            : null;
       } catch {
-        result[entry.relativePath] = "";
+        subjects[entry.relativePath] = "";
+        plannedDates[entry.relativePath] = null;
       }
     }));
   };
 
   await walk(lessonTree);
-  return result;
+  return { subjects, plannedDates };
 }
 
 let searchIndexBuildVersion = 0;
@@ -831,6 +882,13 @@ let searchIndexBuildVersion = 0;
 let uiSettingsPersistChain: Promise<void> = Promise.resolve();
 
 function persistUiSettings(patch: Partial<UISettings>): Promise<void> {
+  // Nothing may write settings before initVault has loaded the saved store
+  // and the vault settings backup. Otherwise a startup setter can replace a
+  // portable settings backup with defaults.
+  if (!useAppStore.getState().isInitialized) {
+    return Promise.resolve();
+  }
+
   const run = uiSettingsPersistChain.then(() => writeUiSettings(patch));
   uiSettingsPersistChain = run.catch((error) => {
     console.warn("Could not persist UI settings", error);
@@ -1062,6 +1120,19 @@ function alertT(key: string, params?: Record<string, string | number>): void {
   alert(tr(key, params));
 }
 
+/**
+ * Flush the currently open document before switching, renaming or deleting
+ * the file it lives in. If the write fails, let the user decide whether to
+ * continue (and explicitly discard the pending changes) or stay put.
+ */
+async function flushBeforeDocumentChange(): Promise<boolean> {
+  const result = await flushOpenDocuments();
+  if (result.ok) {
+    return true;
+  }
+  return window.confirm(tr("alerts.saveBeforeSwitch"));
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   isInitialized: false,
   vaultPath: null,
@@ -1080,6 +1151,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   })(),
   lessonSearchIndex: {},
   mindmapSearchIndex: {},
+  lessonPlannedDateIndex: {},
   isSearchIndexing: false,
   themeMode: DEFAULT_UI_SETTINGS.themeMode,
   accentColor: DEFAULT_UI_SETTINGS.accentColor,
@@ -1120,6 +1192,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   subjectDatabases: [],
   lastSavedAt: null,
+  documentSaveState: "idle",
+  setDocumentSaveState: (state) => {
+    if (get().documentSaveState !== state) {
+      set({ documentSaveState: state });
+    }
+  },
   aiStatusMessage: null,
   activeChatDb: null,
   activeChatGrade: null,
@@ -1446,35 +1524,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     const trashPath = await join(vaultPath, "Trash");
     const cutoffTime = Date.now() - (trashAutoClearDays * 24 * 60 * 60 * 1000);
 
-    const deleteOldItems = async (dirPath: string) => {
-      try {
-        const entries = await readDir(dirPath);
-        for (const entry of entries) {
-          if (!entry.name || entry.name.startsWith(".")) continue;
-          const entryPath = await join(dirPath, entry.name);
-          const entryStat = await stat(entryPath);
-
-          if (entry.isDirectory) {
-            await deleteOldItems(entryPath);
-            // Check if directory is now empty
-            const remaining = await readDir(entryPath);
-            if (remaining.filter(e => !e.name?.startsWith(".")).length === 0) {
-              await remove(entryPath);
-            }
-          } else {
-            // Check if file is older than cutoff
-            const modifiedTime = entryStat.mtime ? new Date(entryStat.mtime).getTime() : Date.now();
-            if (modifiedTime < cutoffTime) {
-              await remove(entryPath);
-            }
-          }
+    // Age is determined only by the timestamp embedded in the trash entry
+    // name. Do not recurse into a trashed folder and judge its children by
+    // mtime: a folder moved to the Trash today may contain old files, and
+    // those files must not be permanently deleted immediately.
+    try {
+      const sections = await readDir(trashPath);
+      for (const section of sections) {
+        if (!section.isDirectory || !section.name || section.name.startsWith(".")) {
+          continue;
         }
-      } catch (error) {
-        console.error("Failed to cleanup trash item:", error);
-      }
-    };
 
-    await deleteOldItems(trashPath);
+        const sectionPath = await join(trashPath, section.name);
+        const entries = await readDir(sectionPath);
+        for (const entry of entries) {
+          if (!entry.name || entry.name.startsWith(".")) {
+            continue;
+          }
+          if (!isTrashEntryExpired(entry.name, cutoffTime)) {
+            continue;
+          }
+
+          const entryPath = await join(sectionPath, entry.name);
+          await remove(entryPath, entry.isDirectory ? { recursive: true } : undefined);
+        }
+      }
+    } catch (error) {
+      // Trash may not exist yet on a freshly created vault.
+      if (await exists(trashPath)) {
+        console.error("Failed to clean up old trash items:", error);
+      }
+    }
   },
 
   refreshVault: async () => {
@@ -1531,10 +1611,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       void (async () => {
         try {
-          const [nextLessonIndex, nextMindmapIndex, nextSubjectIndex] = await Promise.all([
+          const [nextLessonIndex, nextMindmapIndex, nextMetadataIndex] = await Promise.all([
             buildLessonSearchIndex(vaultPath, lpFiltered),
             buildMindmapSearchIndex(vaultPath, mmFiltered),
-            buildLessonSubjectIndex(vaultPath, lessonTree),
+            buildLessonMetadataIndex(vaultPath, lessonTree),
           ]);
 
           if (buildVersion !== searchIndexBuildVersion) {
@@ -1544,7 +1624,8 @@ export const useAppStore = create<AppState>((set, get) => ({
           set({
             lessonSearchIndex: nextLessonIndex,
             mindmapSearchIndex: nextMindmapIndex,
-            lessonSubjectIndex: nextSubjectIndex,
+            lessonSubjectIndex: nextMetadataIndex.subjects,
+            lessonPlannedDateIndex: nextMetadataIndex.plannedDates,
             isSearchIndexing: false,
           });
         } catch (indexError) {
@@ -1588,6 +1669,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   createNewLesson: async (plannedDate?: Date, subFolder?: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const { defaultTeacherName } = get();
@@ -1598,7 +1680,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const month = String(dateToUse.getMonth() + 1).padStart(2, '0');
       const day = String(dateToUse.getDate()).padStart(2, '0');
       const dateStr = `${year}-${month}-${day}`;
-      const fileName = `Lesson-${dateStr}-${Date.now().toString().slice(-4)}.json`;
+      const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const candidateName = `Lesson-${dateStr}-${uniqueSuffix}.json`;
       const lessonPlansFolder = subFolder
         ? await join(vaultPath, "Lesson Plans", ...subFolder.split("/").filter(Boolean))
         : await join(vaultPath, "Lesson Plans");
@@ -1606,7 +1689,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!(await exists(lessonPlansFolder))) {
         await mkdir(lessonPlansFolder, { recursive: true });
       }
-      const filePath = await join(lessonPlansFolder, fileName);
+      const filePath = await ensureUniqueTargetPath(lessonPlansFolder, candidateName);
       
       const initialContent: LessonData = {
         version: 1,
@@ -1639,7 +1722,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   duplicateLesson: async (fileName: string) => {
-    const { vaultPath } = get();
+    const { vaultPath, currentView } = get();
     if (!vaultPath) return;
 
     try {
@@ -1650,7 +1733,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const stem = fileName.replace(/\.json$/i, "");
       const duplicateBaseName = `${stem} (Copy).json`;
       const destinationPath = await ensureUniqueTargetPath(lessonPlansFolder, duplicateBaseName);
-      const duplicatedFileName = extractBaseName(destinationPath);
+      const duplicatedFileName =
+        relativePathWithin(destinationPath, lessonPlansFolder) ?? extractBaseName(destinationPath);
 
       let nextText = sourceText;
       try {
@@ -1665,7 +1749,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       await writeTextFileAtomic(destinationPath, nextText);
       await get().refreshVault();
-      await get().openLesson(duplicatedFileName);
+      // Duplicating from the weekly view should keep the user in the weekly
+      // view and simply show the new copy on the same day. From the editor,
+      // opening the duplicate is the useful behavior.
+      if (currentView !== "calendar") {
+        await get().openLesson(duplicatedFileName);
+      }
     } catch (error) {
       console.error("Failed to duplicate lesson:", error);
       alertT("alerts.duplicateLesson", { error: String(error) });
@@ -1675,6 +1764,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   rescheduleLesson: async (fileName: string, plannedDate: Date) => {
     const { vaultPath, activeFilePath, defaultTeacherName, lessonSubjectIndex, subjects } = get();
     if (!vaultPath) return null;
+    if (!(await flushBeforeDocumentChange())) return null;
 
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
@@ -1774,21 +1864,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteLesson: async (fileName: string) => {
-    const { vaultPath, activeFilePath, currentView } = get();
+    const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const filePath = await join(lessonPlansFolder, fileName);
       // Extract just the basename for trash naming (handles nested paths like "Folder/Lesson.json")
       const baseName = fileName.split("/").pop() || fileName;
-      const didMove = await movePathToTrash(vaultPath, filePath, "Lesson Plans", baseName);
+      const didMove = await enqueueDocumentWrite(() =>
+        movePathToTrash(vaultPath, filePath, "Lesson Plans", baseName),
+      );
 
       if (!didMove) {
         console.warn(`Skipped deleting lesson \"${fileName}\" because it no longer exists.`);
       }
 
-      if (currentView === "editor" && activeFilePath && sameVaultPath(activeFilePath, filePath)) {
+      if (activeFilePath && relativePathWithin(activeFilePath, filePath) !== null) {
         set({ activeFilePath: null, activeFileContent: null });
       }
 
@@ -1800,8 +1893,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   renameLesson: async (oldFileName: string, newName: string) => {
-    const { vaultPath, activeFilePath, currentView } = get();
+    const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const rawName = newName.trim();
@@ -1823,9 +1917,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      await rename(oldPath, newPath);
+      await enqueueDocumentWrite(() => rename(oldPath, newPath));
 
-      if (currentView === "editor" && activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
+      if (activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
       }
 
@@ -1846,6 +1940,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activeFilePath || !activeFileContent || !vaultPath) return true;
     const allowRename = options?.allowRename ?? true;
 
+    return enqueueDocumentWrite(async () => {
     try {
       const nextNotes =
         typeof updatedNotes === "string"
@@ -1892,7 +1987,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         newFileName = `${folderPrefix}${dateStr}-${sanitizedSubject}.json`;
       } else {
         if (currentFileName.startsWith("Untitled-Lesson")) {
-          const id = Date.now().toString().slice(-4);
+          const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
           newFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
         }
       }
@@ -1914,6 +2009,14 @@ export const useAppStore = create<AppState>((set, get) => ({
             console.error("Rename failed, saving to old path", renameError);
           }
         }
+      }
+
+      // Never recreate a file the user deleted or moved while this save was
+      // queued. saveLessonAtPath already had this guard; the autosave path
+      // used by the editor did not.
+      if (!(await exists(savePath))) {
+        console.warn("Lesson no longer exists; refusing to recreate it:", savePath);
+        return false;
       }
 
       await backupDocumentBeforeWrite(vaultPath, savePath);
@@ -1944,6 +2047,12 @@ export const useAppStore = create<AppState>((set, get) => ({
             relativeKey && state.lessonSubjectIndex[relativeKey] !== undefined
               ? { ...state.lessonSubjectIndex, [relativeKey]: newLessonData.metadata.subject || "" }
               : state.lessonSubjectIndex,
+          lessonPlannedDateIndex: relativeKey
+            ? {
+                ...state.lessonPlannedDateIndex,
+                [relativeKey]: newLessonData.metadata.plannedFor || null,
+              }
+            : state.lessonPlannedDateIndex,
         }));
       } else {
         await get().refreshVault();
@@ -1955,6 +2064,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       alertT("alerts.saveLesson", { error: String(error) });
       return false;
     }
+    });
   },
 
   saveLessonAtPath: async (
@@ -1965,6 +2075,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { vaultPath } = get();
     if (!vaultPath || !filePath) return false;
 
+    return enqueueDocumentWrite(async () => {
     try {
       // The outgoing lesson may have been deleted or renamed in the meantime —
       // never resurrect a file the user got rid of.
@@ -1990,6 +2101,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonSubjectIndex: state.lessonSubjectIndex[relativeKey] !== undefined
             ? { ...state.lessonSubjectIndex, [relativeKey]: lessonData.metadata?.subject || "" }
             : state.lessonSubjectIndex,
+          lessonPlannedDateIndex: {
+            ...state.lessonPlannedDateIndex,
+            [relativeKey]: lessonData.metadata?.plannedFor || null,
+          },
         }));
       }
       set({ lastSavedAt: Date.now() });
@@ -2001,11 +2116,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return false;
     }
+    });
   },
 
   openLesson: async (fileName: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const parts = fileName.split("/").filter(Boolean);
@@ -2031,13 +2148,30 @@ export const useAppStore = create<AppState>((set, get) => ({
             content: rawContent
           };
         } else {
-          lessonData = rawContent as LessonData;
-          if (typeof lessonData.notes !== "string") {
-            lessonData = {
-              ...lessonData,
-              notes: "",
-            };
-          }
+          const rawLesson = rawContent as Partial<LessonData>;
+          const rawMetadata = (rawLesson.metadata ?? {}) as Partial<LessonMetadata>;
+          lessonData = {
+            ...(rawLesson as LessonData),
+            version: 1,
+            metadata: {
+              teacher:
+                typeof rawMetadata.teacher === "string"
+                  ? rawMetadata.teacher
+                  : defaultTeacherName,
+              createdAt:
+                typeof rawMetadata.createdAt === "string" && rawMetadata.createdAt.trim()
+                  ? rawMetadata.createdAt
+                  : new Date().toISOString(),
+              plannedFor:
+                typeof rawMetadata.plannedFor === "string" && rawMetadata.plannedFor.trim()
+                  ? rawMetadata.plannedFor
+                  : null,
+              subject:
+                typeof rawMetadata.subject === "string" ? rawMetadata.subject : "",
+            },
+            notes: typeof rawLesson.notes === "string" ? rawLesson.notes : "",
+            content: rawLesson.content ?? { type: "doc", content: [] },
+          };
         }
 
         set({
@@ -2054,16 +2188,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   createNewMindmap: async (subFolder?: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
-      const fileName = `Mindmap-${Date.now().toString().slice(-4)}.json`;
+      const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+      const candidateName = `Mindmap-${uniqueSuffix}.json`;
       const mindmapsFolder = subFolder
         ? await join(vaultPath, "Mindmaps", ...subFolder.split("/").filter(Boolean))
         : await join(vaultPath, "Mindmaps");
       if (!(await exists(mindmapsFolder))) {
         await mkdir(mindmapsFolder, { recursive: true });
       }
-      const filePath = await join(mindmapsFolder, fileName);
+      const filePath = await ensureUniqueTargetPath(mindmapsFolder, candidateName);
       
       const initialContent: MindmapData = {
         version: 1,
@@ -2088,17 +2224,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   deleteMindmap: async (fileName: string) => {
-    const { vaultPath, activeFilePath, currentView } = get();
+    const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const mindmapsFolder = await join(vaultPath, "Mindmaps");
       const filePath = await join(mindmapsFolder, fileName);
       // Extract just the basename for trash naming (handles nested paths like "Folder/Mindmap.json")
       const baseName = fileName.split("/").pop() || fileName;
-      await movePathToTrash(vaultPath, filePath, "Mindmaps", baseName);
+      await enqueueDocumentWrite(() =>
+        movePathToTrash(vaultPath, filePath, "Mindmaps", baseName),
+      );
 
-      if (currentView === "mindmap" && activeFilePath && sameVaultPath(activeFilePath, filePath)) {
+      if (activeFilePath && relativePathWithin(activeFilePath, filePath) !== null) {
         set({ activeFilePath: null, activeMindmapContent: null });
       }
 
@@ -2110,8 +2249,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   renameMindmap: async (oldFileName: string, newName: string) => {
-    const { vaultPath, activeFilePath, currentView } = get();
+    const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const rawName = newName.trim();
@@ -2133,9 +2273,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      await rename(oldPath, newPath);
+      await enqueueDocumentWrite(() => rename(oldPath, newPath));
 
-      if (currentView === "mindmap" && activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
+      if (activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
       }
 
@@ -2150,7 +2290,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeFilePath, vaultPath } = get();
     if (!activeFilePath || !vaultPath) return;
 
+    return enqueueDocumentWrite(async () => {
     try {
+      if (!(await exists(activeFilePath))) {
+        console.warn("Mindmap no longer exists; refusing to recreate it:", activeFilePath);
+        return;
+      }
+
       const newMindmapData: MindmapData = {
         version: 1,
         nodes,
@@ -2171,6 +2317,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error("Failed to save mindmap:", error);
       alertT("alerts.saveMindmap", { error: String(error) });
     }
+    });
   },
 
   saveMindmapAtPath: async (
@@ -2182,6 +2329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { vaultPath } = get();
     if (!vaultPath || !filePath) return false;
 
+    return enqueueDocumentWrite(async () => {
     try {
       // The outgoing mindmap may have been deleted or renamed in the meantime
       // — never resurrect a file the user got rid of.
@@ -2210,11 +2358,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       return false;
     }
+    });
   },
 
   openMindmap: async (fileName: string) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const parts = fileName.split("/").filter(Boolean);
@@ -2412,6 +2562,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   renameVaultPath: async (root, relativePath, newName) => {
     const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
     try {
       const trimmed = newName.trim();
       if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
@@ -2426,12 +2577,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       const oldPath = await join(vaultPath, root, ...segs);
       const newPath = await join(vaultPath, root, ...parentSegs, finalName);
       if (oldPath === newPath) return;
+      // The unified folder may exist in only some roots. A root that does not
+      // contain the source must be skipped before checking the destination;
+      // otherwise an unrelated folder with the target name in that root
+      // produces a misleading "already exists" alert.
+      if (!(await exists(oldPath))) return;
       if (await exists(newPath)) {
-        alertT("alerts.itemNameExists");
+        alertT("alerts.itemNameExistsInRoot", { name: finalName, root });
         return;
       }
-      await rename(oldPath, newPath);
-      if (activeFilePath === oldPath) set({ activeFilePath: newPath });
+
+      const activeRelative = activeFilePath
+        ? relativePathWithin(activeFilePath, oldPath)
+        : null;
+
+      await enqueueDocumentWrite(() => rename(oldPath, newPath));
+      if (activeRelative !== null) {
+        set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
+      }
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename vault path:", error);
@@ -2442,6 +2605,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   moveVaultPath: async (root, sourceRelative, targetFolderRelative) => {
     const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
     try {
       const srcSegs = sourceRelative.split("/").filter(Boolean);
       if (srcSegs.length === 0) return;
@@ -2466,8 +2630,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         await mkdir(targetFolderPath, { recursive: true });
       }
       const newPath = await ensureUniqueTargetPath(targetFolderPath, itemName);
-      await rename(sourcePath, newPath);
-      if (activeFilePath === sourcePath) set({ activeFilePath: newPath });
+      const activeRelative = activeFilePath
+        ? relativePathWithin(activeFilePath, sourcePath)
+        : null;
+
+      await enqueueDocumentWrite(() => rename(sourcePath, newPath));
+      if (activeRelative !== null) {
+        set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
+      }
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to move vault path:", error);
@@ -2478,18 +2648,27 @@ export const useAppStore = create<AppState>((set, get) => ({
   deleteVaultPath: async (root, relativePath, isDirectory) => {
     const { vaultPath, activeFilePath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
     try {
       const segs = relativePath.split("/").filter(Boolean);
       if (segs.length === 0) return;
       const sourcePath = await join(vaultPath, root, ...segs);
       const originalName = segs[segs.length - 1];
       const trashSection = root === "Materials" ? "Materials" : root;
-      const moved = await movePathToTrash(vaultPath, sourcePath, trashSection, originalName);
+      const moved = await enqueueDocumentWrite(() =>
+        movePathToTrash(vaultPath, sourcePath, trashSection, originalName),
+      );
       if (!moved) {
         // Fallback hard delete if not in vault anymore
-        try { await remove(sourcePath, isDirectory ? { recursive: true } : undefined); } catch {}
+        await enqueueDocumentWrite(async () => {
+          try {
+            await remove(sourcePath, isDirectory ? { recursive: true } : undefined);
+          } catch {
+            // The item is already gone; nothing else to clean up.
+          }
+        });
       }
-      if (activeFilePath === sourcePath) {
+      if (activeFilePath && relativePathWithin(activeFilePath, sourcePath) !== null) {
         set({ activeFilePath: null, activeFileContent: null, activeMindmapContent: null });
       }
       await get().refreshVault();

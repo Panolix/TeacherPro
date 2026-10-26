@@ -35,7 +35,7 @@ use it daily; it's shared here in case it's useful to someone else.
     <td align="center" width="50%">
       <img src="public/screenshot2.png" alt="Mindmap" width="100%"><br>
       <b>Mindmaps</b><br>
-      <sub>Infinite canvas for curriculum maps. Nodes can be renamed, coloured and linked; files can be dropped onto the canvas.</sub>
+      <sub>Infinite canvas for curriculum maps. Nodes can be renamed, coloured and linked; materials can be attached from the sidebar.</sub>
     </td>
     <td align="center" width="50%">
       <img src="public/screenshot4.png" alt="Method bank" width="100%"><br>
@@ -50,8 +50,10 @@ use it daily; it's shared here in case it's useful to someone else.
 Everything lives in a **vault** — a normal folder you pick on first launch.
 Lessons and mindmaps are JSON files, materials stay where you put them, and the
 trash is just a `Trash` folder inside the vault. Because it's all plain files,
-you can back the vault up, sync it with Dropbox or put it on a USB stick
-without the app caring.
+you can back the vault up, sync it with Dropbox or put it on a USB stick.
+Avoid editing the same vault from two machines at the same time: the app has
+no merge or conflict detection, and simultaneous autosaves can overwrite each
+other.
 
 If you want to know what the vault looks like before committing to it, create
 an empty folder and poke around after a few minutes of use.
@@ -72,15 +74,14 @@ methods, searchable and insertable into lesson tables from a side panel or via
 `/` inside a table cell.
 
 **Mindmaps.** A node-based canvas for mapping out a unit or a topic. Nodes can
-be colour-coded, renamed, connected, and external files dragged in.
+be colour-coded, renamed, connected, and materials attached from the sidebar.
 
 **Calendar.** A week view of all planned lessons. Click a card to open the
 lesson, drag it to another day to reschedule it.
 
-**Search and trash.** One search field filters lessons, mindmaps, materials
-and trash, including the text inside documents. Deleted items go to the vault's
-trash where they can be restored or deleted permanently; rendered previews are
-available before restoring.
+**Search and trash.** The sidebar search field filters lessons and mindmaps by
+name and folder. Materials and trash are browsed separately. Deleted items go
+to the vault's trash where they can be restored or deleted permanently.
 
 **Printing and PDF.** Lessons and mindmaps print through the native print
 dialog and export as PDF into an `Exports` folder. The exported page matches
@@ -97,8 +98,8 @@ AI is optional and runs entirely on your machine. TeacherPro starts its own
 Ollama install, no runtime to set up and nothing sent to the internet.
 
 - **Models** are downloaded in Settings → KI-Funktionen as GGUF files from
-  Hugging Face and verified with SHA-256. Sizes range from small models for
-  older laptops to 27B models for machines with a big GPU.
+  Hugging Face and verified with SHA-256 when downloaded. Sizes range from
+  small models for older laptops to 27B models for machines with a big GPU.
 - **Chat** streams token by token, supports thinking models, and can be stopped
   mid-answer. The rewrite/translate actions in the editor use the same engine.
 - **Knowledge bases.** You can import PDFs into subject databases. They're

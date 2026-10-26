@@ -9,8 +9,15 @@ import { StatusBar } from "./StatusBar";
 
 export function MainContent() {
   const { t } = useTranslation();
-  const { vaultPath, openVault, activeFilePath, currentView } = useAppStore();
+  const { vaultPath, openVault, activeFilePath, activeFileContent, currentView } = useAppStore();
   const editorDocumentOpen = currentView === "editor" && !!activeFilePath;
+  // Remount the editor when the document identity changes. This gives each
+  // lesson a fresh TipTap history, so Ctrl+Z can never restore content from
+  // the previously open lesson. A save-driven rename keeps the same identity.
+  const editorDocumentKey =
+    activeFileContent?.metadata?.createdAt
+      ? `lesson:${activeFileContent.metadata.createdAt}`
+      : activeFilePath ?? "lesson";
 
   return (
     <div
@@ -53,7 +60,7 @@ export function MainContent() {
             {/* Editor when file is open and editor view */}
             {activeFilePath && currentView === "editor" && (
               <div className="print:p-0 h-full min-h-0">
-                <Editor />
+                <Editor key={editorDocumentKey} />
               </div>
             )}
 

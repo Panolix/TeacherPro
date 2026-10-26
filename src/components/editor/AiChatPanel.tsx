@@ -88,7 +88,12 @@ export function AiChatPanel({
     });
   }, [open, messages, busy]);
 
-  return (      <div
+  return (
+      <div
+        inert={!open}
+        aria-hidden={!open}
+        role="dialog"
+        aria-label={t("editor.panels.aiChat")}
         className={`fixed left-0 top-0 bottom-0 z-[200] w-[336px] max-w-[336px] print:hidden flex flex-col transition-transform duration-300 ease-in-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -173,6 +178,9 @@ export function AiChatPanel({
             {/* Messages */}
             <div
               ref={chatScrollRef}
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
               className="flex-1 overflow-y-auto bg-[var(--tp-app-bg)] px-4 py-4 space-y-4 [scrollbar-width:thin] [scrollbar-color:#3a3a3a_#161616] [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-[#161616] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#3a3a3a]"
             >
               {messages.length === 0 && (
@@ -290,6 +298,7 @@ export function AiChatPanel({
               <div className="flex items-center gap-2 rounded-xl border border-[var(--tp-border-strong)] bg-[var(--tp-panel-muted)] px-3 py-2 focus-within:border-[var(--tp-accent)]">
                 <textarea
                   value={input}
+                  aria-label={t("editor.panels.messageAi")}
                   onChange={(event) => onInputChange(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {

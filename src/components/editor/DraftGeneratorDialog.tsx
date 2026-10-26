@@ -252,6 +252,9 @@ export function DraftGeneratorDialog({
   return (
     <div className="fixed inset-0 z-[400] flex items-center justify-center" style={{ background: "rgba(0,0,0,0.55)" }}>
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("editor.aiDraft.title")}
         className="w-[720px] max-w-[94vw] max-h-[92vh] overflow-y-auto rounded-xl border shadow-2xl p-6"
         style={{ background: "var(--tp-panel-elevated)", borderColor: "var(--tp-border-strong)", color: "var(--tp-text-primary)" }}
       >

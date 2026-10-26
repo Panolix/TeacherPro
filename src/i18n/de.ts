@@ -40,6 +40,7 @@
 
   // Nicht-React-Code (store.ts): Alerts für Vault-Operationen.
   alerts: {
+    saveBeforeSwitch: "Das aktuelle Dokument konnte nicht gespeichert werden. Trotzdem fortfahren und die ungespeicherten Änderungen verwerfen?",
     invalidFolderName: "Ungültiger Ordnername",
     folderExists: "Ein Ordner mit diesem Namen existiert bereits",
     createFolder: "Fehler beim Erstellen des Ordners: {{error}}",
@@ -67,6 +68,7 @@
     deleteTrashError: "Fehler beim Löschen des Papierkorb-Eintrags: {{error}}",
     nameEmptyOrSeparators: "Der Name darf nicht leer sein und keine Pfad-Trennzeichen enthalten.",
     itemNameExists: "Ein Element mit diesem Namen existiert hier bereits.",
+    itemNameExistsInRoot: 'Ein Element namens "{{name}}" existiert in {{root}} bereits.',
     renameError: "Fehler beim Umbenennen: {{error}}",
     moveIntoItself: "Ein Ordner kann nicht in sich selbst verschoben werden.",
     moveError: "Fehler beim Verschieben: {{error}}",
@@ -166,6 +168,7 @@
       methodBank: "Methodenbank",
       lessonNotes: "Unterrichtsnotizen",
       clearNotes: "Notizen leeren",
+      clearNotesConfirm: "Die Notizen dieser Stunde löschen? Das kann nicht rückgängig gemacht werden.",
       closeNotes: "Notizen schließen",
       closeMethodBank: "Methodenbank schließen",
       closeAiChat: "KI-Chat schließen",
@@ -259,6 +262,7 @@
     },
 
     methodBank: {
+      insert: "Einfügen",
       searchMethods: "Methoden durchsuchen...",
       phase: "Phase",
       social: "Sozialform",
@@ -711,7 +715,7 @@
   },
 
   statusBar: {
-    vaultSynced: "Vault synchronisiert",
+    vaultSynced: "Vault geöffnet",
     noVault: "Kein Vault",
     zoomOut: "Verkleinern (Cmd/Strg -)",
     zoomPresets: "Zoom-Voreinstellungen",
@@ -719,6 +723,10 @@
     fitToWidth: "An Breite anpassen",
     fit: "Anpassen",
     saved: "Gespeichert {{time}}",
+    saving: "Speichern…",
+    unsaved: "Ungespeicherte Änderungen",
+    saveFailed: "Speichern fehlgeschlagen",
+    closeSaveFailed: "Einige Änderungen konnten nicht gespeichert werden. Trotzdem schließen und verwerfen?",
   },
 
   materialPreview: {

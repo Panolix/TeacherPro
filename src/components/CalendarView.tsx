@@ -22,6 +22,7 @@ export function CalendarView() {
     rescheduleLesson,
     subjects,
     lessonSubjectIndex,
+    lessonPlannedDateIndex,
   } = useAppStore();
 
   const { t, language } = useTranslation();
@@ -70,11 +71,27 @@ export function CalendarView() {
 
   const getLessonsForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return allLessonEntries.filter(p => p.name && p.name.includes(dateStr));
+    return allLessonEntries.filter((lesson) => {
+      const plannedIso = lessonPlannedDateIndex[lesson.relativePath];
+      if (plannedIso) {
+        const plannedDate = new Date(plannedIso);
+        if (!Number.isNaN(plannedDate.getTime())) {
+          return format(plannedDate, "yyyy-MM-dd") === dateStr;
+        }
+      }
+      return lesson.name.includes(dateStr);
+    });
   };
 
-  const getLessonDateToken = (lessonName: string): string | null => {
-    const match = lessonName.match(/\d{4}-\d{2}-\d{2}/);
+  const getLessonDateToken = (lessonRelativePath: string): string | null => {
+    const plannedIso = lessonPlannedDateIndex[lessonRelativePath];
+    if (plannedIso) {
+      const plannedDate = new Date(plannedIso);
+      if (!Number.isNaN(plannedDate.getTime())) {
+        return format(plannedDate, "yyyy-MM-dd");
+      }
+    }
+    const match = lessonRelativePath.match(/\d{4}-\d{2}-\d{2}/);
     return match ? match[0] : null;
   };
 

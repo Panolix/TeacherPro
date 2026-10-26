@@ -82,6 +82,22 @@ fn subject_db_dir(vault_path: &str) -> PathBuf {
     PathBuf::from(vault_path).join("SubjectDBs")
 }
 
+/// Resolve SubjectDBs and refuse to use it when it is a junction/symlink that
+/// points outside the vault. All destructive SubjectDB operations go through
+/// this check before touching the filesystem.
+fn subject_db_dir_checked(vault_path: &str) -> Result<PathBuf, String> {
+    let db_dir = subject_db_dir(vault_path);
+    std::fs::create_dir_all(&db_dir).map_err(|e| format!("Failed to create SubjectDBs: {e}"))?;
+    let canonical_db =
+        std::fs::canonicalize(&db_dir).map_err(|e| format!("Failed to resolve SubjectDBs: {e}"))?;
+    let canonical_vault = std::fs::canonicalize(vault_path)
+        .map_err(|e| format!("Failed to resolve vault: {e}"))?;
+    if !canonical_db.starts_with(&canonical_vault) {
+        return Err("SubjectDBs resolves outside the vault.".to_string());
+    }
+    Ok(canonical_db)
+}
+
 /// Validate a single folder or file name coming from the frontend.
 ///
 /// Rejects path separators, traversal components, empty names and NUL bytes so
@@ -159,7 +175,7 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
-    let db_dir = subject_db_dir(&vault_path);
+    let db_dir = subject_db_dir_checked(&vault_path)?;
     if !db_dir.exists() { return Ok(Vec::new()); }
 
     let sqlite_counts: std::collections::HashMap<(String, String, String), i64> = {
@@ -272,10 +288,7 @@ pub async fn subject_db_scan_import(
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
-    let db_dir = subject_db_dir(&vault_path);
-    if !db_dir.exists() {
-        std::fs::create_dir_all(&db_dir).map_err(|e| format!("Failed to create SubjectDBs: {e}"))?;
-    }
+    let db_dir = subject_db_dir_checked(&vault_path)?;
 
     init_subject_db(&app);
 
@@ -553,7 +566,7 @@ pub async fn subject_db_add_pdfs(
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
 
-    let base = subject_db_dir(&vault_path).join(&subject);
+    let base = subject_db_dir_checked(&vault_path)?.join(&subject);
 
     let target_dir = match (&grade, &topic) {
         (Some(g), Some(t)) => base.join(g).join(t),
@@ -603,7 +616,7 @@ pub async fn subject_db_delete_file(
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
     let filename = validate_segment(&filename, "filename")?;
 
-    let base = subject_db_dir(&vault_path).join(&subject);
+    let base = subject_db_dir_checked(&vault_path)?.join(&subject);
     let file_path = match (&grade, &topic) {
         (Some(g), Some(t)) => base.join(g).join(t).join(&filename),
         (Some(g), None) => base.join(g).join(&filename),
@@ -731,7 +744,7 @@ pub async fn subject_db_delete(
     let grade = grade.map(|g| validate_segment(&g, "grade")).transpose()?;
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
 
-    let db_dir = subject_db_dir(&vault_path);
+    let db_dir = subject_db_dir_checked(&vault_path)?;
     let target = db_dir.join(&subject);
 
     {

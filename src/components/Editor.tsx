@@ -49,6 +49,12 @@ import { NotesPanel } from "./editor/NotesPanel";
 import { MethodBankPanel } from "./editor/MethodBankPanel";
 import { AiChatPanel } from "./editor/AiChatPanel";
 import type { AiChatMessage } from "./editor/AiChatPanel";
+
+// Chat is session-level, not persisted to disk. Keeping it in a module-level
+// cache keyed by document identity means remounting the editor (which we do to
+// reset TipTap's undo history between lessons) does not drop the conversation.
+const chatCacheByDocument = new Map<string, AiChatMessage[]>();
+let lastChatDocumentId: string | null = null;
 import type { SubjectDbScope } from "./editor/SubjectDbPicker";
 import { DraftGeneratorDialog } from "./editor/DraftGeneratorDialog";
 import type { SelectedTextRange, TableContextMenuState } from "./editor/EditorContextMenu";
@@ -88,6 +94,12 @@ function escapeXmlAttr(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// Retrieved PDF text is untrusted. Prevent it from closing/opening the
+// excerpt delimiter and injecting instructions outside the data block.
+function sanitizeExcerptText(value: string): string {
+  return value.replace(/<\/?excerpt\b[^>]*>/gi, "[excerpt]");
+}
+
 
 /**
  * Split a raw model response into thinking content and actual response.
@@ -121,6 +133,7 @@ export function Editor() {
     defaultLessonTableBodyRows,
     setSidebarOpen,
     setEditorActions,
+    setDocumentSaveState,
     lessonZoomMode,
     lessonZoomFixed,
     setLessonZoomMode,
@@ -167,7 +180,7 @@ export function Editor() {
   const [, setIsEditorDropActive] = useState(false);
   const [expandedThinking, setExpandedThinking] = useState<Set<string>>(new Set());
   const modelSupportsThinking = doesV3ModelSupportThinking(aiV3ChatModelId);
-  const lessonEditorDragDropEnabled = false;
+  const lessonEditorDragDropEnabled = true;
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
@@ -298,7 +311,13 @@ export function Editor() {
 
   const [chatInput, setChatInput] = useState("");
   const [isChatBusy, setIsChatBusy] = useState(false);
-  const [chatMessages, setChatMessages] = useState<AiChatMessage[]>([]);
+  const [chatMessages, setChatMessages] = useState<AiChatMessage[]>(() => {
+    const initialDocumentId =
+      activeFileContent?.metadata?.createdAt ?? activeFilePath ?? null;
+    return initialDocumentId && aiPersistChats
+      ? chatCacheByDocument.get(initialDocumentId) ?? []
+      : [];
+  });
   const ragChunksRef = useRef<ScoredChunk[]>([]);
   const activeStreamIdRef = useRef<string | null>(null);
 
@@ -326,12 +345,21 @@ export function Editor() {
   // ── Autosave machinery (ref-based, so typing no longer re-renders the tree) ──
   const editorRef = useRef<any>(null);
   const autosaveTimerRef = useRef<number | null>(null);
+  // Even while the user is typing without a 1.8 s pause, force a save at
+  // least this often so a crash cannot lose an unbounded editing session.
+  const maxAutosaveTimerRef = useRef<number | null>(null);
+  const MAX_AUTOSAVE_INTERVAL_MS = 15_000;
   // Latest document JSON, captured on every editor update. Lets the
   // switch/unmount flush read the outgoing document even after the editor
   // instance has been destroyed.
   const latestDocJsonRef = useRef<any>(null);
   // The vault path whose content the editor currently holds (set on load).
   const autosavePathRef = useRef<string | null>(null);
+  // Stable document identity. A save-driven rename changes the path but not
+  // the identity, so it must not reset the dirty/revision bookkeeping.
+  const autosaveDocIdRef = useRef<string | null>(
+    activeFileContent?.metadata?.createdAt ?? null,
+  );
   // Latest autosave inputs. Updated after every commit; the flush reads it
   // during effect cleanup, i.e. while it still holds the outgoing lesson's
   // values (the sync effects for the incoming lesson have not run yet).
@@ -373,6 +401,9 @@ export function Editor() {
     notes: activeFileContent?.notes || "",
   });
   const docDirtyRef = useRef(false);
+  // Incremented on every content/metadata change. A save that finishes after
+  // the user typed again must not clear the dirty flag for those newer edits.
+  const docRevisionRef = useRef(0);
 
   const metaIsDirty = useCallback(
     (candidate: {
@@ -387,49 +418,36 @@ export function Editor() {
       candidate.plannedFor !== lastSavedMetaRef.current.plannedFor,
     [],
   );
-  // Per-lesson chat cache for session-level persistence.
-  const chatStoreRef = useRef<Record<string, AiChatMessage[]>>({});
-  const prevFilePathRef = useRef<string | null>(null);
-  const prevLessonCreatedAtRef = useRef<string | null>(
-    activeFileContent?.metadata?.createdAt ?? null,
-  );
+  const chatDocumentId = activeFileContent?.metadata?.createdAt ?? activeFilePath ?? null;
 
-  // Save/restore chat messages when the active lesson changes.
+  // Keep the session-level chat cache current. The editor is remounted when
+  // the document identity changes (to reset undo history), so this cache is
+  // what preserves a conversation across lesson switches.
   useEffect(() => {
-    const prevPath = prevFilePathRef.current;
-    const nextPath = activeFilePath;
-
-    if (prevPath !== nextPath) {
-      // Save current messages for the lesson we're leaving.
-      if (prevPath && aiPersistChats) {
-        chatStoreRef.current[prevPath] = chatMessages;
-      }
-      // A path change can also be a save-driven rename of the *same* lesson.
-      // Only reset the knowledge-base scope when the lesson actually changed.
-      const nextCreatedAt = activeFileContent?.metadata?.createdAt ?? null;
-      const sameLesson = Boolean(
-        prevLessonCreatedAtRef.current &&
-          nextCreatedAt &&
-          prevLessonCreatedAtRef.current === nextCreatedAt,
-      );
-      if (!sameLesson) {
-        setActiveChatDb(null);
-        setActiveChatGrade(null);
-        setActiveChatTopic(null);
-        setActiveChatFile(null);
-        ragChunksRef.current = [];
-      }
-      prevLessonCreatedAtRef.current = nextCreatedAt;
-      // Restore or clear messages for the new lesson.
-      if (nextPath && aiPersistChats && chatStoreRef.current[nextPath]) {
-        setChatMessages(chatStoreRef.current[nextPath]);
-      } else {
-        setChatMessages([]);
-      }
-      prevFilePathRef.current = nextPath;
+    if (chatDocumentId && aiPersistChats) {
+      chatCacheByDocument.set(chatDocumentId, chatMessages);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilePath, aiPersistChats]);
+  }, [chatDocumentId, aiPersistChats, chatMessages]);
+
+  // Reset the knowledge-base scope when the document identity changes. This
+  // module-level marker survives the editor remount.
+  useEffect(() => {
+    if (lastChatDocumentId === chatDocumentId) {
+      return;
+    }
+    lastChatDocumentId = chatDocumentId;
+    setActiveChatDb(null);
+    setActiveChatGrade(null);
+    setActiveChatTopic(null);
+    setActiveChatFile(null);
+    ragChunksRef.current = [];
+  }, [
+    chatDocumentId,
+    setActiveChatDb,
+    setActiveChatGrade,
+    setActiveChatTopic,
+    setActiveChatFile,
+  ]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -466,7 +484,7 @@ export function Editor() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     setSubject(activeFileContent?.metadata?.subject || "");
@@ -710,9 +728,17 @@ export function Editor() {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
+    if (maxAutosaveTimerRef.current !== null) {
+      window.clearTimeout(maxAutosaveTimerRef.current);
+      maxAutosaveTimerRef.current = null;
+    }
   }, []);
 
   const runAutosave = useCallback(async () => {
+    if (maxAutosaveTimerRef.current !== null) {
+      window.clearTimeout(maxAutosaveTimerRef.current);
+      maxAutosaveTimerRef.current = null;
+    }
     if (!editorRef.current || editorRef.current.isDestroyed || !autosavePathRef.current) {
       return;
     }
@@ -738,29 +764,54 @@ export function Editor() {
     const payload = buildAutosavePayload();
     if (!payload || payload.snapshot === lastSavedSnapshotRef.current) {
       docDirtyRef.current = false;
+      setDocumentSaveState("saved");
       return;
     }
 
+    const revisionAtStart = docRevisionRef.current;
+    setDocumentSaveState("saving");
     const ok = await saveActiveLesson(payload.json, payload.metadataPatch, payload.inputs.lessonNotes);
     if (ok) {
       lastSavedSnapshotRef.current = payload.snapshot;
-      docDirtyRef.current = false;
       lastSavedMetaRef.current = {
         teacher: inputs.teacher,
         subject: inputs.subject,
         notes: inputs.lessonNotes,
         plannedFor: effectivePlannedFor ?? null,
       };
+
+      if (docRevisionRef.current === revisionAtStart) {
+        docDirtyRef.current = false;
+        setDocumentSaveState("saved");
+      } else {
+        // Edits arrived while the save was in flight. Keep them dirty and
+        // schedule another pass instead of marking the newer text as saved.
+        setDocumentSaveState("dirty");
+        window.setTimeout(() => {
+          void runAutosave();
+        }, 600);
+      }
+    } else {
+      setDocumentSaveState("error");
     }
-  }, [buildAutosavePayload, metaIsDirty, saveActiveLesson]);
+  }, [buildAutosavePayload, metaIsDirty, saveActiveLesson, setDocumentSaveState]);
 
   const scheduleAutosave = useCallback(() => {
-    clearAutosaveTimer();
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
     autosaveTimerRef.current = window.setTimeout(() => {
       autosaveTimerRef.current = null;
       void runAutosave();
     }, 1800);
-  }, [clearAutosaveTimer, runAutosave]);
+
+    if (maxAutosaveTimerRef.current === null) {
+      maxAutosaveTimerRef.current = window.setTimeout(() => {
+        maxAutosaveTimerRef.current = null;
+        void runAutosave();
+      }, MAX_AUTOSAVE_INTERVAL_MS);
+    }
+  }, [runAutosave]);
 
   // Flush pending edits for the lesson the editor currently holds. Runs when
   // the active lesson changes, the editor unmounts, or the window is closing
@@ -773,7 +824,7 @@ export function Editor() {
 
     const outgoingPath = autosavePathRef.current;
     if (!outgoingPath) {
-      return Promise.resolve(false);
+      return Promise.resolve(true);
     }
 
     const inputs = autosaveInputsRef.current;
@@ -791,12 +842,12 @@ export function Editor() {
         plannedFor: effectivePlannedFor ?? null,
       })
     ) {
-      return Promise.resolve(false);
+      return Promise.resolve(true);
     }
 
     const payload = buildAutosavePayload();
     if (!payload || payload.snapshot === lastSavedSnapshotRef.current) {
-      return Promise.resolve(false);
+      return Promise.resolve(true);
     }
 
     const baseMetadata = inputs.baseMetadata ?? {
@@ -821,8 +872,34 @@ export function Editor() {
 
     // `silent`: a blocking alert() during app close could stall the flush and
     // trip the Rust-side force-close timer.
-    return saveLessonAtPath(outgoingPath, lessonData, { silent: true });
-  }, [buildAutosavePayload, clearAutosaveTimer, metaIsDirty, saveLessonAtPath]);
+    const revisionAtStart = docRevisionRef.current;
+    setDocumentSaveState("saving");
+    return saveLessonAtPath(outgoingPath, lessonData, { silent: true }).then((ok) => {
+      if (!ok) {
+        setDocumentSaveState("error");
+        return false;
+      }
+      if (docRevisionRef.current !== revisionAtStart) {
+        // The flush did not cover the newest keystrokes. Keep the document
+        // dirty and let the caller decide whether to abort the switch/close.
+        setDocumentSaveState("dirty");
+        window.setTimeout(() => {
+          void runAutosave();
+        }, 600);
+        return false;
+      }
+      docDirtyRef.current = false;
+      setDocumentSaveState("saved");
+      return true;
+    });
+  }, [
+    buildAutosavePayload,
+    clearAutosaveTimer,
+    metaIsDirty,
+    saveLessonAtPath,
+    setDocumentSaveState,
+    runAutosave,
+  ]);
 
   // Register the flush for the window-close flow (App.tsx runs the registry
   // before confirming the close). Effect re-runs when the flush identity
@@ -846,10 +923,26 @@ export function Editor() {
     // changes — a save updates activeFileContent under the same path, and
     // resetting then would drop a freshly armed autosave timer.
     if (autosavePathRef.current !== activeFilePath) {
+      const nextDocId = activeFileContent?.metadata?.createdAt ?? activeFilePath;
+      const sameDocument =
+        autosaveDocIdRef.current !== null && autosaveDocIdRef.current === nextDocId;
+
       autosavePathRef.current = activeFilePath;
-      latestDocJsonRef.current = null;
-      docDirtyRef.current = false;
-      clearAutosaveTimer();
+      autosaveDocIdRef.current = nextDocId;
+
+      if (!sameDocument) {
+        // Genuine document switch: the incoming document starts clean.
+        latestDocJsonRef.current = null;
+        docDirtyRef.current = false;
+        docRevisionRef.current = 0;
+        setDocumentSaveState("saved");
+      }
+
+      // A save-driven rename keeps the dirty/revision state intact: edits
+      // made while the rename was in flight must not be marked as saved.
+      if (!sameDocument) {
+        clearAutosaveTimer();
+      }
     }
 
     try {
@@ -881,6 +974,8 @@ export function Editor() {
 
     const handleContentUpdate = () => {
       docDirtyRef.current = true;
+      docRevisionRef.current += 1;
+      setDocumentSaveState("dirty");
       try {
         latestDocJsonRef.current = editor.getJSON();
       } catch {
@@ -923,7 +1018,8 @@ export function Editor() {
       notes: activeFileContent.notes || "",
     };
     docDirtyRef.current = false;
-  }, [editor, activeFilePath, activeFileContent]);
+    setDocumentSaveState("saved");
+  }, [editor, activeFilePath, activeFileContent, setDocumentSaveState]);
 
   // Metadata edits (teacher/subject/date/notes fields) also arm the autosave.
   useEffect(() => {
@@ -931,9 +1027,37 @@ export function Editor() {
       return;
     }
 
+    const parsedPlannedFor = parseEuropeanDateToIso(plannedForInput);
+    const effectivePlannedFor =
+      parsedPlannedFor !== undefined
+        ? parsedPlannedFor
+        : (autosaveInputsRef.current.lastKnownPlannedFor ?? null);
+    if (
+      metaIsDirty({
+        teacher,
+        subject,
+        notes: lessonNotes,
+        plannedFor: effectivePlannedFor,
+      })
+    ) {
+      docRevisionRef.current += 1;
+      setDocumentSaveState("dirty");
+    }
+
     scheduleAutosave();
     return clearAutosaveTimer;
-  }, [editor, activeFilePath, teacher, subject, plannedForInput, lessonNotes, scheduleAutosave, clearAutosaveTimer]);
+  }, [
+    editor,
+    activeFilePath,
+    teacher,
+    subject,
+    plannedForInput,
+    lessonNotes,
+    scheduleAutosave,
+    clearAutosaveTimer,
+    metaIsDirty,
+    setDocumentSaveState,
+  ]);
 
   const insertLessonTable = () => {
     if (!editor) return;
@@ -1058,6 +1182,8 @@ export function Editor() {
     }
 
     const json = editor.getJSON();
+    const revisionAtStart = docRevisionRef.current;
+    setDocumentSaveState("saving");
     const ok = await saveActiveLesson(json, {
       teacher,
       subject,
@@ -1071,15 +1197,30 @@ export function Editor() {
         plannedFor: parsedPlannedFor,
         notes: lessonNotes,
       });
-      docDirtyRef.current = false;
       lastSavedMetaRef.current = {
         teacher,
         subject,
         plannedFor: parsedPlannedFor,
         notes: lessonNotes,
       };
+      if (docRevisionRef.current === revisionAtStart) {
+        docDirtyRef.current = false;
+        setDocumentSaveState("saved");
+      } else {
+        setDocumentSaveState("dirty");
+      }
+    } else {
+      setDocumentSaveState("error");
     }
-  }, [editor, plannedForInput, saveActiveLesson, teacher, subject, lessonNotes]);
+  }, [
+    editor,
+    plannedForInput,
+    saveActiveLesson,
+    teacher,
+    subject,
+    lessonNotes,
+    setDocumentSaveState,
+  ]);
 
   useEffect(() => {
     const onSaveShortcut = (event: KeyboardEvent) => {
@@ -1507,7 +1648,7 @@ export function Editor() {
               const includedResults: ScoredChunk[] = [];
               let usedTokens = 0;
               for (const r of results) {
-                const excerpt = `\n<excerpt source="${escapeXmlAttr(r.source)}" page="${r.page}" subject="${escapeXmlAttr(r.subject)}" grade="${escapeXmlAttr(r.grade)}" topic="${escapeXmlAttr(r.topic)}">\n[${r.source}, p.${r.page}]\n${r.text}\n</excerpt>`;
+                const excerpt = `\n<excerpt source="${escapeXmlAttr(r.source)}" page="${r.page}" subject="${escapeXmlAttr(r.subject)}" grade="${escapeXmlAttr(r.grade)}" topic="${escapeXmlAttr(r.topic)}">\n[${r.source}, p.${r.page}]\n${sanitizeExcerptText(r.text)}\n</excerpt>`;
                 const excerptTokens = estimateTokens(excerpt);
                 if (excerpts.length > 0 && usedTokens + excerptTokens > ragTokenBudget) break;
                 excerpts.push(excerpt);
@@ -2666,12 +2807,6 @@ export function Editor() {
     const shouldInsertAtCursor = clientX < 0 || clientY < 0;
 
     if (shouldInsertAtCursor) {
-      if (!isSelectionInsideLessonTableBodyRow()) {
-        logDebug("editor", "double-click-insert-skipped", `${relativePath} | cursor-not-inside-lesson-table-body-row`);
-        setPendingMaterialDrop(null);
-        return;
-      }
-
       const didInsert = insertMaterialLinkAtSelection({
         relativePath,
         itemType: isDirectory ? "folder" : "file",
@@ -2730,7 +2865,7 @@ export function Editor() {
     }
 
     setPendingMaterialDrop(null);
-  }, [editor, isSelectionInsideLessonTableBodyRow, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
+  }, [editor, pendingMaterialDrop, insertMaterialLinkAtSelection, setPendingMaterialDrop, setDraggedMaterial, logDebug]);
 
   // Subject color drives both the on-screen picker and the exported subject dot.
   const normalizedSubjectName = subject.trim().toLowerCase();

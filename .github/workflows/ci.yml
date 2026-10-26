@@ -59,6 +59,16 @@ jobs:
       - name: Verify typography minimum size
         run: npm run verify:typography
 
+      - name: Verify fs capabilities
+        run: npm run verify:capabilities
+
+      - name: Frontend unit tests
+        run: npm test
+
+      - name: Rust unit tests
+        run: cargo test
+        working-directory: src-tauri
+
       - name: Build frontend
         run: npm run build
 

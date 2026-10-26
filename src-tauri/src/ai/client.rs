@@ -34,7 +34,11 @@ pub struct StreamEvent {
 #[derive(Serialize, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Usage {
+    // OpenAI-compatible servers emit snake_case. `rename_all` keeps the
+    // frontend contract camelCase; the aliases are for deserialization.
+    #[serde(alias = "prompt_tokens")]
     pub prompt_tokens: u64,
+    #[serde(alias = "completion_tokens")]
     pub completion_tokens: u64,
 }
 
@@ -105,6 +109,14 @@ struct SseChunk {
     choices: Vec<SseChoice>,
     #[serde(default)]
     usage: Option<Usage>,
+    #[serde(default)]
+    error: Option<SseErrorPayload>,
+}
+
+#[derive(Deserialize, Default)]
+struct SseErrorPayload {
+    #[serde(default)]
+    message: Option<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -288,6 +300,8 @@ fn run_stream(
     let mut agg = StreamAggregator::new();
     let reader = response.into_reader();
     let mut sse_lines = std::io::BufReader::new(reader);
+    let mut saw_done = false;
+    let mut terminal_error: Option<String> = None;
     loop {
         if cancel.load(Ordering::Relaxed) {
             agg.cancelled = true;
@@ -297,7 +311,10 @@ fn run_stream(
         match std::io::BufRead::read_line(&mut sse_lines, &mut line) {
             Ok(0) => break,
             Ok(_) => {}
-            Err(_) => break,
+            Err(error) => {
+                terminal_error = Some(format!("AI stream read failed: {error}"));
+                break;
+            }
         }
         let line = line.trim_end();
         if !line.starts_with("data:") {
@@ -305,11 +322,20 @@ fn run_stream(
         }
         let payload = line[5..].trim();
         if payload == "[DONE]" {
+            saw_done = true;
             break;
         }
         let Ok(chunk) = serde_json::from_str::<SseChunk>(payload) else {
             continue;
         };
+        if let Some(error) = chunk.error {
+            terminal_error = Some(
+                error
+                    .message
+                    .unwrap_or_else(|| "The AI engine returned an error.".to_string()),
+            );
+            break;
+        }
         if let Some(usage) = chunk.usage {
             agg.usage = Some(usage);
         }
@@ -332,6 +358,16 @@ fn run_stream(
     }
 
     agg.flush(&app, &request_id, true);
+    let completed = saw_done || agg.finish.is_some();
+    let error = if agg.cancelled {
+        Some("cancelled".to_string())
+    } else if terminal_error.is_some() {
+        terminal_error
+    } else if !completed {
+        Some("The AI stream ended before the answer was complete.".to_string())
+    } else {
+        None
+    };
     emit_event(
         &app,
         &request_id,
@@ -340,11 +376,7 @@ fn run_stream(
             text: None,
             usage: agg.usage,
             finish: agg.finish,
-            error: if agg.cancelled {
-                Some("cancelled".into())
-            } else {
-                None
-            },
+            error,
         },
     );
     cleanup_stream(&app, &request_id, &cancel);
@@ -378,6 +410,9 @@ fn build_chat_body(
     }
     if let Some(mt) = max_tokens {
         body["max_tokens"] = serde_json::json!(mt.clamp(64, 8192));
+    }
+    if stream {
+        body["stream_options"] = serde_json::json!({ "include_usage": true });
     }
     if supports_thinking && thinking_control == "reasoning_effort" {
         body["reasoning_effort"] = serde_json::json!(if thinking.unwrap_or(false) {

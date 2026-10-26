@@ -14,11 +14,24 @@ pub struct PageText {
 /// 2. If pdf-extract yields very little text (< 50 chars) and Tesseract CLI
 ///    is available, render pages via `pdftoppm` + OCR via `tesseract`.
 /// 3. Otherwise, return what we got (or an error).
+const MAX_PDF_BYTES: u64 = 250 * 1024 * 1024;
+const MAX_OCR_PAGES: usize = 300;
+
 pub fn extract_text_from_pdf(path: &Path) -> Result<Vec<PageText>, String> {
     let filename = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
+
+    if let Ok(metadata) = std::fs::metadata(path) {
+        if metadata.len() > MAX_PDF_BYTES {
+            return Err(format!(
+                "{filename}: PDF is too large ({} MB, limit {} MB).",
+                metadata.len() / (1024 * 1024),
+                MAX_PDF_BYTES / (1024 * 1024)
+            ));
+        }
+    }
 
     // Strategy 1: pdf-extract (handles digital PDFs)
     match pdf_extract::extract_text_by_pages(path) {
@@ -88,6 +101,8 @@ fn ocr_fallback(path: &Path) -> Result<Vec<PageText>, String> {
         .arg("-png")
         .arg("-r")
         .arg("300") // 300 DPI for good OCR
+        .arg("-l")
+        .arg((MAX_OCR_PAGES + 1).to_string())
         .arg(path)
         .arg(tmp_path.join("page"))
         .output()
@@ -116,6 +131,11 @@ fn ocr_fallback(path: &Path) -> Result<Vec<PageText>, String> {
 
     if page_images.is_empty() {
         return Err("pdftoppm produced no page images".to_string());
+    }
+    if page_images.len() > MAX_OCR_PAGES {
+        return Err(format!(
+            "Scanned PDF has more than {MAX_OCR_PAGES} pages; OCR is limited to {MAX_OCR_PAGES} pages per file."
+        ));
     }
 
     // OCR each page with Tesseract

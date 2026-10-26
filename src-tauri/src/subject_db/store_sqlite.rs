@@ -44,6 +44,10 @@ pub fn open(vault_path: &str) -> Result<Connection, String> {
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
     )
     .map_err(|e| format!("Failed to open SubjectDB index: {e}"))?;
+    // Scans and queries use separate connections; wait instead of failing
+    // immediately with SQLITE_BUSY while another connection is writing.
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .map_err(|e| format!("Failed to configure SubjectDB busy timeout: {e}"))?;
     conn.pragma_update(None, "journal_mode", "WAL").ok();
     conn.pragma_update(None, "synchronous", "NORMAL").ok();
     // Required for the vecs ON DELETE CASCADE to fire (SQLite defaults FK off);

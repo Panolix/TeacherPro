@@ -77,29 +77,29 @@ Primary implementation:
 
 - Sectioned sidebar for lesson plans, mindmaps, materials.
 - New lesson and new mindmap actions.
-- Unified collapsible sidebar search block applies one query across Lesson Plans, Mindmaps, Materials, and Trash.
-- Lesson and mindmap search now includes indexed JSON content (TipTap text + metadata for lessons, node labels/material paths for mindmaps), not only filenames.
+- Unified collapsible sidebar search block filters Lesson Plans and Mindmaps by name and folder path. Materials and Trash are browsed separately.
+- Full-text indexes for lesson and mindmap JSON are built in the store but are not yet wired to the sidebar search UI.
 - Material search supports both file/folder names and relative paths (including nested entries).
 - Section headers for Lesson Plans, Mindmaps, Materials, and Trash now use larger/more readable sidebar typography.
-- Sidebar open/collapsed state is now persisted in app settings and restored on next launch.
-- Sidebar Search collapsed/expanded state is now persisted in app settings and restored on next launch.
+- Sidebar open state is persisted for compatibility; the sidebar collapse control is not currently exposed.
+- Sidebar Search collapsed/expanded state is persisted in settings but not currently exposed as a control.
 - Expanded folder state maps for Materials and Trash trees are now persisted in app settings and restored on next launch.
-- Appearance settings now include independent paper-tone controls for lesson plans and mindmaps.
+- Lesson paper stays light and the mindmap canvas stays dark; the old paper-tone controls are no longer user-facing.
 - Settings panel now uses section tabs (Appearance, Defaults, Advanced) for clearer grouping and reduced visual clutter.
 - Settings now open as a centered modal overlay with stronger spacing, dimmed/blurred backdrop, and Escape/backdrop dismiss.
 - Settings modal dimensions and tab/card text sizing were increased for better readability on higher-resolution displays.
 - Defaults tab includes a Subjects block: up to 4 named subjects each with a custom color picker. Subjects are persisted to vault settings.
 - Defaults tab includes a persisted numeric setting for default inserted lesson-table body rows (range 1-12, default 4).
-- Settings now include an AI tab for local-first configuration, including AI enablement, chat persistence, and a curated multi-family model catalog with selectable providers (Ollama runtime or direct-download mode).
+- Settings include an AI tab for local-first configuration: AI enablement, chat persistence, and a curated multi-family model catalog downloaded as GGUF files and run by the bundled llama-server.
 - AI catalog cards support install/remove/default actions with local status indicators and manual refresh.
-- AI settings now include runtime diagnostics showing server source (TeacherPro-managed vs external), backend policy text, and active model processor usage.
+- AI settings show engine/model status, download progress and hardware information for the bundled engine.
 - AI settings now expose model routing controls with separate selections for lesson chat model and shared rewrite+translation model.
 - AI settings now use neutral per-model capability chips instead of benchmark recommendation cards.
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
 - Lesson context menu includes duplicate action.
-- Trash section in sidebar supports search, restore, preview (files), reveal, and permanent delete actions.
-- Trash preview for deleted lesson/mindmap JSON is rendered to resemble in-app document/mindmap views rather than raw JSON text.
+- Trash section in sidebar supports search, restore, reveal, and permanent delete actions. Preview is not currently available.
+- Trash restore currently returns files to their section root; the original folder path is not preserved.
 - Material preview modal supports PDF, image, and text.
 - Material open in system default app and reveal in Finder.
 - Material double-click insertion now queues only while the lesson editor is active, preventing accidental inserts from calendar/mindmap views.

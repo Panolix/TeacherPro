@@ -152,7 +152,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (tab !== "ai") return;
+    if (!open || tab !== "ai") return;
     let alive = true;
     void invoke<HardwareInfoDto>("ai_hardware_info")
       .then((h) => {
@@ -162,11 +162,11 @@ export function SettingsModal({ open, onClose }: Props) {
     return () => {
       alive = false;
     };
-  }, [tab]);
+  }, [open, tab]);
 
 
   useEffect(() => {
-    if (tab !== "ai") return;
+    if (!open || tab !== "ai") return;
     let alive = true;
     const tick = async () => {
       try {
@@ -205,7 +205,7 @@ export function SettingsModal({ open, onClose }: Props) {
       alive = false;
       window.clearInterval(handle);
     };
-  }, [tab]);
+  }, [open, tab]);
 
   const pollDownload = async (modelId: string) => {
     try {
@@ -360,6 +360,9 @@ export function SettingsModal({ open, onClose }: Props) {
       style={{ background: "rgba(0,0,0,0.6)" }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("settings.title")}
         className="tp-settings-modal flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         style={{ width: "min(900px, calc(100vw - 3rem))", height: "min(720px, calc(100vh - 3rem))" }}
@@ -854,7 +857,7 @@ export function SettingsModal({ open, onClose }: Props) {
         </div>
 
         <div className="tp-settings-footer">
-          <button onClick={onClose} className="tp-btn">{t("common.cancel")}</button>
+          <button onClick={onClose} className="tp-btn">{t("common.close")}</button>
           <button onClick={onClose} className="tp-btn tp-btn-primary">
             <Save className="w-3.5 h-3.5" />
             {t("common.done")}
@@ -905,6 +908,7 @@ function ToggleRow({
         type="button"
         onClick={() => onChange(!value)}
         className={`tp-toggle ${value ? "active" : ""}`}
+        aria-label={label}
         aria-pressed={value}
       />
     </div>

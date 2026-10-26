@@ -2,8 +2,9 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewProps, NodeViewWrapper } from "@tiptap/react";
 import { File, ExternalLink, Trash2, Folder, Eye, FolderOpen, X } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { createImageBlobUrl } from "../../utils/filePreview";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAppStore } from "../../store";
@@ -199,7 +200,9 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
         return;
       }
 
-      setPreviewHtmlSrc(convertFileSrc(fullPath));
+      const blobUrl = await createImageBlobUrl(fullPath);
+      setPreviewBlobUrl(blobUrl);
+      setPreviewHtmlSrc(blobUrl);
       setPreviewOpen(true);
     } catch (error) {
       console.error("Failed to preview file", error);
@@ -230,14 +233,15 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
   };
 
   return (
-    <NodeViewWrapper className="block max-w-full my-2 mx-1 overflow-hidden">
-      <div
+    <NodeViewWrapper as="span" className="inline-flex max-w-full align-middle my-1 mx-0.5">
+      <span
         onContextMenu={handleContextMenu}
         onDoubleClick={() => {
           closeContextMenu();
           void handlePreview();
         }}
-        className="flex items-center gap-2 px-3 py-2 bg-[#222] border border-[#333] rounded-lg hover:border-[color:var(--tp-accent)] transition-all shadow-sm max-w-full cursor-pointer"
+        className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-[#222] border border-[#333] rounded-lg hover:border-[color:var(--tp-accent)] transition-all shadow-sm cursor-pointer"
+        style={{ maxWidth: "min(24rem, 100%)" }}
         title={t('editor.materialLink.tooltip', { name: filePath || fileName })}
       >
         {itemType === "folder" ? (
@@ -246,12 +250,12 @@ const MaterialLinkComponent = (props: NodeViewProps) => {
           <File className="w-4 h-4 shrink-0 text-[var(--tp-accent)]" />
         )}
         <span
-          className="text-sm text-gray-200 font-medium truncate flex-1 min-w-0"
+          className="text-[13px] text-gray-200 font-medium truncate min-w-0 max-w-[18rem]"
           title={filePath || fileName}
         >
           {fileName}
         </span>
-      </div>
+      </span>
 
       {contextMenu && createPortal(
         <div

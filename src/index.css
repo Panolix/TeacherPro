@@ -1454,7 +1454,7 @@ button:where(:active):not(:disabled) {
   margin-left: auto;
   font-size: 11px;
   font-weight: 500;
-  color: #555555;
+  color: #9a9a9a;
   padding: 2px 6px;
   background: #2a2a2a;
   border-radius: 6px;
@@ -1469,9 +1469,9 @@ button:where(:active):not(:disabled) {
 
 .tp-cm-section {
   padding: 6px 10px 4px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
-  color: #555555;
+  color: #9a9a9a;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1619,7 +1619,7 @@ button:where(:active):not(:disabled) {
 .tp-section-title {
   font-size: 12px;
   font-weight: 700;
-  color: #555555;
+  color: #9a9a9a;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 14px;
@@ -1644,7 +1644,7 @@ button:where(:active):not(:disabled) {
 
 .tp-form-hint {
   font-size: 12px;
-  color: #555555;
+  color: #9a9a9a;
 }
 
 .tp-input {
@@ -1666,7 +1666,7 @@ button:where(:active):not(:disabled) {
 }
 
 .tp-input::placeholder {
-  color: #555555;
+  color: #9a9a9a;
 }
 
 select.tp-input {

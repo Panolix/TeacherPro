@@ -19,8 +19,9 @@ import { useAppStore } from "../store";
 import { Eye, Plus, Save, Printer, Download, X, FolderOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
 import { join } from "@tauri-apps/api/path";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
+import { createImageBlobUrl } from "../utils/filePreview";
 import {
   createPdfBlobUrl,
   printCurrentWindow,
@@ -134,8 +135,12 @@ const MATERIAL_NODE_STYLE = {
   color: "#111827",
   border: "1px solid #94a3b8",
   borderRadius: "8px",
-  padding: "10px 20px",
+  padding: "10px 14px",
   fontSize: "13px",
+  width: "220px",
+  maxWidth: "240px",
+  whiteSpace: "normal",
+  wordBreak: "break-word" as const,
 };
 
 const NODE_COLOR_PRESETS: NodeColorPreset[] = [
@@ -321,6 +326,7 @@ export function MindmapView() {
     pendingMaterialDrop,
     setPendingMaterialDrop,
     logDebug,
+    setDocumentSaveState,
   } = useAppStore();
   const { t } = useTranslation();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -369,6 +375,9 @@ export function MindmapView() {
   // Serialized graph state that matches the last persisted version (updated
   // on load, on save, and on flush) — the dirty check compares against it.
   const mindmapSnapshotRef = useRef<string>("");
+  // Mirrors the lesson editor's revision guard: graph edits that happen while
+  // a save is in flight must keep the document dirty.
+  const mindmapRevisionRef = useRef(0);
   // The vault path whose graph the component currently holds (bound at load,
   // like the lesson editor's autosavePathRef). Flushes must target this path —
   // reading the live store during a switch would write the outgoing graph
@@ -386,27 +395,40 @@ export function MindmapView() {
     // when this flush runs on a switch/unmount/close.
     const path = mindmapPathRef.current;
     if (!path || !mindmapDirtyRef.current) {
-      return Promise.resolve(false);
+      return Promise.resolve(true);
     }
     const nodesSnapshot = nodesRef.current;
     const edgesSnapshot = edgesRef.current;
     const snapshot = JSON.stringify({ nodes: nodesSnapshot, edges: edgesSnapshot });
     if (snapshot === mindmapSnapshotRef.current) {
       mindmapDirtyRef.current = false;
-      return Promise.resolve(false);
+      setDocumentSaveState("saved");
+      return Promise.resolve(true);
     }
     // Pre-register the echo guard so the store's echo of THIS save is
     // recognized by the sync effect (mirrors handleSave below).
     lastSavedNodesRef.current = nodesSnapshot;
     lastSavedEdgesRef.current = edgesSnapshot;
+    const revisionAtStart = mindmapRevisionRef.current;
+    setDocumentSaveState("saving");
     return saveMindmapAtPath(path, nodesSnapshot, edgesSnapshot, { silent: true }).then((ok) => {
-      if (ok) {
-        mindmapSnapshotRef.current = snapshot;
-        mindmapDirtyRef.current = false;
+      if (!ok) {
+        setDocumentSaveState("error");
+        return false;
       }
-      return ok;
+      if (mindmapRevisionRef.current !== revisionAtStart) {
+        setDocumentSaveState("dirty");
+        window.setTimeout(() => {
+          void flushMindmapAutosave();
+        }, 600);
+        return false;
+      }
+      mindmapSnapshotRef.current = snapshot;
+      mindmapDirtyRef.current = false;
+      setDocumentSaveState("saved");
+      return true;
     });
-  }, [saveMindmapAtPath]);
+  }, [saveMindmapAtPath, setDocumentSaveState]);
 
   // Keep the flush target bound to the live active path (renames move it);
   // bound here — like the lesson editor's autosavePathRef — so flushes never
@@ -548,10 +570,12 @@ export function MindmapView() {
       setEdges([]);
       mindmapSnapshotRef.current = "";
       mindmapDirtyRef.current = false;
+      mindmapRevisionRef.current = 0;
+      setDocumentSaveState("saved");
       pastRef.current = [];
       futureRef.current = [];
     }
-  }, [activeMindmapContent]);
+  }, [activeMindmapContent, setDocumentSaveState]);
 
   // Debounced autosave: schedule 1.8s after the last graph mutation, mirroring
   // the lesson editor's cadence. Skips load/echo passes via the snapshot.
@@ -564,6 +588,8 @@ export function MindmapView() {
       return;
     }
     mindmapDirtyRef.current = true;
+    mindmapRevisionRef.current += 1;
+    setDocumentSaveState("dirty");
     if (mindmapSaveTimerRef.current !== null) {
       window.clearTimeout(mindmapSaveTimerRef.current);
     }
@@ -706,11 +732,21 @@ export function MindmapView() {
       return;
     }
     const snapshot = JSON.stringify({ nodes, edges });
+    const revisionAtStart = mindmapRevisionRef.current;
     lastSavedNodesRef.current = nodes;
     lastSavedEdgesRef.current = edges;
+    setDocumentSaveState("saving");
     void saveMindmapAtPath(activeFilePath, nodes, edges).then((ok) => {
-      if (ok) {
+      if (!ok) {
+        setDocumentSaveState("error");
+        return;
+      }
+      if (mindmapRevisionRef.current === revisionAtStart) {
         mindmapSnapshotRef.current = snapshot;
+        mindmapDirtyRef.current = false;
+        setDocumentSaveState("saved");
+      } else {
+        setDocumentSaveState("dirty");
       }
     });
   };
@@ -827,10 +863,12 @@ export function MindmapView() {
       }
 
       if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)) {
+        const blobUrl = await createImageBlobUrl(absolutePath);
         setMaterialPreviewState({
           title: fileName,
           kind: "image",
-          src: convertFileSrc(absolutePath),
+          src: blobUrl,
+          blobUrl,
         });
         return;
       }
@@ -860,6 +898,7 @@ export function MindmapView() {
       preferredPosition?: { x: number; y: number },
       sourceNodeId?: string,
     ) => {
+      pushHistory();
       const fileName = payload.relativePath.split("/").pop() || payload.relativePath;
       const nodeId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
@@ -897,7 +936,7 @@ export function MindmapView() {
         );
       }
     },
-    [],
+    [pushHistory, t],
   );
 
   const handleMaterialDragOver = useCallback(
@@ -964,6 +1003,100 @@ export function MindmapView() {
     ],
   );
 
+  // Window-level fallback for drag/drop. WebView2 can swallow the drop before
+  // it reaches React Flow's wrapper; the sidebar already records the dragged
+  // material in the store, so pointer hit-testing is enough to finish the drop.
+  useEffect(() => {
+    const onWindowDragOver = (event: DragEvent) => {
+      if (!useAppStore.getState().draggedMaterial) {
+        return;
+      }
+      const surface = mindmapSurfaceRef.current;
+      if (!surface) {
+        return;
+      }
+      const rect = surface.getBoundingClientRect();
+      const inside =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      if (inside) {
+        event.preventDefault();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+      }
+    };
+
+    const onWindowDrop = (event: DragEvent) => {
+      const active = useAppStore.getState().draggedMaterial;
+      if (!active || !flowInstance) {
+        return;
+      }
+      const surface = mindmapSurfaceRef.current;
+      if (!surface) {
+        return;
+      }
+      const rect = surface.getBoundingClientRect();
+      const inside =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+      if (!inside) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const flowPosition = flowInstance.screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
+      const targetElement = (document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)
+        ?.closest(".react-flow__node") as HTMLElement | null;
+      const sourceNodeId = targetElement?.getAttribute("data-id") || undefined;
+      const sourceNode = sourceNodeId
+        ? nodes.find((node) => node.id === sourceNodeId)
+        : undefined;
+      const preferredPosition = sourceNode
+        ? { x: sourceNode.position.x + 240, y: sourceNode.position.y }
+        : flowPosition;
+
+      addMaterialNodeAt(
+        {
+          relativePath: active.relativePath,
+          itemType: active.isDirectory ? "folder" : "file",
+        },
+        preferredPosition,
+        sourceNodeId,
+      );
+      setDraggedMaterial(null);
+      setPendingMaterialDrop(null);
+      logDebug(
+        "mindmap",
+        sourceNodeId ? "material-drop-window-linked" : "material-drop-window",
+        active.relativePath,
+      );
+    };
+
+    window.addEventListener("dragover", onWindowDragOver, true);
+    window.addEventListener("drop", onWindowDrop, true);
+    return () => {
+      window.removeEventListener("dragover", onWindowDragOver, true);
+      window.removeEventListener("drop", onWindowDrop, true);
+    };
+  }, [
+    addMaterialNodeAt,
+    flowInstance,
+    logDebug,
+    nodes,
+    setDraggedMaterial,
+    setPendingMaterialDrop,
+  ]);
+
   useEffect(() => {
     if (!flowInstance || !pendingMaterialDrop) {
       return;
@@ -972,13 +1105,26 @@ export function MindmapView() {
     const { clientX, clientY, relativePath, isDirectory } = pendingMaterialDrop;
     const shouldInsertAtCursor = clientX < 0 || clientY < 0;
 
+    const surface = mindmapSurfaceRef.current;
     if (shouldInsertAtCursor) {
-      logDebug("mindmap", "drag-end-fallback-ignored-cursor", relativePath);
+      const payload = {
+        relativePath,
+        itemType: isDirectory ? ("folder" as const) : ("file" as const),
+      };
+      const rect = surface?.getBoundingClientRect();
+      const center = rect
+        ? flowInstance.screenToFlowPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          })
+        : undefined;
+      addMaterialNodeAt(payload, center);
+      logDebug("mindmap", "double-click-insert-success", relativePath);
+      setDraggedMaterial(null);
       setPendingMaterialDrop(null);
       return;
     }
 
-    const surface = mindmapSurfaceRef.current;
     if (!surface) {
       setPendingMaterialDrop(null);
       return;

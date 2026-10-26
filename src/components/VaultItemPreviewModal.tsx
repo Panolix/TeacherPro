@@ -208,6 +208,9 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
       <div
         ref={modalRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("vaultPreview.title")}
         className="tp-preview-surface w-full max-w-4xl h-[85vh] rounded-xl shadow-2xl overflow-hidden flex flex-col"
         style={{ background: "#161616", border: "1px solid #333" }}
         onMouseDown={(e) => e.stopPropagation()}

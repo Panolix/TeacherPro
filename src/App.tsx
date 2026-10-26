@@ -6,6 +6,7 @@ import { MainContent } from "./components/MainContent";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { runCloseFlushers } from "./utils/closeFlush";
 import { useAppStore } from "./store";
+import { t as translate } from "./i18n/translations";
 
 const ACCENT_COLORS: Record<string, string> = {
   blue: "#2d86a5",
@@ -42,7 +43,7 @@ function resolveAccentColor(accentValue: string): string {
 }
 
 function App() {
-  const { initVault, accentColor } = useAppStore();
+  const { initVault, accentColor, language } = useAppStore();
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -57,9 +58,9 @@ function App() {
       console.error("Vault init failed:", err);
     });
 
-    // Fixed canvas modes: lesson paper is always light, mindmap canvas is always dark.
-    useAppStore.getState().setLessonPaperTone("light");
-    useAppStore.getState().setMindmapPaperTone("dark");
+    // Fixed canvas modes are enforced by normalizeUiSettings and the data
+    // attributes below. Do not persist on startup: doing so can race
+    // initVault and overwrite the vault settings backup with defaults.
 
     // AI v3: no runtime auto-start. The engine is lazy-started on first AI use
     // (see src-tauri/src/ai/engine.rs) — nothing runs until the user needs it.
@@ -70,7 +71,19 @@ function App() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
+  useEffect(() => {
     const handler = (e: MouseEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('input, textarea, [contenteditable="true"]')
+      ) {
+        // Let text fields keep the native paste/spellcheck/correction menu.
+        return;
+      }
       e.preventDefault();
     };
     document.addEventListener("contextmenu", handler);
@@ -101,7 +114,24 @@ function App() {
           return;
         }
         closing = true;
-        await runCloseFlushers();
+        const flushResult = await runCloseFlushers();
+        if (!flushResult.ok) {
+          const language = useAppStore.getState().language;
+          const discard = window.confirm(
+            translate(language, "statusBar.closeSaveFailed"),
+          );
+          if (!discard) {
+            // Keep the window open. The dirty state is still intact, so the
+            // user can retry the save (Ctrl/Cmd+S) or close again.
+            try {
+              await invoke("cancel_close_window");
+            } catch (error) {
+              console.error("Cancel close failed:", error);
+            }
+            closing = false;
+            return;
+          }
+        }
         try {
           await invoke("confirm_close_window");
         } catch (error) {

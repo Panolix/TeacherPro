@@ -20,6 +20,7 @@ export function StatusBar() {
     setLessonZoomMode,
     setLessonZoomFixed,
     lastSavedAt,
+    documentSaveState,
     aiStatusMessage,
     setAiStatusMessage,
   } = useAppStore();
@@ -82,14 +83,28 @@ export function StatusBar() {
         <span>{t('statusBar.noVault')}</span>
       )}
 
-      {lastSavedAt && (
-        <span title={t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm:ss") })}>
-          {t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm") })}
+      {documentSaveState === "saving" ? (
+        <span role="status" aria-live="polite">{t('statusBar.saving')}</span>
+      ) : documentSaveState === "dirty" ? (
+        <span role="status" aria-live="polite" style={{ color: "var(--tp-amber, #d97706)" }}>
+          {t('statusBar.unsaved')}
         </span>
+      ) : documentSaveState === "error" ? (
+        <span role="alert" style={{ color: "var(--tp-red, #e11d48)" }}>
+          {t('statusBar.saveFailed')}
+        </span>
+      ) : (
+        lastSavedAt && (
+          <span title={t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm:ss") })}>
+            {t('statusBar.saved', { time: format(new Date(lastSavedAt), "HH:mm") })}
+          </span>
+        )
       )}
 
       {aiStatusMessage && (
         <span
+          role="status"
+          aria-live="polite"
           className="inline-flex items-center gap-1.5 rounded px-2 py-0.5"
           style={{ background: "var(--tp-bg-3)", border: "1px solid var(--tp-b-2)", color: "var(--tp-accent)" }}
           title={aiStatusMessage}

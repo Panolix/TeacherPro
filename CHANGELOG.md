@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.9.2] - 2026-10-26
+
+### Fixed
+- **Renamed lessons disappear from the week** - the calendar now reads
+  `metadata.plannedFor` instead of relying on the filename date. Renamed and
+  duplicated lessons stay on their planned day.
+- **Duplicates from Calendar** - duplicating no longer pulls you into the
+  editor, so the copy is visible immediately. Duplicates in subfolders open
+  with the correct relative path.
+- **Save races** - lesson/mindmap writes, flushes, renames and deletes use a
+  serialized write queue. A save that finishes late can no longer overwrite a
+  newer one, and edits typed during a save stay dirty.
+- **Cross-lesson undo** - each lesson gets a fresh editor history, so Ctrl+Z
+  cannot restore another lesson's text into the current file.
+- **Close/save failures** - the status bar shows Saving/Unsaved/Save failed;
+  closing with a failed save asks before discarding. The force-close grace
+  period is 30 s and cancellable.
+- **Rename window closing** - Delete, Backspace, Ctrl+A and selection drags no
+  longer close the rename dialog. Folder renames preflight every root and name
+  the conflicting root.
+- **Active-document path bugs** - folder rename/move/delete and Calendar
+  deletion no longer leave a stale active file or resurrect a deleted lesson.
+- **Settings startup race** - startup no longer overwrites the vault settings
+  backup with defaults.
+- **Trash retention** - auto-clear uses the trash-entry timestamp instead of
+  the original file mtime. Existing items older than the retention period may
+  be removed on the next refresh.
+- **Materials** - copy-file permission restores import/duplicate; image/HTML
+  previews use blob URLs; double-click inserts outside tables and into
+  mindmaps; drag-and-drop handlers are enabled with a WebView2 fallback;
+  material chips and mindmap nodes are compact.
+- **Security** - fixed a `..` path-containment bypass, added an open-file
+  allowlist, hardened ZIP extraction, added SQLite `busy_timeout`, rejected
+  SubjectDB roots outside the vault, added single-instance protection, and
+  escaped retrieved PDF text.
+- **AI streaming** - truncated streams become errors; usage fields deserialize
+  correctly and are requested from llama-server.
+- **PDF/OCR limits** - 250 MB PDF cap and 300-page OCR cap.
+- **Accessibility/i18n** - dialog roles, inert closed panels, aria-live,
+  labels, contrast fixes, `html lang`, notes-clear confirmation, and Settings
+  Close/Done semantics.
+
+### Changed
+- Undo history is per lesson; content is saved, but switching away and back
+  starts a fresh undo stack.
+- Executable/script/HTML materials cannot be opened from material links; use
+  Reveal in folder instead.
+- One app instance per vault; a second launch focuses the existing window.
+
+### Added
+- Vitest tests for the write queue, close flush and trash retention.
+- Rust tests for path-component and executable-material rejection.
+- `verify:capabilities` and CI steps for frontend tests, Rust tests and the
+  capability check.
+
 ## [2.9.1] - 2026-10-19
 
 ### Fixed

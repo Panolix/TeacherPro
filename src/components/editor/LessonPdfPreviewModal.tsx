@@ -72,6 +72,9 @@ export function LessonPdfPreviewModal({ url, onClose, onPrint }: Props) {
       <div
         ref={modalRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("editor.pdf.lessonPlanPreview")}
         className="tp-preview-surface w-full max-w-6xl h-[88vh] bg-[#161616] border border-[#333] rounded-xl shadow-2xl overflow-hidden"
         onMouseDown={(event) => event.stopPropagation()}
       >

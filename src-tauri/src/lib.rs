@@ -1,7 +1,7 @@
 ﻿use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::Duration;
 use tauri::Emitter;
@@ -66,6 +66,14 @@ fn register_vault_root(path: String) -> Result<(), String> {
     if !candidate.is_dir() {
         return Err("Vault path is not a directory.".to_string());
     }
+    if contains_parent_dir(&candidate) {
+        return Err("Vault path must not contain `..` components.".to_string());
+    }
+    // A drive/filesystem root is never a meaningful vault and would turn the
+    // entire filesystem into an allowed scope.
+    if candidate.parent().is_none() {
+        return Err("The filesystem root cannot be used as a vault.".to_string());
+    }
     let canonical = std::fs::canonicalize(&candidate).unwrap_or(candidate);
     if let Ok(mut guard) = VAULT_ROOT.lock() {
         *guard = Some(canonical);
@@ -99,6 +107,33 @@ fn is_allowed_path(path: &Path) -> bool {
         }
     }
     false
+}
+
+/// File types that may be handed to the OS default application from a
+/// material link. Executables, scripts, shortcuts and HTML are deliberately
+/// excluded: a shared vault must not be able to turn one click into code
+/// execution. Unknown types can still be revealed in the file manager.
+const OPENABLE_EXTENSIONS: &[&str] = &[
+    "pdf", "txt", "md", "markdown", "json", "csv", "tsv", "log", "rtf",
+    "odt", "ods", "odp", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "epub",
+    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "tif",
+    "tiff", "mp3", "wav", "ogg", "m4a", "flac", "aac", "mp4", "webm", "mov",
+    "m4v",
+];
+
+fn is_openable_material(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    let Some(extension) = path.extension().and_then(OsStr::to_str) else {
+        return false;
+    };
+    OPENABLE_EXTENSIONS
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(extension))
 }
 
 /// Validate a path that is about to be sent to the OS print pipeline.
@@ -164,6 +199,9 @@ pub(crate) fn validated_vault_path(vault_path: &str) -> Result<PathBuf, String> 
     if !candidate.is_dir() {
         return Err("Vault path is not a directory.".to_string());
     }
+    if contains_parent_dir(&candidate) {
+        return Err("Vault path must not contain `..` components.".to_string());
+    }
 
     let roots: Vec<PathBuf> = match VAULT_ROOT.lock() {
         Ok(guard) => match guard.as_ref() {
@@ -195,7 +233,19 @@ pub(crate) fn validated_vault_path(vault_path: &str) -> Result<PathBuf, String> 
 /// not exist yet (about to be created): canonicalizes the deepest existing
 /// ancestor and requires every remaining component to be a plain name —
 /// never `..`, never one containing a path separator.
+fn contains_parent_dir(path: &Path) -> bool {
+    path.components()
+        .any(|component| matches!(component, Component::ParentDir))
+}
+
 fn grant_path_contained(path: &Path) -> bool {
+    // Never accept a path whose normalization depends on `..`: a string
+    // prefix check would otherwise treat `vault\..\..\Windows` as inside the
+    // vault even though canonicalization resolves it outside.
+    if contains_parent_dir(path) {
+        return false;
+    }
+
     let mut base = path.to_path_buf();
     loop {
         if base.exists() {
@@ -231,23 +281,29 @@ fn grant_path_contained(path: &Path) -> bool {
 /// Containment check for an existing base path against a root: prefer the
 /// canonicalized comparison, fall back to normalized string prefixes.
 fn path_below_root(base: &Path, root: &Path) -> bool {
-    if let (Ok(resolved), Ok(root_canonical)) =
-        (std::fs::canonicalize(base), std::fs::canonicalize(root))
-    {
-        if resolved.starts_with(&root_canonical) {
+    let Ok(resolved) = std::fs::canonicalize(base) else {
+        // The path does not exist yet. Keep the tolerant fallback, but the
+        // caller has already rejected `..` components.
+        return path_string_below(base, root);
+    };
+
+    let root_canonical = std::fs::canonicalize(root);
+    if let Ok(root_canonical) = &root_canonical {
+        if resolved.starts_with(root_canonical) {
             return true;
         }
     }
-    if let Ok(resolved) = std::fs::canonicalize(base) {
-        if resolved.starts_with(root) {
-            return true;
-        }
+    if resolved.starts_with(root) {
+        return true;
     }
-    // Fallback for setups where canonicalize fails on either side.
-    path_string_below(base, root)
-        || std::fs::canonicalize(base)
-            .map(|resolved| resolved.starts_with(root) || path_string_below(&resolved, root))
-            .unwrap_or(false)
+
+    // Only use the string fallback when canonicalization of the root itself
+    // failed (exotic mounts). If canonicalization succeeded and showed the
+    // path outside the root, do not second-guess it with a string prefix.
+    match root_canonical {
+        Ok(_) => false,
+        Err(_) => path_string_below(&resolved, root),
+    }
 }
 
 
@@ -317,6 +373,12 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
     if !is_allowed_path(&target) {
         return Err("Path is outside the vault.".to_string());
     }
+    if !is_openable_material(&target) {
+        return Err(
+            "This file type cannot be opened from TeacherPro. Use Reveal in folder instead."
+                .to_string(),
+        );
+    }
     let target = target.to_string_lossy().to_string();
 
     #[cfg(target_os = "macos")]
@@ -332,8 +394,6 @@ fn open_file_in_default_app(path: String) -> Result<(), String> {
                 .args([
                     "-NoProfile",
                     "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
                     "-Command",
                     "Start-Process -FilePath $env:TP_OPEN_PATH",
                 ]),
@@ -427,8 +487,6 @@ fn print_pdf_file(path: String) -> Result<(), String> {
                 .args([
                     "-NoProfile",
                     "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
                     "-Command",
                     "Start-Process -FilePath $env:TP_PRINT_PATH",
                 ])
@@ -497,26 +555,49 @@ fn migrate_legacy_app_data(app: &tauri::App) {
 
 /// Set by `confirm_close_window` once the webview finished its close flush.
 static CLOSE_CONFIRMED: AtomicBool = AtomicBool::new(false);
-/// Ensures the force-close grace timer runs at most once per close request.
-static CLOSE_GRACE_SPAWNED: AtomicBool = AtomicBool::new(false);
+/// Incremented for every close request / cancellation. A grace timer only
+/// acts if it still owns the latest generation, so an old timer cannot close
+/// the window after the user cancelled and started another attempt.
+static CLOSE_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// How long a close request waits for the webview flush before force-closing.
-const CLOSE_FLUSH_GRACE: Duration = Duration::from_secs(6);
+/// Generous enough for the save-failure confirmation dialog to be answered.
+const CLOSE_FLUSH_GRACE: Duration = Duration::from_secs(30);
 
 /// Called by the webview after it flushed pending document saves in response
 /// to `app-close-requested`. Destroys the window (destroy does not emit
 /// another CloseRequested, so the flush cannot loop).
 #[tauri::command]
 fn confirm_close_window(app: tauri::AppHandle) -> Result<(), String> {
+    CLOSE_GENERATION.fetch_add(1, Ordering::Relaxed);
     CLOSE_CONFIRMED.store(true, Ordering::Relaxed);
+    ai::engine::kill_on_exit(&app);
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.destroy();
     }
     Ok(())
 }
 
+/// Called when the webview decided not to close (for example after a failed
+/// save flush). Suppresses the current grace timer without destroying the
+/// window; the user can retry the close later.
+#[tauri::command]
+fn cancel_close_window() {
+    CLOSE_GENERATION.fetch_add(1, Ordering::Relaxed);
+    CLOSE_CONFIRMED.store(true, Ordering::Relaxed);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // A second launch should focus the existing window rather than
+            // opening another instance against the same vault/SQLite index.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_fs::init())
@@ -530,23 +611,21 @@ pub fn run() {
             // hung webview so the window can always be closed.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                let generation = CLOSE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
                 CLOSE_CONFIRMED.store(false, Ordering::Relaxed);
                 let _ = window.emit("app-close-requested", ());
-                if !CLOSE_GRACE_SPAWNED.swap(true, Ordering::Relaxed) {
-                    let handle = window.app_handle().clone();
-                    std::thread::spawn(move || {
-                        std::thread::sleep(CLOSE_FLUSH_GRACE);
-                        if !CLOSE_CONFIRMED.load(Ordering::Relaxed) {
-                            if let Some(window) = handle.get_webview_window("main") {
-                                let _ = window.destroy();
-                            }
+                let handle = window.app_handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(CLOSE_FLUSH_GRACE);
+                    let still_current =
+                        CLOSE_GENERATION.load(Ordering::Relaxed) == generation;
+                    if still_current && !CLOSE_CONFIRMED.load(Ordering::Relaxed) {
+                        ai::engine::kill_on_exit(&handle);
+                        if let Some(window) = handle.get_webview_window("main") {
+                            let _ = window.destroy();
                         }
-                        CLOSE_GRACE_SPAWNED.store(false, Ordering::Relaxed);
-                    });
-                }
-                // The engine is on its way out with the window — kill it now
-                // (previously the only thing close did).
-                ai::engine::kill_on_exit(window.app_handle());
+                    }
+                });
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -557,6 +636,7 @@ pub fn run() {
             allow_fs_scopes,
             print_pdf_file,
             confirm_close_window,
+            cancel_close_window,
             subject_db::subject_db_list,
             subject_db::subject_db_scan_import,
             subject_db::subject_db_add_pdfs,
@@ -606,13 +686,39 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{validated_existing_path, validated_pdf_path};
+    use super::{
+        contains_parent_dir, is_openable_material, validated_existing_path, validated_pdf_path,
+    };
     use std::io::Write;
+    use std::path::Path;
 
     #[test]
     fn missing_paths_are_rejected() {
         assert!(validated_existing_path("/definitely/not/here").is_err());
         assert!(validated_pdf_path("/definitely/not/here.pdf").is_err());
+    }
+
+    #[test]
+    fn parent_directory_components_are_rejected() {
+        assert!(contains_parent_dir(Path::new("../etc")));
+        assert!(contains_parent_dir(Path::new("vault/../Windows")));
+        assert!(!contains_parent_dir(Path::new("vault/sub/file.pdf")));
+    }
+
+    #[test]
+    fn executable_materials_are_not_openable() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let pdf_path = dir.path().join("lesson.pdf");
+        let exe_path = dir.path().join("lesson.exe");
+        let cmd_path = dir.path().join("lesson.cmd");
+        std::fs::File::create(&pdf_path).expect("create pdf");
+        std::fs::File::create(&exe_path).expect("create exe");
+        std::fs::File::create(&cmd_path).expect("create cmd");
+
+        assert!(is_openable_material(&pdf_path));
+        assert!(!is_openable_material(&exe_path));
+        assert!(!is_openable_material(&cmd_path));
+        assert!(!is_openable_material(dir.path()));
     }
 
     #[test]
