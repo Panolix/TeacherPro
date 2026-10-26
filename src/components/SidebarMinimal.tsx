@@ -103,6 +103,7 @@ export function SidebarMinimal() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const [fileSelectionActive, setFileSelectionActive] = useState(false);
   const [newFolderModalOpen, setNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [expandedTrashSections, setExpandedTrashSections] = useState<Record<string, boolean>>({});
@@ -388,6 +389,7 @@ export function SidebarMinimal() {
           icon: <FolderPlus className="w-4 h-4" />,
           onClick: () => {
             setSelectedFolder(path);
+            setFileSelectionActive(false);
             setNewFolderName("");
             setNewFolderModalOpen(true);
           },
@@ -586,12 +588,13 @@ export function SidebarMinimal() {
 
     if (node.isDirectory) {
       const isExpanded = !!expandedMaterialFolders[key];
-      const isSelected = selectedFolder === node.relativePath;
+      const isSelected = !fileSelectionActive && selectedFolder === node.relativePath;
       const isDropTarget = dragOverFolder === key;
       return (
         <li key={key}>
           <div
             data-folder-path={node.relativePath}
+            data-vault-row
             className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors text-left cursor-pointer select-none ${
               isSelected
                 ? "bg-[var(--tp-accent)]/15 text-white"
@@ -634,6 +637,7 @@ export function SidebarMinimal() {
               className="flex-1 flex items-center gap-1.5 cursor-pointer"
               onClick={(e) => {
                 if ((e as any).dropped) return;
+                setFileSelectionActive(false);
                 setSelectedFolder(isSelected ? null : node.relativePath);
               }}
               onContextMenu={(e) => ctxMenu.open(e, buildFolderMenu(node))}
@@ -654,10 +658,16 @@ export function SidebarMinimal() {
 
     // File — split into drag handle + click area so the two gestures don't conflict
     const root: VaultRoot = node.fileType === "mindmap" ? "Mindmaps" : "Lesson Plans";
-    const isActive = activeFilePath?.endsWith(node.relativePath) ?? false;
+    const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? "";
+    const rootSegment = node.fileType === "mindmap" ? "/Mindmaps/" : "/Lesson Plans/";
+    const isActive =
+      fileSelectionActive &&
+      normalizedActivePath.includes(rootSegment) &&
+      normalizedActivePath.endsWith(`/${node.relativePath}`);
     return (
       <li key={key}>
         <div
+          data-vault-row
           className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors select-none ${
             isActive
               ? "bg-[var(--tp-accent)]/10 text-white"
@@ -678,12 +688,18 @@ export function SidebarMinimal() {
             role="button"
             tabIndex={0}
             onClick={() => {
+              const slash = node.relativePath.lastIndexOf("/");
+              setSelectedFolder(slash >= 0 ? node.relativePath.slice(0, slash) : null);
+              setFileSelectionActive(true);
               if (node.fileType === "lesson") openLesson(node.relativePath);
               else openMindmap(node.relativePath);
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
+                const slash = node.relativePath.lastIndexOf("/");
+                setSelectedFolder(slash >= 0 ? node.relativePath.slice(0, slash) : null);
+                setFileSelectionActive(true);
                 if (node.fileType === "lesson") openLesson(node.relativePath);
                 else openMindmap(node.relativePath);
               }
@@ -1316,7 +1332,17 @@ export function SidebarMinimal() {
               </div>
 
               {/* Nested Folder Tree (top ~2/3) */}
-              <div data-explorer-panel className="flex-[2] overflow-y-auto py-2 min-h-0">
+              <div
+                data-explorer-panel
+                className="flex-[2] overflow-y-auto py-2 min-h-0"
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("[data-vault-row]")) {
+                    return;
+                  }
+                  setSelectedFolder(null);
+                  setFileSelectionActive(false);
+                }}
+              >
                 <ul className="space-y-0.5 px-2">
                   {renderVaultTree()}
                 </ul>

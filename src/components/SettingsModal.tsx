@@ -269,7 +269,7 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   };
 
-  const useModel = async (modelId: string) => {
+  const activateModel = async (modelId: string) => {
     try {
       setEngineStatus(await invoke<EngineStatusDto>("ai_select_model", { modelId }));
       // Persisted routing: chat + rewrite default to the activated model.
@@ -565,7 +565,7 @@ export function SettingsModal({ open, onClose }: Props) {
                               ) : (
                                 <button
                                   className="tp-btn inline-flex items-center gap-1.5"
-                                  onClick={() => void useModel(model.id)}
+                                  onClick={() => void activateModel(model.id)}
                                 >
                                   {t("settings.aiV3.use")}
                                 </button>

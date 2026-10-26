@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.9.3] - 2026-10-26
+
+### Fixed
+- **Single sidebar selection** - folder and file/mindmap highlights are now
+  mutually exclusive. Empty-space clicks clear both; the open document stays
+  open.
+- **Nested file highlighting on Windows** - active files are matched by root
+  and normalized path, instead of relying on native separators.
+- **Subfolder creation** - opening "New Subfolder" now clears the file
+  highlight before the folder becomes the target.
+- **Release draft tagging** - version-tag drafts now explicitly use the pushed
+  tag instead of being left untagged.
+
+### Changed
+- Minor dependency updates: React/React DOM 19.3.1, React types 19.3,
+  Tailwind 4.3.3, `@xyflow/react` 12.12.0, date-fns 4.4.0, Zustand 5.0.16,
+  Tauri CLI 2.12.4, autoprefixer 10.6.1, PostCSS 8.5.31.
+- Added a warnings-only ESLint baseline with TypeScript, React hooks and React
+  refresh rules, and a CI lint step. Current baseline: 80 warnings, 0 errors.
+- Updated GitHub Actions majors and added Dependabot for GitHub Actions, npm
+  minor/patch and Cargo minor/patch updates.
+
 ## [2.9.2] - 2026-10-26
 
 ### Fixed

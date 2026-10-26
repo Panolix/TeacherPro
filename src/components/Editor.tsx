@@ -913,7 +913,6 @@ export function Editor() {
   // store object under the same path, and syncing then would revert unsaved
   // editor edits. The closure still reads the latest activeFileContent on
   // genuine path changes, which always update together.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!editor || !activeFileContent) {
       return;
