@@ -17,6 +17,8 @@ interface Props {
   open: boolean;
   itemType: "lesson" | "mindmap";
   relativePath: string | null;
+  rootFolder?: "Lesson Plans" | "Mindmaps" | "Trash";
+  displayName?: string;
   onClose: () => void;
 }
 
@@ -100,7 +102,14 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
-export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }: Props) {
+export function VaultItemPreviewModal({
+  open,
+  itemType,
+  relativePath,
+  rootFolder,
+  displayName,
+  onClose,
+}: Props) {
   const { vaultPath } = useAppStore();
   const { t } = useTranslation();
   const [lessonData, setLessonData] = useState<LessonData | null>(null);
@@ -110,9 +119,12 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   const fileName = useMemo(() => {
+    if (displayName) {
+      return displayName.replace(/\.json$/i, "");
+    }
     if (!relativePath) return t("vaultPreview.title");
     return relativePath.split("/").pop()?.replace(/\.json$/i, "") || relativePath;
-  }, [relativePath, t]);
+  }, [displayName, relativePath, t]);
 
   // Load content when modal opens
   useEffect(() => {
@@ -129,9 +141,10 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
 
     (async () => {
       try {
-        const rootFolder = itemType === "lesson" ? "Lesson Plans" : "Mindmaps";
+        const effectiveRootFolder =
+          rootFolder ?? (itemType === "lesson" ? "Lesson Plans" : "Mindmaps");
         const segs = relativePath.split("/").filter(Boolean);
-        const fullPath = await join(vaultPath, rootFolder, ...segs);
+        const fullPath = await join(vaultPath, effectiveRootFolder, ...segs);
 
         const present = await exists(fullPath);
         if (!present) {
@@ -158,7 +171,7 @@ export function VaultItemPreviewModal({ open, itemType, relativePath, onClose }:
     return () => {
       cancelled = true;
     };
-  }, [open, relativePath, vaultPath, itemType, t]);
+  }, [open, relativePath, vaultPath, itemType, rootFolder, t]);
 
   // Esc to close
   useEffect(() => {

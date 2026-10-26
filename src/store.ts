@@ -15,7 +15,17 @@ import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from '@tauri-apps/plugin-store';
 import { t } from "./i18n/translations";
-import { isTrashEntryExpired } from "./utils/trash";
+import {
+  addTrashManifestEntry,
+  findTrashManifestEntry,
+  isTrashEntryExpired,
+  parseTrashManifest,
+  removeTrashManifestEntry,
+  stripTrashEntryName,
+  TRASH_SECTIONS,
+  type TrashManifest,
+  type TrashSection,
+} from "./utils/trash";
 import { enqueueDocumentWrite } from "./utils/documentWriteQueue";
 import { flushOpenDocuments } from "./utils/closeFlush";
 
@@ -24,6 +34,7 @@ export interface LessonMetadata {
   createdAt: string;
   plannedFor: string | null;
   subject: string;
+  calendarOrder?: number;
 }
 
 export interface LessonData {
@@ -212,6 +223,8 @@ interface AppState {
   language: "en" | "de";
   lessonSubjectIndex: Record<string, string>;
   lessonPlannedDateIndex: Record<string, string | null>;
+  lessonCalendarOrderIndex: Record<string, number>;
+  vaultItemOrder: Record<string, string[]>;
   debugEvents: DebugEventEntry[];
   draggedMaterial: DraggedMaterialRef | null;
   pendingMaterialDrop: PendingMaterialDropRef | null;
@@ -311,6 +324,8 @@ interface AppState {
   createVaultFolder: (folderName: string, parentPath?: string) => Promise<void>;
   duplicateLesson: (fileName: string) => Promise<void>;
   rescheduleLesson: (fileName: string, plannedDate: Date) => Promise<string | null>;
+  reorderCalendarLessons: (orderedRelativePaths: string[]) => Promise<void>;
+  setVaultItemOrder: (folderPath: string, orderedItemKeys: string[]) => Promise<void>;
   deleteLesson: (fileName: string) => Promise<void>;
   renameLesson: (oldFileName: string, newName: string) => Promise<void>;
   saveActiveLesson: (
@@ -368,6 +383,109 @@ interface AppState {
 const STORE_KEY = "teacherpro-settings.json";
 const SETTINGS_BACKUP_DIR = ".teacherpro";
 const SETTINGS_BACKUP_FILE = "ui-settings.backup.json";
+const TRASH_MANIFEST_FILE = "trash.json";
+const SIDEBAR_ORDER_FILE = "sidebar-order.json";
+
+type SidebarOrderMap = Record<string, string[]>;
+
+function parseSidebarOrder(raw: string | null): SidebarOrderMap {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as { folders?: unknown };
+    const folders = parsed?.folders;
+    if (!folders || typeof folders !== "object" || Array.isArray(folders)) {
+      return {};
+    }
+
+    const result: SidebarOrderMap = {};
+    for (const [folderPath, value] of Object.entries(
+      folders as Record<string, unknown>,
+    )) {
+      if (!Array.isArray(value)) continue;
+      result[folderPath] = value.filter(
+        (item): item is string => typeof item === "string",
+      );
+    }
+    return result;
+  } catch (error) {
+    console.warn("Could not parse sidebar order", error);
+    return {};
+  }
+}
+
+async function readSidebarOrder(vaultPath: string): Promise<SidebarOrderMap> {
+  try {
+    const orderPath = await join(
+      vaultPath,
+      SETTINGS_BACKUP_DIR,
+      SIDEBAR_ORDER_FILE,
+    );
+    if (!(await exists(orderPath))) return {};
+    return parseSidebarOrder(await readTextFile(orderPath));
+  } catch (error) {
+    console.warn("Could not read sidebar order", error);
+    return {};
+  }
+}
+
+let sidebarOrderWriteChain: Promise<void> = Promise.resolve();
+
+function writeSidebarOrder(
+  vaultPath: string,
+  order: SidebarOrderMap,
+): Promise<void> {
+  const run = sidebarOrderWriteChain.then(async () => {
+    const settingsDir = await join(vaultPath, SETTINGS_BACKUP_DIR);
+    await mkdir(settingsDir, { recursive: true });
+    await writeTextFileAtomic(
+      await join(settingsDir, SIDEBAR_ORDER_FILE),
+      JSON.stringify({ version: 1, folders: order }, null, 2),
+    );
+  });
+  sidebarOrderWriteChain = run.catch((error) => {
+    console.warn("Could not write sidebar order", error);
+  });
+  return run;
+}
+
+let trashManifestWriteChain: Promise<void> = Promise.resolve();
+
+async function readTrashManifest(vaultPath: string): Promise<TrashManifest> {
+  try {
+    const manifestPath = await join(
+      vaultPath,
+      SETTINGS_BACKUP_DIR,
+      TRASH_MANIFEST_FILE,
+    );
+    if (!(await exists(manifestPath))) {
+      return parseTrashManifest(null);
+    }
+    return parseTrashManifest(await readTextFile(manifestPath));
+  } catch (error) {
+    console.warn("Could not read trash manifest", error);
+    return parseTrashManifest(null);
+  }
+}
+
+function updateTrashManifest(
+  vaultPath: string,
+  update: (manifest: TrashManifest) => TrashManifest,
+): Promise<void> {
+  const run = trashManifestWriteChain.then(async () => {
+    const manifest = await readTrashManifest(vaultPath);
+    const next = update(manifest);
+    const dir = await join(vaultPath, SETTINGS_BACKUP_DIR);
+    await mkdir(dir, { recursive: true });
+    await writeTextFileAtomic(
+      await join(dir, TRASH_MANIFEST_FILE),
+      JSON.stringify(next, null, 2),
+    );
+  });
+  trashManifestWriteChain = run.catch((error) => {
+    console.warn("Could not update trash manifest", error);
+  });
+  return run;
+}
 
 /**
  * Register paths in the Tauri fs scope at runtime (canonicalized on the Rust
@@ -680,16 +798,8 @@ function createTrashName(originalName: string): string {
   return `${stamp}-${originalName}`;
 }
 
-function stripTrashNamePrefix(trashName: string, section: "Lesson Plans" | "Mindmaps" | "Materials"): string {
-  const withoutTimestamp = trashName.replace(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z-/, "");
-  if (section !== "Materials") {
-    return withoutTimestamp;
-  }
-  return withoutTimestamp.replace(/^(file|folder)-/, "");
-}
-
 function pruneEmptyTrashSections(entries: MaterialEntry[]): MaterialEntry[] {
-  const sectionNames = new Set(["Lesson Plans", "Mindmaps", "Materials"]);
+  const sectionNames = new Set<string>(TRASH_SECTIONS);
   return entries.filter((entry) => !sectionNames.has(entry.name) || entry.children.length > 0);
 }
 
@@ -784,48 +894,87 @@ function buildMindmapSearchText(rawMindmap: unknown): string {
   return chunks.join(" ").toLowerCase();
 }
 
-async function buildLessonSearchIndex(vaultPath: string, lessonEntries: DirEntry[]): Promise<Record<string, string>> {
+async function buildLessonSearchIndex(
+  vaultPath: string,
+  lessonTree: MaterialEntry[],
+): Promise<Record<string, string>> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-  const pairs = await Promise.all(
-    lessonEntries
-      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
-      .map(async (entry) => {
-        const fileName = entry.name!;
-        const filePath = await join(lessonPlansFolder, fileName);
+  const result: Record<string, string> = {};
 
+  const walk = async (entries: MaterialEntry[]) => {
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.isDirectory) {
+          await walk(entry.children);
+          return;
+        }
+        if (!entry.name?.toLowerCase().endsWith(".json")) {
+          return;
+        }
+
+        const filePath = await join(
+          lessonPlansFolder,
+          ...entry.relativePath.split("/").filter(Boolean),
+        );
         try {
           const text = await readTextFile(filePath);
-          const parsed = JSON.parse(text) as unknown;
-          return [fileName, buildLessonSearchText(parsed)] as const;
+          result[entry.relativePath] = buildLessonSearchText(JSON.parse(text));
         } catch {
-          return [fileName, ""] as const;
+          result[entry.relativePath] = "";
         }
       }),
-  );
+    );
+  };
 
-  return Object.fromEntries(pairs);
+  await walk(lessonTree);
+  return result;
 }
 
-async function buildMindmapSearchIndex(vaultPath: string, mindmapEntries: DirEntry[]): Promise<Record<string, string>> {
+async function buildMindmapSearchIndex(
+  vaultPath: string,
+  mindmapTree: MaterialEntry[],
+): Promise<Record<string, string>> {
   const mindmapsFolder = await join(vaultPath, "Mindmaps");
-  const pairs = await Promise.all(
-    mindmapEntries
-      .filter((entry) => !entry.isDirectory && !!entry.name && entry.name.toLowerCase().endsWith(".json"))
-      .map(async (entry) => {
-        const fileName = entry.name!;
-        const filePath = await join(mindmapsFolder, fileName);
+  const result: Record<string, string> = {};
 
+  const walk = async (entries: MaterialEntry[]) => {
+    await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.isDirectory) {
+          await walk(entry.children);
+          return;
+        }
+        if (!entry.name?.toLowerCase().endsWith(".json")) {
+          return;
+        }
+
+        const filePath = await join(
+          mindmapsFolder,
+          ...entry.relativePath.split("/").filter(Boolean),
+        );
         try {
           const text = await readTextFile(filePath);
-          const parsed = JSON.parse(text) as unknown;
-          return [fileName, buildMindmapSearchText(parsed)] as const;
+          result[entry.relativePath] = buildMindmapSearchText(JSON.parse(text));
         } catch {
-          return [fileName, ""] as const;
+          result[entry.relativePath] = "";
         }
       }),
-  );
+    );
+  };
 
-  return Object.fromEntries(pairs);
+  await walk(mindmapTree);
+  return result;
+}
+
+async function relativePathForRoot(
+  vaultPath: string,
+  root: "Lesson Plans" | "Mindmaps" | "Materials",
+  filePath: string,
+): Promise<string | null> {
+  const rootFolder = await join(vaultPath, root);
+  const prefix = rootFolder.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
+  const normalized = filePath.replace(/\\/g, "/");
+  return normalized.startsWith(prefix) ? normalized.slice(prefix.length) : null;
 }
 
 async function buildLessonMetadataIndex(
@@ -834,10 +983,12 @@ async function buildLessonMetadataIndex(
 ): Promise<{
   subjects: Record<string, string>;
   plannedDates: Record<string, string | null>;
+  calendarOrders: Record<string, number>;
 }> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
   const subjects: Record<string, string> = {};
   const plannedDates: Record<string, string | null> = {};
+  const calendarOrders: Record<string, number> = {};
 
   // Walk the full tree recursively so nested lessons (e.g. "History/Lesson.json")
   // are indexed by their full relativePath — the same key CalendarView uses.
@@ -852,7 +1003,11 @@ async function buildLessonMetadataIndex(
       try {
         const text = await readTextFile(filePath);
         const parsed = JSON.parse(text) as {
-          metadata?: { subject?: unknown; plannedFor?: unknown };
+          metadata?: {
+            subject?: unknown;
+            plannedFor?: unknown;
+            calendarOrder?: unknown;
+          };
         };
         subjects[entry.relativePath] =
           typeof parsed?.metadata?.subject === "string"
@@ -863,6 +1018,12 @@ async function buildLessonMetadataIndex(
           parsed.metadata.plannedFor.trim()
             ? parsed.metadata.plannedFor
             : null;
+        if (
+          typeof parsed?.metadata?.calendarOrder === "number" &&
+          Number.isFinite(parsed.metadata.calendarOrder)
+        ) {
+          calendarOrders[entry.relativePath] = parsed.metadata.calendarOrder;
+        }
       } catch {
         subjects[entry.relativePath] = "";
         plannedDates[entry.relativePath] = null;
@@ -871,7 +1032,7 @@ async function buildLessonMetadataIndex(
   };
 
   await walk(lessonTree);
-  return { subjects, plannedDates };
+  return { subjects, plannedDates, calendarOrders };
 }
 
 let searchIndexBuildVersion = 0;
@@ -1022,8 +1183,9 @@ async function copyDirectoryRecursive(sourceDir: string, destinationDir: string)
 async function movePathToTrash(
   vaultPath: string,
   sourcePath: string,
-  trashSection: "Lesson Plans" | "Mindmaps" | "Materials",
+  trashSection: TrashSection,
   originalName: string,
+  isDirectory = false,
 ): Promise<boolean> {
   if (!(await exists(sourcePath))) {
     return false;
@@ -1037,6 +1199,26 @@ async function movePathToTrash(
 
   try {
     await rename(sourcePath, trashTargetPath);
+
+    const sectionRoot = await join(vaultPath, trashSection);
+    const originalRelativePath =
+      relativePathWithin(sourcePath, sectionRoot) ?? originalName;
+    const recordedTrashName = extractBaseName(trashTargetPath);
+
+    try {
+      await updateTrashManifest(vaultPath, (manifest) =>
+        addTrashManifestEntry(manifest, {
+          trashName: recordedTrashName,
+          section: trashSection,
+          originalRelativePath,
+          deletedAt: new Date().toISOString(),
+          isDirectory,
+        }),
+      );
+    } catch (manifestError) {
+      console.warn("Could not record trash manifest entry", manifestError);
+    }
+
     return true;
   } catch (error) {
     // During rapid bulk actions the file may already have been moved by a prior pass.
@@ -1058,30 +1240,6 @@ function createPlannedForIso(plannedDate: Date): string {
     0,
   );
   return localNoon.toISOString();
-}
-
-function buildLessonFileNameForMetadata(currentFileName: string, metadata: LessonMetadata): string {
-  const sourceDate = metadata.plannedFor || metadata.createdAt;
-  const dateStr = sourceDate.split("T")[0];
-  const subject = metadata.subject.trim();
-
-  // Preserve folder prefix (e.g. "History/") if the file lives in a subfolder
-  const lastSlash = currentFileName.lastIndexOf("/");
-  const folderPrefix = lastSlash >= 0 ? currentFileName.slice(0, lastSlash + 1) : "";
-  const baseName = lastSlash >= 0 ? currentFileName.slice(lastSlash + 1) : currentFileName;
-
-  if (subject) {
-    const sanitizedSubject = subject.replace(/[^a-zA-Z0-9\-_ ]/g, "").replace(/\s+/g, "-");
-    return `${folderPrefix}${dateStr}-${sanitizedSubject}.json`;
-  }
-
-  const datePattern = /\d{4}-\d{2}-\d{2}/;
-  if (datePattern.test(baseName)) {
-    return `${folderPrefix}${baseName.replace(datePattern, dateStr)}`;
-  }
-
-  const id = Date.now().toString().slice(-4);
-  return `${folderPrefix}Lesson-${dateStr}-${id}.json`;
 }
 
 function subjectToLessonFileToken(subject: string): string {
@@ -1152,6 +1310,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   lessonSearchIndex: {},
   mindmapSearchIndex: {},
   lessonPlannedDateIndex: {},
+  lessonCalendarOrderIndex: {},
+  vaultItemOrder: {},
   isSearchIndexing: false,
   themeMode: DEFAULT_UI_SETTINGS.themeMode,
   accentColor: DEFAULT_UI_SETTINGS.accentColor,
@@ -1528,14 +1688,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     // name. Do not recurse into a trashed folder and judge its children by
     // mtime: a folder moved to the Trash today may contain old files, and
     // those files must not be permanently deleted immediately.
+    const removed: Array<{ section: TrashSection; trashName: string }> = [];
+
     try {
       const sections = await readDir(trashPath);
       for (const section of sections) {
-        if (!section.isDirectory || !section.name || section.name.startsWith(".")) {
+        if (
+          !section.isDirectory ||
+          !section.name ||
+          section.name.startsWith(".") ||
+          !(TRASH_SECTIONS as readonly string[]).includes(section.name)
+        ) {
           continue;
         }
 
-        const sectionPath = await join(trashPath, section.name);
+        const sectionName = section.name as TrashSection;
+        const sectionPath = await join(trashPath, sectionName);
         const entries = await readDir(sectionPath);
         for (const entry of entries) {
           if (!entry.name || entry.name.startsWith(".")) {
@@ -1547,12 +1715,27 @@ export const useAppStore = create<AppState>((set, get) => ({
 
           const entryPath = await join(sectionPath, entry.name);
           await remove(entryPath, entry.isDirectory ? { recursive: true } : undefined);
+          removed.push({ section: sectionName, trashName: entry.name });
         }
       }
     } catch (error) {
       // Trash may not exist yet on a freshly created vault.
       if (await exists(trashPath)) {
         console.error("Failed to clean up old trash items:", error);
+      }
+    }
+
+    if (removed.length > 0) {
+      try {
+        await updateTrashManifest(vaultPath, (manifest) =>
+          removed.reduce(
+            (current, item) =>
+              removeTrashManifestEntry(current, item.section, item.trashName),
+            manifest,
+          ),
+        );
+      } catch (error) {
+        console.warn("Could not prune trash manifest", error);
       }
     }
   },
@@ -1596,6 +1779,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       const trashPath = await join(vaultPath, "Trash");
       const trashTree = pruneEmptyTrashSections(await readMaterialTree(trashPath));
+      const vaultItemOrder = await readSidebarOrder(vaultPath);
 
       const buildVersion = ++searchIndexBuildVersion;
       
@@ -1606,14 +1790,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         mindmapTree,
         materials: materialTree,
         trashEntries: trashTree,
+        vaultItemOrder,
         isSearchIndexing: true,
       });
 
       void (async () => {
         try {
           const [nextLessonIndex, nextMindmapIndex, nextMetadataIndex] = await Promise.all([
-            buildLessonSearchIndex(vaultPath, lpFiltered),
-            buildMindmapSearchIndex(vaultPath, mmFiltered),
+            buildLessonSearchIndex(vaultPath, lessonTree),
+            buildMindmapSearchIndex(vaultPath, mindmapTree),
             buildLessonMetadataIndex(vaultPath, lessonTree),
           ]);
 
@@ -1626,6 +1811,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             mindmapSearchIndex: nextMindmapIndex,
             lessonSubjectIndex: nextMetadataIndex.subjects,
             lessonPlannedDateIndex: nextMetadataIndex.plannedDates,
+            lessonCalendarOrderIndex: nextMetadataIndex.calendarOrders,
             isSearchIndexing: false,
           });
         } catch (indexError) {
@@ -1672,16 +1858,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!(await flushBeforeDocumentChange())) return;
 
     try {
-      const { defaultTeacherName } = get();
-      // Use local date string to avoid UTC timezone shift
+      const { defaultTeacherName, language } = get();
       const now = new Date();
       const dateToUse = plannedDate || now;
-      const year = dateToUse.getFullYear();
-      const month = String(dateToUse.getMonth() + 1).padStart(2, '0');
-      const day = String(dateToUse.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-      const candidateName = `Lesson-${dateStr}-${uniqueSuffix}.json`;
+      const candidateName = language === "de" ? "Stunde.json" : "Lesson.json";
       const lessonPlansFolder = subFolder
         ? await join(vaultPath, "Lesson Plans", ...subFolder.split("/").filter(Boolean))
         : await join(vaultPath, "Lesson Plans");
@@ -1817,6 +1997,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
             ? rawMetadata.subject
             : fallbackSubject,
+        calendarOrder:
+          typeof rawMetadata?.calendarOrder === "number" &&
+          Number.isFinite(rawMetadata.calendarOrder)
+            ? rawMetadata.calendarOrder
+            : undefined,
       };
 
       const nextLessonData: LessonData = {
@@ -1827,39 +2012,96 @@ export const useAppStore = create<AppState>((set, get) => ({
         },
       };
 
-      const nextFileName = buildLessonFileNameForMetadata(fileName, nextLessonData.metadata);
-      let savePath = sourcePath;
-      let finalFileName = fileName;
-
-      if (nextFileName !== fileName) {
-        const requestedPath = await join(lessonPlansFolder, nextFileName);
-        let nextPath = requestedPath;
-
-        if (await exists(requestedPath)) {
-          nextPath = await ensureUniqueTargetPath(lessonPlansFolder, nextFileName);
-        }
-
-        await rename(sourcePath, nextPath);
-        savePath = nextPath;
-        finalFileName = extractBaseName(nextPath);
-      }
-
-      await backupDocumentBeforeWrite(vaultPath, savePath);
-      await writeTextFileAtomic(savePath, JSON.stringify(nextLessonData, null, 2));
+      await backupDocumentBeforeWrite(vaultPath, sourcePath);
+      await writeTextFileAtomic(sourcePath, JSON.stringify(nextLessonData, null, 2));
 
       if (activeFilePath && sameVaultPath(activeFilePath, sourcePath)) {
         set({
-          activeFilePath: savePath,
+          activeFilePath: sourcePath,
           activeFileContent: nextLessonData,
         });
       }
 
       await get().refreshVault();
-      return finalFileName;
+      return extractBaseName(sourcePath);
     } catch (error) {
       console.error("Failed to reschedule lesson:", error);
       alertT("alerts.rescheduleLesson", { error: String(error) });
       return null;
+    }
+  },
+
+  reorderCalendarLessons: async (orderedRelativePaths) => {
+    const { vaultPath, activeFilePath } = get();
+    if (!vaultPath || orderedRelativePaths.length === 0) return;
+    if (!(await flushBeforeDocumentChange())) return;
+
+    const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
+    const updates: Record<string, number> = {};
+    let activeUpdate: LessonData | null = null;
+
+    try {
+      for (let order = 0; order < orderedRelativePaths.length; order += 1) {
+        const relativePath = orderedRelativePaths[order];
+        if (!relativePath) continue;
+
+        const filePath = await join(
+          lessonPlansFolder,
+          ...relativePath.split("/").filter(Boolean),
+        );
+        if (!(await exists(filePath))) continue;
+
+        const parsed = JSON.parse(await readTextFile(filePath)) as LessonData;
+        const nextLessonData: LessonData = {
+          ...parsed,
+          metadata: {
+            ...parsed.metadata,
+            calendarOrder: order,
+          },
+        };
+
+        await enqueueDocumentWrite(() =>
+          writeTextFileAtomic(filePath, JSON.stringify(nextLessonData, null, 2)),
+        );
+
+        updates[relativePath] = order;
+        if (activeFilePath && sameVaultPath(activeFilePath, filePath)) {
+          activeUpdate = nextLessonData;
+        }
+      }
+
+      set((state) => ({
+        lessonCalendarOrderIndex: {
+          ...state.lessonCalendarOrderIndex,
+          ...updates,
+        },
+        ...(activeUpdate ? { activeFileContent: activeUpdate } : {}),
+      }));
+
+      // Rebuild the metadata index from disk. This also invalidates any
+      // in-flight index build from a just-finished reschedule.
+      await get().refreshVault();
+    } catch (error) {
+      console.error("Failed to reorder calendar lessons:", error);
+      alertT("alerts.reorderLessons", { error: String(error) });
+    }
+  },
+
+  setVaultItemOrder: async (folderPath, orderedItemKeys) => {
+    const { vaultPath, vaultItemOrder } = get();
+    if (!vaultPath) return;
+
+    const nextOrder = {
+      ...vaultItemOrder,
+      [folderPath]: orderedItemKeys,
+    };
+    set({ vaultItemOrder: nextOrder });
+
+    try {
+      await writeSidebarOrder(vaultPath, nextOrder);
+    } catch (error) {
+      console.error("Failed to save sidebar order:", error);
+      alertT("alerts.saveSidebarOrder", { error: String(error) });
     }
   },
 
@@ -1975,21 +2217,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       const folderSlash = relativeActive.lastIndexOf("/");
       const folderPrefix = folderSlash >= 0 ? relativeActive.slice(0, folderSlash + 1) : "";
 
-      const dateStr = newLessonData.metadata.plannedFor
-        ? newLessonData.metadata.plannedFor.split("T")[0]
-        : newLessonData.metadata.createdAt.split("T")[0];
-
       let newFileName = currentFileName;
 
-      // Intelligent Naming Logic
-      if (newLessonData.metadata.subject && newLessonData.metadata.subject.trim() !== "") {
-        const sanitizedSubject = newLessonData.metadata.subject.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, '-');
-        newFileName = `${folderPrefix}${dateStr}-${sanitizedSubject}.json`;
-      } else {
-        if (currentFileName.startsWith("Untitled-Lesson")) {
-          const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-          newFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
-        }
+      // Only legacy untitled drafts are auto-renamed. User-chosen filenames
+      // (including the clean "Lesson"/"Stunde" defaults) stay stable.
+      if (allowRename && currentFileName.startsWith("Untitled-Lesson")) {
+        const dateStr = newLessonData.metadata.plannedFor
+          ? newLessonData.metadata.plannedFor.split("T")[0]
+          : newLessonData.metadata.createdAt.split("T")[0];
+        const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+        newFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
       }
 
       if (allowRename && currentFileName !== newFileName) {
@@ -2038,10 +2275,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       // change the tree, so they still get a full refresh.
       if (sameVaultPath(savePath, activeFilePath)) {
         const relativeKey = folderPrefix + (extractBaseName(savePath) || "");
-        const searchKey = folderPrefix ? "" : relativeKey; // text index only covers root files
         set((state) => ({
-          lessonSearchIndex: searchKey
-            ? { ...state.lessonSearchIndex, [searchKey]: buildLessonSearchText(newLessonData) }
+          lessonSearchIndex: relativeKey
+            ? { ...state.lessonSearchIndex, [relativeKey]: buildLessonSearchText(newLessonData) }
             : state.lessonSearchIndex,
           lessonSubjectIndex:
             relativeKey && state.lessonSubjectIndex[relativeKey] !== undefined
@@ -2093,10 +2329,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const normalizedPath = filePath.replace(/\\/g, "/");
       if (normalizedPath.startsWith(normalizedPrefix)) {
         const relativeKey = normalizedPath.slice(normalizedPrefix.length);
-        const searchKey = relativeKey.includes("/") ? "" : relativeKey;
         set((state) => ({
-          lessonSearchIndex: searchKey
-            ? { ...state.lessonSearchIndex, [searchKey]: buildLessonSearchText(lessonData) }
+          lessonSearchIndex: relativeKey
+            ? { ...state.lessonSearchIndex, [relativeKey]: buildLessonSearchText(lessonData) }
             : state.lessonSearchIndex,
           lessonSubjectIndex: state.lessonSubjectIndex[relativeKey] !== undefined
             ? { ...state.lessonSubjectIndex, [relativeKey]: lessonData.metadata?.subject || "" }
@@ -2191,8 +2426,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!(await flushBeforeDocumentChange())) return;
 
     try {
-      const uniqueSuffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-      const candidateName = `Mindmap-${uniqueSuffix}.json`;
+      const candidateName = "Mindmap.json";
       const mindmapsFolder = subFolder
         ? await join(vaultPath, "Mindmaps", ...subFolder.split("/").filter(Boolean))
         : await join(vaultPath, "Mindmaps");
@@ -2306,8 +2540,22 @@ export const useAppStore = create<AppState>((set, get) => ({
       await backupDocumentBeforeWrite(vaultPath, activeFilePath);
       await writeTextFileAtomic(activeFilePath, JSON.stringify(newMindmapData, null, 2));
 
+      const relativeKey = await relativePathForRoot(
+        vaultPath,
+        "Mindmaps",
+        activeFilePath,
+      );
+      if (relativeKey) {
+        set((state) => ({
+          mindmapSearchIndex: {
+            ...state.mindmapSearchIndex,
+            [relativeKey]: buildMindmapSearchText(newMindmapData),
+          },
+        }));
+      }
+
       // Only update the active-document state if the user is still on this
-      // mindmap — an in-flight save must never clobber a newly opened file.
+      // mindmap - an in-flight save must never clobber a newly opened file.
       const currentActivePath = get().activeFilePath;
       if (currentActivePath && sameVaultPath(currentActivePath, activeFilePath)) {
         set({ activeMindmapContent: newMindmapData });
@@ -2337,17 +2585,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         return false;
       }
 
+      const nextMindmapData: MindmapData = { version: 1, nodes, edges };
       await backupDocumentBeforeWrite(vaultPath, filePath);
       await writeTextFileAtomic(
         filePath,
-        JSON.stringify({ version: 1, nodes, edges } satisfies MindmapData, null, 2),
+        JSON.stringify(nextMindmapData, null, 2),
       );
 
-      // Echo the saved graph back only if the user is still on this mindmap —
+      const relativeKey = await relativePathForRoot(vaultPath, "Mindmaps", filePath);
+      if (relativeKey) {
+        set((state) => ({
+          mindmapSearchIndex: {
+            ...state.mindmapSearchIndex,
+            [relativeKey]: buildMindmapSearchText(nextMindmapData),
+          },
+        }));
+      }
+
+      // Echo the saved graph back only if the user is still on this mindmap -
       // an in-flight flush must never clobber a newly opened file.
       const currentActivePath = get().activeFilePath;
       if (currentActivePath && sameVaultPath(currentActivePath, filePath)) {
-        set({ activeMindmapContent: { version: 1, nodes, edges } });
+        set({ activeMindmapContent: nextMindmapData });
       }
       set({ lastSavedAt: Date.now() });
       return true;
@@ -2469,7 +2728,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const targetPath = await join(vaultPath, "Materials", ...pathSegments);
       const entryName = pathSegments[pathSegments.length - 1] || "material";
       const trashEntryName = isDirectory ? `folder-${entryName}` : `file-${entryName}`;
-      await movePathToTrash(vaultPath, targetPath, "Materials", trashEntryName);
+      await movePathToTrash(
+        vaultPath,
+        targetPath,
+        "Materials",
+        trashEntryName,
+        isDirectory,
+      );
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete material entry:", error);
@@ -2523,19 +2788,57 @@ export const useAppStore = create<AppState>((set, get) => ({
         return;
       }
 
-      const section = pathSegments[0] as "Lesson Plans" | "Mindmaps" | "Materials";
-      if (!["Lesson Plans", "Mindmaps", "Materials"].includes(section)) {
+      const sectionName = pathSegments[0];
+      if (!(TRASH_SECTIONS as readonly string[]).includes(sectionName)) {
         alertT("alerts.unknownTrashSection");
         return;
       }
+      const section = sectionName as TrashSection;
 
       const trashSourcePath = await join(vaultPath, "Trash", ...pathSegments);
-      const originalName = pathSegments[pathSegments.length - 1];
-      const restoredName = stripTrashNamePrefix(originalName, section);
-      const destinationRoot = await join(vaultPath, section);
-      const destinationPath = await ensureUniqueTargetPath(destinationRoot, restoredName);
+      const trashName = pathSegments[pathSegments.length - 1];
+      const manifest = await readTrashManifest(vaultPath);
+      const manifestEntry = findTrashManifestEntry(manifest, section, trashName);
 
+      let restoredName = stripTrashEntryName(trashName, section);
+      let destinationRoot = await join(vaultPath, section);
+
+      const originalRelativePath = manifestEntry?.originalRelativePath.trim();
+      if (originalRelativePath) {
+        const originalSegments = originalRelativePath.split("/").filter(Boolean);
+        const originalBaseName = originalSegments.pop();
+        if (originalBaseName) {
+          restoredName = originalBaseName;
+        }
+
+        if (originalSegments.length > 0) {
+          const originalParentPath = await join(
+            vaultPath,
+            section,
+            ...originalSegments,
+          );
+          if (await exists(originalParentPath)) {
+            destinationRoot = originalParentPath;
+          }
+        }
+      }
+
+      const destinationPath = await ensureUniqueTargetPath(
+        destinationRoot,
+        restoredName,
+      );
       await rename(trashSourcePath, destinationPath);
+
+      if (manifestEntry) {
+        try {
+          await updateTrashManifest(vaultPath, (current) =>
+            removeTrashManifestEntry(current, section, trashName),
+          );
+        } catch (error) {
+          console.warn("Could not update trash manifest after restore", error);
+        }
+      }
+
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to restore trash entry:", error);
@@ -2551,6 +2854,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       const pathSegments = relativePath.split("/").filter(Boolean);
       const trashTargetPath = await join(vaultPath, "Trash", ...pathSegments);
       await remove(trashTargetPath, isDirectory ? { recursive: true } : undefined);
+
+      const sectionName = pathSegments[0];
+      if (
+        pathSegments.length >= 2 &&
+        (TRASH_SECTIONS as readonly string[]).includes(sectionName)
+      ) {
+        const section = sectionName as TrashSection;
+        const trashName = pathSegments[pathSegments.length - 1];
+        try {
+          await updateTrashManifest(vaultPath, (manifest) =>
+            removeTrashManifestEntry(manifest, section, trashName),
+          );
+        } catch (error) {
+          console.warn("Could not update trash manifest after permanent delete", error);
+        }
+      }
+
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to permanently delete trash entry:", error);
@@ -2656,7 +2976,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       const originalName = segs[segs.length - 1];
       const trashSection = root === "Materials" ? "Materials" : root;
       const moved = await enqueueDocumentWrite(() =>
-        movePathToTrash(vaultPath, sourcePath, trashSection, originalName),
+        movePathToTrash(
+          vaultPath,
+          sourcePath,
+          trashSection,
+          originalName,
+          isDirectory,
+        ),
       );
       if (!moved) {
         // Fallback hard delete if not in vault anymore

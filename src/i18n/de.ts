@@ -47,6 +47,8 @@
     createLesson: "Fehler beim Erstellen des Unterrichtsentwurfs: {{error}}",
     duplicateLesson: "Fehler beim Duplizieren des Unterrichtsentwurfs: {{error}}",
     rescheduleLesson: "Fehler beim Verschieben des Unterrichtsentwurfs: {{error}}",
+    reorderLessons: "Fehler beim Sortieren der Unterrichtsentwürfe: {{error}}",
+    saveSidebarOrder: "Fehler beim Speichern der Sidebar-Reihenfolge: {{error}}",
     deleteLesson: "Fehler beim Löschen des Unterrichtsentwurfs: {{error}}",
     namePathSeparators: "Der Name darf keine Pfad-Trennzeichen enthalten.",
     lessonNameExists: "Ein Unterrichtsentwurf mit diesem Namen existiert bereits.",
@@ -451,7 +453,7 @@
     tooltips: {
       collapse: "Einklappen",
       expand: "Ausklappen",
-      dragToFolder: "Zum Verschieben in Ordner ziehen",
+      dragToFolder: "Zum Verschieben oder Sortieren ziehen",
       newLesson: "Neue Stunde in {{section}}",
       newLessonRoot: "Neue Stunde",
       newMindmap: "Neue Mindmap in {{section}}",
@@ -507,7 +509,7 @@
       freeDay: "Freier Tag",
     },
     tooltips: {
-      dragToReschedule: "Zum Verschieben ziehen",
+      dragToReschedule: "Ziehen zum Verschieben oder Sortieren",
       deselect: "Auswahl aufheben",
       select: "Auswählen",
       moveToTrash: "In Papierkorb",

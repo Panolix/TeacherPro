@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import { GripVertical } from "lucide-react";
 import {
   FolderOpen,
@@ -32,9 +32,44 @@ import { SettingsModal } from "./SettingsModal";
 import { ContextMenu, useContextMenu, type ContextMenuEntry } from "./ContextMenu";
 import { MaterialPreviewModal } from "./MaterialPreviewModal";
 import { VaultItemPreviewModal } from "./VaultItemPreviewModal";
+import {
+  stripTrashEntryName,
+  TRASH_SECTIONS,
+  type TrashSection,
+} from "../utils/trash";
 
 // Types for panel switching
 type PanelType = "explorer" | "search" | "recent" | "calendar" | "trash";
+
+type SidebarSearchResult =
+  | {
+      kind: "lesson" | "mindmap";
+      name: string;
+      relativePath: string;
+      folderPath: string;
+      snippet?: string;
+    }
+  | {
+      kind: "material";
+      name: string;
+      relativePath: string;
+      folderPath: string;
+    }
+  | {
+      kind: "trash";
+      itemType: "lesson" | "mindmap";
+      name: string;
+      relativePath: string;
+      displayName: string;
+      section: TrashSection;
+    }
+  | {
+      kind: "trash-material";
+      name: string;
+      relativePath: string;
+      displayName: string;
+      section: "Materials";
+    };
 
 // Icons for file types
 const LessonIcon = () => (
@@ -50,6 +85,35 @@ const MindmapIcon = () => (
     <path d="M12 2v4M12 18v4"/>
   </svg>
 );
+
+const getVaultFolderPath = (relativePath: string): string => {
+  const slash = relativePath.lastIndexOf("/");
+  return slash >= 0 ? relativePath.slice(0, slash) : "";
+};
+
+const vaultItemOrderKey = (root: VaultRoot, relativePath: string): string =>
+  `${root}:${relativePath}`;
+
+const getSidebarFileRows = (folderPath: string): HTMLElement[] =>
+  Array.from(document.querySelectorAll<HTMLElement>("[data-vault-file-key]")).filter(
+    (row) => row.dataset.vaultFileFolder === folderPath,
+  );
+
+const getSidebarInsertIndex = (folderPath: string, clientY: number): number => {
+  const rows = getSidebarFileRows(folderPath);
+  for (let index = 0; index < rows.length; index += 1) {
+    const rect = rows[index].getBoundingClientRect();
+    if (clientY < rect.top + rect.height / 2) {
+      return index;
+    }
+  }
+  return rows.length;
+};
+
+const getSidebarFileKeys = (folderPath: string): string[] =>
+  getSidebarFileRows(folderPath)
+    .map((row) => row.dataset.vaultFileKey || "")
+    .filter(Boolean);
 
 const FolderIcon = ({ expanded }: { expanded?: boolean }) => (
   expanded ? (
@@ -93,6 +157,10 @@ export function SidebarMinimal() {
     setDraggedMaterial,
     setPendingMaterialDrop,
     currentView,
+    lessonSearchIndex,
+    mindmapSearchIndex,
+    vaultItemOrder,
+    setVaultItemOrder,
   } = useAppStore();
 
   const { t } = useTranslation();
@@ -118,11 +186,20 @@ export function SidebarMinimal() {
   } | null>(null);
   const [renameInput, setRenameInput] = useState("");
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const [vaultItemDragActive, setVaultItemDragActive] = useState(false);
+  const [sidebarDropIndicator, setSidebarDropIndicator] = useState<{
+    folderPath: string;
+    index: number;
+  } | null>(null);
+  const sidebarDropIndicatorRef = useRef<{
+    folderPath: string;
+    index: number;
+  } | null>(null);
   // Fallback for WKWebView/Safari: custom MIME types are stripped from dataTransfer in drop events
   const vaultDragPayloadRef = useRef<{ root: VaultRoot; relativePath: string } | null>(null);
 
   /**
-   * Mouse-based drag for sidebar file items → folder drop targets.
+   * Mouse-based drag for sidebar file items ? folder drop targets.
    * HTML5 dragstart on div elements is unreliable in WKWebView (Tauri/macOS).
    */
   const startSidebarMouseDrag = useCallback((
@@ -136,6 +213,10 @@ export function SidebarMinimal() {
     const startY = e.clientY;
     let dragging = false;
     let ghost: HTMLDivElement | null = null;
+    const sourceFolderPath = getVaultFolderPath(relativePath);
+    const sourceKey = vaultItemOrderKey(root, relativePath);
+    sidebarDropIndicatorRef.current = null;
+    setSidebarDropIndicator(null);
 
     const findFolderPathAtPoint = (x: number, y: number): string | null => {
       const els = document.querySelectorAll<HTMLElement>('[data-folder-path]');
@@ -160,6 +241,7 @@ export function SidebarMinimal() {
       const dy = ev.clientY - startY;
       if (!dragging && Math.sqrt(dx * dx + dy * dy) > 5) {
         dragging = true;
+        setVaultItemDragActive(true);
         vaultDragPayloadRef.current = { root, relativePath };
         ghost = document.createElement('div');
         Object.assign(ghost.style, {
@@ -185,8 +267,27 @@ export function SidebarMinimal() {
       if (dragging && ghost) {
         ghost.style.left = `${ev.clientX + 14}px`;
         ghost.style.top = `${ev.clientY - 10}px`;
-        const hovered = findFolderPathAtPoint(ev.clientX, ev.clientY);
-        setDragOverFolder(hovered ? `unified:d:${hovered}:` : null);
+
+        const hoveredFolder = findFolderPathAtPoint(ev.clientX, ev.clientY);
+        setDragOverFolder(hoveredFolder ? `unified:d:${hoveredFolder}:` : null);
+
+        let indicator: { folderPath: string; index: number } | null = null;
+        if (hoveredFolder === null && isInExplorerPanel(ev.clientX, ev.clientY)) {
+          const rows = getSidebarFileRows(sourceFolderPath);
+          if (rows.length > 0) {
+            const firstTop = rows[0].getBoundingClientRect().top;
+            const lastBottom = rows[rows.length - 1].getBoundingClientRect().bottom;
+            if (ev.clientY >= firstTop - 10 && ev.clientY <= lastBottom + 10) {
+              indicator = {
+                folderPath: sourceFolderPath,
+                index: getSidebarInsertIndex(sourceFolderPath, ev.clientY),
+              };
+            }
+          }
+        }
+
+        sidebarDropIndicatorRef.current = indicator;
+        setSidebarDropIndicator(indicator);
       }
     };
 
@@ -195,24 +296,64 @@ export function SidebarMinimal() {
       document.removeEventListener('mouseup', onMouseUp);
       if (ghost) { ghost.remove(); ghost = null; }
       setDragOverFolder(null);
+      setVaultItemDragActive(false);
+
+      const dropIndicator = sidebarDropIndicatorRef.current;
+      sidebarDropIndicatorRef.current = null;
+      setSidebarDropIndicator(null);
 
       const payload = vaultDragPayloadRef.current;
       vaultDragPayloadRef.current = null;
       if (!dragging || !payload) return;
 
-      const targetFolder = findFolderPathAtPoint(ev.clientX, ev.clientY);
+      let targetFolder = findFolderPathAtPoint(ev.clientX, ev.clientY);
+      if (targetFolder === null && !dropIndicator) {
+        const hoveredElement = document.elementFromPoint(
+          ev.clientX,
+          ev.clientY,
+        ) as HTMLElement | null;
+        const hoveredFileRow = hoveredElement?.closest<HTMLElement>(
+          "[data-vault-file-key]",
+        );
+        if (hoveredFileRow) {
+          targetFolder = hoveredFileRow.dataset.vaultFileFolder ?? "";
+        }
+      }
+
       if (targetFolder !== null) {
-        // targetFolder is a subfolder path
+        // Dropping on a folder row (or a file row in another folder) moves
+        // the item into that folder; no insertion line is shown here.
         moveVaultPath(payload.root, payload.relativePath, targetFolder);
-      } else if (isInExplorerPanel(ev.clientX, ev.clientY)) {
-        // Dropped in the sidebar but not on any folder row → move to root
+        return;
+      }
+
+      if (dropIndicator && dropIndicator.folderPath === sourceFolderPath) {
+        const keys = getSidebarFileKeys(sourceFolderPath);
+        const sourceIndex = keys.indexOf(sourceKey);
+
+        if (sourceIndex >= 0) {
+          const reordered = keys.filter((key) => key !== sourceKey);
+          let insertIndex = dropIndicator.index;
+          if (insertIndex > sourceIndex) insertIndex -= 1;
+          insertIndex = Math.max(0, Math.min(insertIndex, reordered.length));
+          reordered.splice(insertIndex, 0, sourceKey);
+
+          if (reordered.join("\n") !== keys.join("\n")) {
+            void setVaultItemOrder(sourceFolderPath, reordered);
+          }
+          return;
+        }
+      }
+
+      if (isInExplorerPanel(ev.clientX, ev.clientY)) {
+        // Dropped in the sidebar but not on any folder row ? move to root
         moveVaultPath(payload.root, payload.relativePath, "");
       }
     };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
-  }, [moveVaultPath]);
+  }, [moveVaultPath, setVaultItemOrder]);
   const ctxMenu = useContextMenu();
 
   // Build a flat list of all folders for "Move to..." submenu
@@ -438,6 +579,8 @@ export function SidebarMinimal() {
     children: UnifiedNode[];
     // Which roots contain this folder (for delete/rename across roots)
     roots: VaultRoot[];
+    fileIndex?: number;
+    isLastFile?: boolean;
   };
 
   const buildUnifiedTree = useCallback((): UnifiedNode[] => {
@@ -492,47 +635,228 @@ export function SidebarMinimal() {
     walk(lessonTree, rootFiles, folderMap, "Lesson Plans", "lesson");
     walk(mindmapTree, rootFiles, folderMap, "Mindmaps", "mindmap");
 
-    // Sort: folders first, then files; alphabetical within each group
-    const sortNode = (nodes: UnifiedNode[]) => {
+    // Folders stay first. Files use the saved per-folder order; unlisted files
+    // fall back to alphabetical order.
+    const sortNode = (nodes: UnifiedNode[], folderPath: string) => {
+      const order = vaultItemOrder[folderPath] ?? [];
+      const orderIndex = new Map(order.map((key, index) => [key, index]));
+
       nodes.sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+
+        if (!a.isDirectory && !b.isDirectory) {
+          const aOrder = orderIndex.get(
+            vaultItemOrderKey(
+              a.fileType === "mindmap" ? "Mindmaps" : "Lesson Plans",
+              a.relativePath,
+            ),
+          );
+          const bOrder = orderIndex.get(
+            vaultItemOrderKey(
+              b.fileType === "mindmap" ? "Mindmaps" : "Lesson Plans",
+              b.relativePath,
+            ),
+          );
+
+          if (aOrder !== undefined || bOrder !== undefined) {
+            if (aOrder === undefined) return 1;
+            if (bOrder === undefined) return -1;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+          }
+        }
+
         return a.name.localeCompare(b.name);
       });
-      for (const n of nodes) if (n.isDirectory) sortNode(n.children);
+
+      const files = nodes.filter((n) => !n.isDirectory);
+      files.forEach((node, index) => {
+        node.fileIndex = index;
+        node.isLastFile = index === files.length - 1;
+      });
+
+      for (const n of nodes) if (n.isDirectory) sortNode(n.children, n.relativePath);
     };
-    sortNode(rootFiles);
+    sortNode(rootFiles, "");
 
     return rootFiles;
-  }, [lessonTree, mindmapTree]);
+  }, [lessonTree, mindmapTree, vaultItemOrder]);
 
   const unifiedTree = useMemo(buildUnifiedTree, [buildUnifiedTree]);
 
   // Walk tree collecting files with their folder paths
-  const walkTree = useCallback(
-    (entries: MaterialEntry[], type: "lesson" | "mindmap", acc: Array<{ name: string; relativePath: string; folderPath: string; type: "lesson" | "mindmap" }>) => {
-      for (const e of entries) {
-        if (e.isDirectory) {
-          walkTree(e.children, type, acc);
-        } else if (e.name.toLowerCase().endsWith(".json")) {
-          const folderPath = e.relativePath.includes("/")
-            ? e.relativePath.substring(0, e.relativePath.lastIndexOf("/"))
-            : "";
-          acc.push({ name: e.name, relativePath: e.relativePath, folderPath, type });
-        }
-      }
-    },
-    [],
-  );
+  const searchResults = useMemo<SidebarSearchResult[]>(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      return [];
+    }
 
-  // Search results - filter by query, include folder paths
-  const searchResults = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return [];
-    const all: Array<{ name: string; relativePath: string; folderPath: string; type: "lesson" | "mindmap" }> = [];
-    walkTree(lessonTree, "lesson", all);
-    walkTree(mindmapTree, "mindmap", all);
-    return all.filter((r) => r.name.toLowerCase().includes(q) || r.folderPath.toLowerCase().includes(q));
-  }, [searchQuery, lessonTree, mindmapTree, walkTree]);
+    const results: SidebarSearchResult[] = [];
+    const matches = (value: string) => value.toLowerCase().includes(query);
+    const snippet = (text: string): string | undefined => {
+      const index = text.indexOf(query);
+      if (index < 0) {
+        return undefined;
+      }
+      const start = Math.max(0, index - 35);
+      const end = Math.min(text.length, index + query.length + 60);
+      return `${start > 0 ? "..." : ""}${text.slice(start, end).trim()}${end < text.length ? "..." : ""}`;
+    };
+
+    const walkVaultFiles = (
+      entries: MaterialEntry[],
+      type: "lesson" | "mindmap",
+      parentPath = "",
+    ) => {
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          walkVaultFiles(
+            entry.children,
+            type,
+            parentPath ? `${parentPath}/${entry.name}` : entry.name,
+          );
+          continue;
+        }
+        if (!entry.name.toLowerCase().endsWith(".json")) {
+          continue;
+        }
+
+        const folderPath = parentPath;
+        const contentIndex =
+          type === "lesson" ? lessonSearchIndex : mindmapSearchIndex;
+        const content = contentIndex[entry.relativePath] ?? "";
+        const contentMatch = query.length >= 2 && content.includes(query);
+        if (!matches(entry.name) && !matches(folderPath) && !contentMatch) {
+          continue;
+        }
+
+        results.push({
+          kind: type,
+          name: entry.name,
+          relativePath: entry.relativePath,
+          folderPath,
+          snippet: contentMatch ? snippet(content) : undefined,
+        });
+      }
+    };
+
+    walkVaultFiles(lessonTree, "lesson");
+    walkVaultFiles(mindmapTree, "mindmap");
+
+    const walkMaterials = (entries: MaterialEntry[], parentPath = "") => {
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          walkMaterials(
+            entry.children,
+            parentPath ? `${parentPath}/${entry.name}` : entry.name,
+          );
+          continue;
+        }
+        if (!matches(entry.name) && !matches(parentPath) && !matches(entry.relativePath)) {
+          continue;
+        }
+        results.push({
+          kind: "material",
+          name: entry.name,
+          relativePath: entry.relativePath,
+          folderPath: parentPath,
+        });
+      }
+    };
+    walkMaterials(materials);
+
+    const walkTrashFiles = (
+      entries: MaterialEntry[],
+      section: TrashSection,
+      itemType: "lesson" | "mindmap",
+    ) => {
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          walkTrashFiles(entry.children, section, itemType);
+          continue;
+        }
+        if (!entry.name.toLowerCase().endsWith(".json")) {
+          continue;
+        }
+        const displayName = stripTrashEntryName(entry.name, section);
+        if (!matches(displayName) && !matches(entry.relativePath)) {
+          continue;
+        }
+        results.push({
+          kind: "trash",
+          itemType,
+          name: displayName,
+          relativePath: entry.relativePath,
+          displayName,
+          section,
+        });
+      }
+    };
+
+    const walkTrashMaterials = (entries: MaterialEntry[]) => {
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          walkTrashMaterials(entry.children);
+          continue;
+        }
+        const displayName = stripTrashEntryName(entry.name, "Materials");
+        if (!matches(displayName) && !matches(entry.relativePath)) {
+          continue;
+        }
+        results.push({
+          kind: "trash-material",
+          name: displayName,
+          relativePath: entry.relativePath,
+          displayName,
+          section: "Materials",
+        });
+      }
+    };
+
+    for (const sectionEntry of trashEntries) {
+      if (
+        !sectionEntry.isDirectory ||
+        !(TRASH_SECTIONS as readonly string[]).includes(sectionEntry.name)
+      ) {
+        continue;
+      }
+      const section = sectionEntry.name as TrashSection;
+      if (section === "Materials") {
+        walkTrashMaterials(sectionEntry.children);
+        continue;
+      }
+      walkTrashFiles(
+        sectionEntry.children,
+        section,
+        section === "Mindmaps" ? "mindmap" : "lesson",
+      );
+    }
+
+    const rank = (item: SidebarSearchResult): number => {
+      const name = "displayName" in item ? item.displayName : item.name;
+      if (name.toLowerCase().startsWith(query)) return 0;
+      if (name.toLowerCase().includes(query)) return 1;
+      if ("folderPath" in item && item.folderPath.toLowerCase().includes(query)) return 2;
+      return 3;
+    };
+
+    results.sort((a, b) => {
+      const rankDiff = rank(a) - rank(b);
+      if (rankDiff !== 0) return rankDiff;
+      const aName = "displayName" in a ? a.displayName : a.name;
+      const bName = "displayName" in b ? b.displayName : b.name;
+      return aName.localeCompare(bName);
+    });
+
+    return results.slice(0, 40);
+  }, [
+    searchQuery,
+    lessonTree,
+    mindmapTree,
+    materials,
+    trashEntries,
+    lessonSearchIndex,
+    mindmapSearchIndex,
+  ]);
 
   // selectedFolder is now just the unified folder path (e.g. "History+/Math").
   // Empty string means root.
@@ -582,6 +906,31 @@ export function SidebarMinimal() {
     });
   };
 
+  const renderSidebarDropLine = (
+    folderPath: string,
+    index: number,
+    placement: "top" | "bottom" = "top",
+  ) => {
+    if (
+      sidebarDropIndicator?.folderPath !== folderPath ||
+      sidebarDropIndicator.index !== index
+    ) {
+      return null;
+    }
+
+    return (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-2 right-2 z-10 h-[2px] rounded-full"
+        style={{
+          top: placement === "top" ? "-3px" : undefined,
+          bottom: placement === "bottom" ? "-3px" : undefined,
+          background: "var(--tp-accent)",
+        }}
+      />
+    );
+  };
+
   // Recursive render of a UnifiedNode tree branch
   const renderUnifiedNode = (node: UnifiedNode, depth: number): any => {
     const key = `unified:${node.isDirectory ? "d" : "f"}:${node.relativePath}:${node.fileType ?? ""}`;
@@ -598,7 +947,9 @@ export function SidebarMinimal() {
             className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors text-left cursor-pointer select-none ${
               isSelected
                 ? "bg-[var(--tp-accent)]/15 text-white"
-                : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                : vaultItemDragActive
+                  ? "text-gray-400"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
             } ${isDropTarget ? "tp-drop-target" : ""}`}
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             onDragEnter={(e) => {
@@ -656,8 +1007,10 @@ export function SidebarMinimal() {
       );
     }
 
-    // File — split into drag handle + click area so the two gestures don't conflict
+    // File � split into drag handle + click area so the two gestures don't conflict
     const root: VaultRoot = node.fileType === "mindmap" ? "Mindmaps" : "Lesson Plans";
+    const fileFolderPath = getVaultFolderPath(node.relativePath);
+    const fileKey = vaultItemOrderKey(root, node.relativePath);
     const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? "";
     const rootSegment = node.fileType === "mindmap" ? "/Mindmaps/" : "/Lesson Plans/";
     const isActive =
@@ -665,17 +1018,25 @@ export function SidebarMinimal() {
       normalizedActivePath.includes(rootSegment) &&
       normalizedActivePath.endsWith(`/${node.relativePath}`);
     return (
-      <li key={key}>
+      <li
+        key={key}
+        className="relative"
+        data-vault-file-key={fileKey}
+        data-vault-file-folder={fileFolderPath}
+      >
+        {renderSidebarDropLine(fileFolderPath, node.fileIndex ?? 0)}
         <div
           data-vault-row
           className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors select-none ${
             isActive
               ? "bg-[var(--tp-accent)]/10 text-white"
-              : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+              : vaultItemDragActive
+                ? "text-gray-400"
+                : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
           }`}
           style={{ paddingLeft: `${8 + depth * 12}px`, WebkitUserSelect: "none" }}
         >
-          {/* Drag handle — onMouseDown starts mouse-based drag (reliable in WKWebView) */}
+          {/* Drag handle � onMouseDown starts mouse-based drag (reliable in WKWebView) */}
           <div
             onMouseDown={(e) => startSidebarMouseDrag(e, root, node.relativePath, node.name.replace(/\.json$/i, ""))}
             className="shrink-0 flex items-center justify-center w-4 h-4 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors select-none"
@@ -711,6 +1072,12 @@ export function SidebarMinimal() {
             <span className="truncate">{node.name.replace(/\.json$/i, "")}</span>
           </div>
         </div>
+        {node.isLastFile &&
+          renderSidebarDropLine(
+            fileFolderPath,
+            (node.fileIndex ?? 0) + 1,
+            "bottom",
+          )}
       </li>
     );
   };
@@ -746,8 +1113,27 @@ export function SidebarMinimal() {
 
   // ===== Materials =====
   const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [previewRootFolder, setPreviewRootFolder] = useState<"Materials" | "Trash">("Materials");
+  const [previewDisplayName, setPreviewDisplayName] = useState<string | undefined>(undefined);
+  const openMaterialPreview = useCallback(
+    (
+      relativePath: string,
+      rootFolder: "Materials" | "Trash" = "Materials",
+      displayName?: string,
+    ) => {
+      setPreviewRootFolder(rootFolder);
+      setPreviewDisplayName(displayName);
+      setPreviewPath(relativePath);
+    },
+    [],
+  );
   // Vault item preview (lessons/mindmaps)
-  const [vaultPreview, setVaultPreview] = useState<{ type: "lesson" | "mindmap"; relativePath: string } | null>(null);
+  const [vaultPreview, setVaultPreview] = useState<{
+    type: "lesson" | "mindmap";
+    relativePath: string;
+    rootFolder?: "Trash";
+    displayName?: string;
+  } | null>(null);
 
   const resolveMaterialAbsPath = useCallback(
     async (relativePath: string): Promise<string | null> => {
@@ -852,7 +1238,7 @@ export function SidebarMinimal() {
         items.push({
           label: t('sidebar.contextMenu.preview'),
           icon: <Eye className="w-4 h-4" />,
-          onClick: () => setPreviewPath(entry.relativePath),
+          onClick: () => openMaterialPreview(entry.relativePath),
         });
         items.push({
           label: t('sidebar.contextMenu.openInDefaultApp'),
@@ -882,7 +1268,7 @@ export function SidebarMinimal() {
         onClick: () => {
           const segs = entry.relativePath.split("/").filter(Boolean);
           const name = segs[segs.length - 1] || "";
-          // window.prompt is blocked in the Tauri webview — use the shared rename modal.
+          // window.prompt is blocked in the Tauri webview � use the shared rename modal.
           setRenameInput(name);
           setRenameModal({
             roots: [],
@@ -964,7 +1350,7 @@ export function SidebarMinimal() {
           tabIndex={0}
           draggable={true}
           onClick={() => {
-            // Single click expands cell preview behavior — left as no-op for simplicity
+            // Single click expands cell preview behavior � left as no-op for simplicity
           }}
           onDoubleClick={() => insertMaterialAtCursor(entry.relativePath, false)}
           onDragStart={(e) => {
@@ -996,6 +1382,8 @@ export function SidebarMinimal() {
   const renderTrashNode = (entry: MaterialEntry, depth: number, sectionPrefix: string): any => {
     const key = `trash:${entry.relativePath}`;
     const fullPath = entry.relativePath;
+    const trashSection = sectionPrefix as TrashSection;
+    const displayName = stripTrashEntryName(entry.name, trashSection);
     if (entry.isDirectory) {
       const isExpanded = !!expandedTrashSections[key];
       return (
@@ -1031,7 +1419,7 @@ export function SidebarMinimal() {
               className={`w-3.5 h-3.5 shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`}
             />
             <FolderIcon expanded={isExpanded} />
-            <span className="truncate font-medium flex-1">{entry.name}</span>
+            <span className="truncate font-medium flex-1">{displayName}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1064,14 +1452,26 @@ export function SidebarMinimal() {
         </li>
       );
     }
+    const isTrashLesson = sectionPrefix === "Lesson Plans";
+    const isTrashJson = entry.name.toLowerCase().endsWith(".json");
     return (
       <li key={key}>
         <div
-          className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] truncate transition-colors"
+          className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] truncate transition-colors cursor-pointer"
           style={{ paddingLeft: `${8 + depth * 12 + 14}px` }}
+          onClick={() => {
+            if (isTrashJson) {
+              setVaultPreview({
+                type: isTrashLesson ? "lesson" : "mindmap",
+                relativePath: fullPath,
+                rootFolder: "Trash",
+                displayName,
+              });
+            } else {
+              openMaterialPreview(fullPath, "Trash", displayName);
+            }
+          }}
           onContextMenu={(e) => {
-            const isTrashLesson = sectionPrefix === "Lesson Plans";
-            const isTrashJson = entry.name.toLowerCase().endsWith(".json");
             ctxMenu.open(e, [
               {
                 label: t('sidebar.contextMenu.restore'),
@@ -1083,9 +1483,12 @@ export function SidebarMinimal() {
                   label: t('sidebar.contextMenu.previewTrash'),
                   icon: <Eye className="w-4 h-4" />,
                   onClick: () => {
-                    // Strip "Lesson Plans/" or "Mindmaps/" prefix from fullPath
-                    const cleanPath = fullPath.replace(/^(Lesson Plans|Mindmaps)\//, "");
-                    setVaultPreview({ type: isTrashLesson ? "lesson" : "mindmap", relativePath: cleanPath });
+                    setVaultPreview({
+                      type: isTrashLesson ? "lesson" : "mindmap",
+                      relativePath: fullPath,
+                      rootFolder: "Trash",
+                      displayName,
+                    });
                   },
                 } as ContextMenuEntry,
               ] : []),
@@ -1108,7 +1511,7 @@ export function SidebarMinimal() {
           ) : (
             <FileText className="w-4 h-4 shrink-0 text-[var(--tp-t-3)]" />
           )}
-          <span className="truncate flex-1">{entry.name.replace(/\.json$/i, "")}</span>
+          <span className="truncate flex-1">{displayName.replace(/\.json$/i, "")}</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1307,26 +1710,26 @@ export function SidebarMinimal() {
                   <button
                     onClick={handleCreateLesson}
                     title={selectedFolder ? t('sidebar.tooltips.newLesson', { section: selectedFolder }) : t('sidebar.tooltips.newLessonRoot')}
-                    className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
-                    <FileText className="w-3.5 h-3.5" />
-                    {t('sidebar.actions.newLesson')}
+                    <FileText className="w-3.5 h-3.5 shrink-0" />
+                    <span className="max-w-full truncate">{t('sidebar.actions.newLesson')}</span>
                   </button>
                   <button
                     onClick={handleCreateMindmap}
                     title={selectedFolder ? t('sidebar.tooltips.newMindmap', { section: selectedFolder }) : t('sidebar.tooltips.newMindmapRoot')}
-                    className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
-                    <Network className="w-3.5 h-3.5" />
-                    {t('sidebar.actions.newMindmap')}
+                    <Network className="w-3.5 h-3.5 shrink-0" />
+                    <span className="max-w-full truncate">{t('sidebar.actions.newMindmap')}</span>
                   </button>
                   <button
                     onClick={handleCreateFolder}
                     title={selectedFolder ? t('sidebar.tooltips.newFolderIn', { section: selectedFolder }) : t('sidebar.tooltips.newFolderIn', { section: t('sidebar.sections.lessonPlans') })}
-                    className="tp-action-btn flex-1 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
-                    <FolderPlus className="w-3.5 h-3.5" />
-                    {t('sidebar.actions.newFolder')}
+                    <FolderPlus className="w-3.5 h-3.5 shrink-0" />
+                    <span className="max-w-full truncate">{t('sidebar.actions.newFolder')}</span>
                   </button>
                 </div>
               </div>
@@ -1438,26 +1841,76 @@ export function SidebarMinimal() {
               ) : (
                 <ul className="space-y-0.5 px-2 mt-2">
                   {searchResults.map((item) => {
-                    const displayName = item.name.replace(/\.json$/i, "");
-                    const rootLabel = item.type === "lesson" ? t('sidebar.sections.lessonPlans') : t('sidebar.sections.mindmaps');
-                    const fullFolderPath = item.folderPath
-                      ? `${rootLabel} / ${item.folderPath.split("/").join(" / ")}`
-                      : rootLabel;
+                    const displayName = (
+                      "displayName" in item ? item.displayName : item.name
+                    ).replace(/\.json$/i, "");
+                    let subtitle = "";
+                    let key = `${item.kind}-${item.relativePath}`;
+
+                    if (item.kind === "lesson" || item.kind === "mindmap") {
+                      const rootLabel =
+                        item.kind === "lesson"
+                          ? t('sidebar.sections.lessonPlans')
+                          : t('sidebar.sections.mindmaps');
+                      subtitle = item.folderPath
+                        ? `${rootLabel} / ${item.folderPath.split("/").join(" / ")}`
+                        : rootLabel;
+                      if (item.snippet) {
+                        subtitle += `  ·  ${item.snippet}`;
+                      }
+                    } else if (item.kind === "material") {
+                      subtitle = item.folderPath
+                        ? `${t('sidebar.sections.materials')} / ${item.folderPath.split("/").join(" / ")}`
+                        : t('sidebar.sections.materials');
+                    } else if (item.kind === "trash") {
+                      subtitle = `${t('sidebar.sections.trash')} / ${item.section}`;
+                      key += `-${item.section}`;
+                    } else if (item.kind === "trash-material") {
+                      subtitle = `${t('sidebar.sections.trash')} / ${t('sidebar.sections.materials')}`;
+                      key += `-${item.section}`;
+                    }
+
                     return (
-                      <li key={`${item.type}-${item.relativePath}`}>
+                      <li key={key}>
                         <button
                           onClick={() => {
-                            if (item.type === "lesson") openLesson(item.relativePath);
-                            else openMindmap(item.relativePath);
+                            if (item.kind === "lesson") {
+                              openLesson(item.relativePath);
+                            } else if (item.kind === "mindmap") {
+                              openMindmap(item.relativePath);
+                            } else if (item.kind === "material") {
+                              openMaterialPreview(item.relativePath);
+                            } else if (item.kind === "trash-material") {
+                              openMaterialPreview(
+                                item.relativePath,
+                                "Trash",
+                                item.displayName,
+                              );
+                            } else if (item.kind === "trash") {
+                              setVaultPreview({
+                                type: item.itemType,
+                                relativePath: item.relativePath,
+                                rootFolder: "Trash",
+                                displayName: item.displayName,
+                              });
+                            }
                           }}
                           className="w-full flex items-start gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
                         >
                           <div className="mt-0.5">
-                            {item.type === "lesson" ? <LessonIcon /> : <MindmapIcon />}
+                            {item.kind === "lesson" ? (
+                              <LessonIcon />
+                            ) : item.kind === "mindmap" ? (
+                              <MindmapIcon />
+                            ) : item.kind === "material" || item.kind === "trash-material" ? (
+                              <FileText className="w-4 h-4 shrink-0 text-amber-400/80" />
+                            ) : (
+                              <Trash2 className="w-4 h-4 shrink-0 text-[var(--tp-t-3)]" />
+                            )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[13px]">{displayName}</div>
-                            <div className="truncate text-[11px] text-gray-500">{fullFolderPath}</div>
+                            <div className="truncate text-[11px] text-gray-500">{subtitle}</div>
                           </div>
                         </button>
                       </li>
@@ -1633,13 +2086,20 @@ export function SidebarMinimal() {
       <MaterialPreviewModal
         open={!!previewPath}
         relativePath={previewPath}
-        onClose={() => setPreviewPath(null)}
+        rootFolder={previewRootFolder}
+        displayName={previewDisplayName}
+        onClose={() => {
+          setPreviewPath(null);
+          setPreviewDisplayName(undefined);
+        }}
       />
 
       <VaultItemPreviewModal
         open={!!vaultPreview}
         itemType={vaultPreview?.type || "lesson"}
         relativePath={vaultPreview?.relativePath || null}
+        rootFolder={vaultPreview?.rootFolder}
+        displayName={vaultPreview?.displayName}
         onClose={() => setVaultPreview(null)}
       />
 

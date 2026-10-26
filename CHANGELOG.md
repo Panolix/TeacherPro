@@ -1,5 +1,52 @@
 # Changelog
 
+## [2.9.4] - 2026-10-26
+
+### Added
+- **Manual calendar ordering** - drag lesson cards up or down within a day, or
+  into another day, with a thin insertion line. The order is stored in lesson
+  metadata and survives restarts.
+- **Sidebar reordering** - drag lessons and mindmaps up or down within folders
+  or at the root. The order is saved in `.teacherpro/sidebar-order.json`;
+  folder drops still use the folder target highlight.
+- **Recoverable Trash** - a `.teacherpro/trash.json` manifest records the
+  original folder; restore returns items to that folder, and trash items can be
+  previewed and searched.
+- **Unified vault search** - recursive lesson/mindmap names, folders and
+  content, live materials, and trash entries with paths and snippets.
+- **Mindmap connection handles** - top, right, bottom and left handles while
+  preserving existing top/bottom edges.
+- **Material fallback opening** - unsupported previews can be opened in the
+  default app, including materials opened from Trash.
+- **Calendar rename button** - lessons can be renamed inline from the weekly
+  calendar without opening the editor.
+
+### Changed
+- New lessons use clean default names (`Lesson.json`/`Stunde.json`) and new
+  mindmaps use `Mindmap.json`; moving a lesson between days no longer renames
+  it. Only legacy `Untitled-Lesson` drafts are still auto-renamed.
+- Calendar rows are sorted by saved order, then by filename for unlisted
+  lessons. Sidebar folders stay first; files use saved order with an
+  alphabetical fallback.
+- The sidebar new-item controls use the shorter Lesson/Mindmap/Folder labels
+  and a horizontal layout.
+- Drag feedback is limited to the thin insertion line and the folder drop
+  highlight; card and file hover highlights are suppressed while dragging.
+
+### Fixed
+- Dragging a lesson to another day no longer resets its title or creates a
+  random date-stamped filename.
+- The material count and search-result subtitle no longer render replacement
+  glyphs.
+- Calendar insertion markers are thin accent lines without a glow or start
+  dot.
+- Trash restoration now respects the original folder instead of placing every
+  item at the section root.
+
+### Tests
+- Added Vitest coverage for trash manifest parsing, display-name cleanup,
+  original-folder restoration and retention checks.
+
 ## [2.9.3] - 2026-10-26
 
 ### Fixed

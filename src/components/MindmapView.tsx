@@ -3,12 +3,16 @@ import {
   ReactFlow,
   Controls,
   Background,
+  Handle,
+  Position,
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
   Node,
   Edge,
   Connection,
+  NodeProps,
+  NodeTypes,
   ReactFlowInstance,
   getNodesBounds,
   NodeChange,
@@ -142,6 +146,25 @@ const MATERIAL_NODE_STYLE = {
   whiteSpace: "normal",
   wordBreak: "break-word" as const,
 };
+
+// The default React Flow node only exposes connection points on the top and
+// bottom. Give mindmap nodes one on each side so they can be wired in any
+// direction while keeping the existing top/bottom handles as the fallback for
+// edges created before this change.
+function MindmapNodeCard({ data }: NodeProps) {
+  const label = typeof data.label === "string" ? data.label : "";
+  return (
+    <>
+      <Handle type="target" position={Position.Top} id="top" />
+      <Handle type="target" position={Position.Left} id="left" />
+      <Handle type="source" position={Position.Bottom} id="bottom" />
+      <Handle type="source" position={Position.Right} id="right" />
+      <div className="pointer-events-none select-none text-center">{label}</div>
+    </>
+  );
+}
+
+const mindmapNodeTypes = { default: MindmapNodeCard } satisfies NodeTypes;
 
 const NODE_COLOR_PRESETS: NodeColorPreset[] = [
   {
@@ -1884,6 +1907,7 @@ export function MindmapView() {
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          nodeTypes={mindmapNodeTypes}
           onInit={setFlowInstance}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}

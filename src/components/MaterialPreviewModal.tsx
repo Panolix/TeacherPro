@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
+import { invoke } from "@tauri-apps/api/core";
 import { exists, readFile, readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
@@ -11,10 +12,18 @@ type PreviewKind = "pdf" | "image" | "text" | null;
 interface Props {
   open: boolean;
   relativePath: string | null;
+  rootFolder?: "Materials" | "Trash";
+  displayName?: string;
   onClose: () => void;
 }
 
-export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
+export function MaterialPreviewModal({
+  open,
+  relativePath,
+  rootFolder = "Materials",
+  displayName,
+  onClose,
+}: Props) {
   const { vaultPath } = useAppStore();
   const { t } = useTranslation();
   const [src, setSrc] = useState<string | null>(null);
@@ -24,9 +33,10 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
   const modalRef = useRef<HTMLDivElement | null>(null);
 
   const fileName = useMemo(() => {
+    if (displayName) return displayName;
     if (!relativePath) return t("materialPreview.title");
     return relativePath.split("/").pop() || relativePath;
-  }, [relativePath, t]);
+  }, [displayName, relativePath, t]);
 
   const extension = useMemo(() => {
     return (fileName.split(".").pop() || "").toLowerCase();
@@ -74,7 +84,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
       }
 
       const segs = relativePath.split("/").filter(Boolean);
-      const fullPath = await join(vaultPath, "Materials", ...segs);
+      const fullPath = await join(vaultPath, rootFolder, ...segs);
 
       try {
         const present = await exists(fullPath);
@@ -117,7 +127,7 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, relativePath, vaultPath, previewKind, t]);
+  }, [open, relativePath, vaultPath, rootFolder, previewKind, t]);
 
   // Esc to close + reclaim focus from PDF iframe
   useEffect(() => {
@@ -175,7 +185,29 @@ export function MaterialPreviewModal({ open, relativePath, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-auto p-4">
-          {error && <div className="text-sm text-red-300">{error}</div>}
+          {error && (
+            <div className="flex flex-col gap-3">
+              <div className="text-sm text-red-300">{error}</div>
+              {previewKind === null && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!vaultPath || !relativePath) return;
+                    const segs = relativePath.split("/").filter(Boolean);
+                    const fullPath = await join(vaultPath, rootFolder, ...segs);
+                    try {
+                      await invoke("open_file_in_default_app", { path: fullPath });
+                    } catch (openError) {
+                      setError(String(openError));
+                    }
+                  }}
+                  className="tp-btn tp-btn-primary w-fit"
+                >
+                  {t("sidebar.contextMenu.openInDefaultApp")}
+                </button>
+              )}
+            </div>
+          )}
           {!error && previewKind === "pdf" && src && (
             <iframe src={src} className="w-full h-full min-h-[70vh] rounded-md bg-white" title={fileName} />
           )}

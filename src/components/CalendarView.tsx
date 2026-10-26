@@ -1,7 +1,7 @@
 ﻿import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { useEffect, useRef, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical, Pencil } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
@@ -10,19 +10,31 @@ export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [selectedLessons, setSelectedLessons] = useState<Set<string>>(new Set());
   const [dragOverDayKey, setDragOverDayKey] = useState<string | null>(null);
+  const [lessonDropIndicator, setLessonDropIndicator] = useState<{
+    dayKey: string;
+    index: number;
+  } | null>(null);
+  const [isDraggingLesson, setIsDraggingLesson] = useState(false);
   const [isDeletingLessons, setIsDeletingLessons] = useState(false);
-  // Mouse-based drag state — bypasses HTML5 DnD which is unreliable in WKWebView.
+  const [renamingLesson, setRenamingLesson] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  // Mouse-based drag state - bypasses HTML5 DnD which is unreliable in WKWebView.
   const draggingLessonRef = useRef<string | null>(null);
   const mouseDragActiveRef = useRef(false);
+  const renameTargetRef = useRef<string | null>(null);
+  const renameCancelledRef = useRef(false);
   const {
     lessonTree,
     openLesson,
     deleteLesson,
     createNewLesson,
     rescheduleLesson,
+    reorderCalendarLessons,
+    renameVaultPath,
     subjects,
     lessonSubjectIndex,
     lessonPlannedDateIndex,
+    lessonCalendarOrderIndex,
   } = useAppStore();
 
   const { t, language } = useTranslation();
@@ -34,6 +46,40 @@ export function CalendarView() {
   const prevWeek = () => setCurrentWeek(addDays(currentWeek, -7));
   const goToToday = () => setCurrentWeek(new Date());
 
+  const beginRenameLesson = (
+    event: React.MouseEvent,
+    relativePath: string,
+    seed: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    renameTargetRef.current = relativePath;
+    renameCancelledRef.current = false;
+    setRenameValue(seed);
+    setRenamingLesson(relativePath);
+  };
+
+  const commitLessonRename = async () => {
+    const target = renameTargetRef.current;
+    const nextName = renameValue.trim();
+    renameTargetRef.current = null;
+    setRenamingLesson(null);
+    setRenameValue("");
+
+    if (!target || !nextName || renameCancelledRef.current) {
+      renameCancelledRef.current = false;
+      return;
+    }
+
+    const currentName = target.split("/").pop()?.replace(/\.json$/i, "") || "";
+    if (nextName === currentName) {
+      return;
+    }
+
+    await renameVaultPath("Lesson Plans", target, nextName);
+    setSelectedLessons(new Set());
+  };
+
   // Generate the 7 days of the week
   const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(start, i)), [start]);
 
@@ -42,6 +88,8 @@ export function CalendarView() {
     setSelectedLessons(new Set());
     draggingLessonRef.current = null;
     setDragOverDayKey(null);
+    setLessonDropIndicator(null);
+    setIsDraggingLesson(false);
   }, [start.getTime()]);
 
   // We could filter `lessonPlans` by date if we stored it in the filename,
@@ -71,16 +119,32 @@ export function CalendarView() {
 
   const getLessonsForDate = (date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
-    return allLessonEntries.filter((lesson) => {
-      const plannedIso = lessonPlannedDateIndex[lesson.relativePath];
-      if (plannedIso) {
-        const plannedDate = new Date(plannedIso);
-        if (!Number.isNaN(plannedDate.getTime())) {
-          return format(plannedDate, "yyyy-MM-dd") === dateStr;
+    return allLessonEntries
+      .filter((lesson) => {
+        const plannedIso = lessonPlannedDateIndex[lesson.relativePath];
+        if (plannedIso) {
+          const plannedDate = new Date(plannedIso);
+          if (!Number.isNaN(plannedDate.getTime())) {
+            return format(plannedDate, "yyyy-MM-dd") === dateStr;
+          }
         }
-      }
-      return lesson.name.includes(dateStr);
-    });
+        return lesson.name.includes(dateStr);
+      })
+      .sort((a, b) => {
+        const aOrder = lessonCalendarOrderIndex[a.relativePath];
+        const bOrder = lessonCalendarOrderIndex[b.relativePath];
+
+        if (aOrder !== undefined || bOrder !== undefined) {
+          if (aOrder === undefined) return 1;
+          if (bOrder === undefined) return -1;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+        }
+
+        return a.relativePath.localeCompare(b.relativePath, undefined, {
+          numeric: true,
+          sensitivity: "base",
+        });
+      });
   };
 
   const getLessonDateToken = (lessonRelativePath: string): string | null => {
@@ -95,33 +159,90 @@ export function CalendarView() {
     return match ? match[0] : null;
   };
 
-  const moveLessonToDate = async (lessonName: string, day: Date) => {
-    const targetDateStr = format(day, "yyyy-MM-dd");
-    if (getLessonDateToken(lessonName) === targetDateStr) {
+  const getLessonInsertIndex = (dayKey: string, clientY: number): number => {
+    const column = document.querySelector<HTMLElement>(`[data-day-key="${dayKey}"]`);
+    const cards = column
+      ? Array.from(column.querySelectorAll<HTMLElement>("[data-lesson-card]"))
+      : [];
+
+    for (let index = 0; index < cards.length; index += 1) {
+      const rect = cards[index].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return index;
+      }
+    }
+
+    return cards.length;
+  };
+
+  const handleLessonDrop = async (
+    lessonName: string,
+    targetDayKey: string,
+    clientY: number,
+  ) => {
+    const targetDay = weekDays.find(
+      (day) => format(day, "yyyy-MM-dd") === targetDayKey,
+    );
+    if (!targetDay) {
       return;
     }
 
-    const nextFileName = await rescheduleLesson(lessonName, day);
+    const targetPaths = getLessonsForDate(targetDay)
+      .map((lesson) => lesson.relativePath)
+      .filter(Boolean);
+    let insertIndex = getLessonInsertIndex(targetDayKey, clientY);
+    const sourceDayKey = getLessonDateToken(lessonName);
+
+    if (sourceDayKey === targetDayKey) {
+      const sourceIndex = targetPaths.indexOf(lessonName);
+      const reordered = targetPaths.filter((path) => path !== lessonName);
+
+      if (sourceIndex >= 0 && insertIndex > sourceIndex) {
+        insertIndex -= 1;
+      }
+      insertIndex = Math.max(0, Math.min(insertIndex, reordered.length));
+      reordered.splice(insertIndex, 0, lessonName);
+
+      if (reordered.join("\n") !== targetPaths.join("\n")) {
+        await reorderCalendarLessons(reordered);
+      }
+      return;
+    }
+
+    const sourceDay = sourceDayKey
+      ? weekDays.find((day) => format(day, "yyyy-MM-dd") === sourceDayKey)
+      : undefined;
+    const sourcePaths = sourceDay
+      ? getLessonsForDate(sourceDay)
+          .map((lesson) => lesson.relativePath)
+          .filter((path) => path && path !== lessonName)
+      : [];
+
+    const nextFileName = await rescheduleLesson(lessonName, targetDay);
     if (!nextFileName) {
       return;
     }
 
-    // rescheduleLesson returns the bare filename; selection keys are paths
-    // relative to "Lesson Plans", so re-attach the lesson's folder prefix.
     const folderSlash = lessonName.lastIndexOf("/");
     const folderPrefix = folderSlash >= 0 ? lessonName.slice(0, folderSlash + 1) : "";
-    const nextRelativePath = folderPrefix + nextFileName;
+    const movedPath = folderPrefix + nextFileName;
+
+    const targetWithMoved = targetPaths.filter((path) => path !== movedPath);
+    insertIndex = Math.max(0, Math.min(insertIndex, targetWithMoved.length));
+    targetWithMoved.splice(insertIndex, 0, movedPath);
 
     setSelectedLessons((previous) => {
-      if (!previous.has(lessonName)) {
+      if (!previous.has(lessonName) || movedPath === lessonName) {
         return previous;
       }
 
       const next = new Set(previous);
       next.delete(lessonName);
-      next.add(nextRelativePath);
+      next.add(movedPath);
       return next;
     });
+
+    await reorderCalendarLessons([...sourcePaths, ...targetWithMoved]);
   };
 
   /** Returns the data-day-key of whichever day column contains the point (x, y). */
@@ -158,6 +279,7 @@ export function CalendarView() {
         dragging = true;
         mouseDragActiveRef.current = true;
         draggingLessonRef.current = lessonName;
+        setIsDraggingLesson(true);
 
         ghost = document.createElement('div');
         Object.assign(ghost.style, {
@@ -184,7 +306,19 @@ export function CalendarView() {
       if (dragging && ghost) {
         ghost.style.left = `${ev.clientX + 14}px`;
         ghost.style.top = `${ev.clientY - 12}px`;
-        setDragOverDayKey(findDayKeyAtPoint(ev.clientX, ev.clientY));
+
+        const targetDayKey = findDayKeyAtPoint(ev.clientX, ev.clientY);
+        setDragOverDayKey(targetDayKey);
+        if (targetDayKey) {
+          const index = getLessonInsertIndex(targetDayKey, ev.clientY);
+          setLessonDropIndicator((previous) =>
+            previous?.dayKey === targetDayKey && previous.index === index
+              ? previous
+              : { dayKey: targetDayKey, index },
+          );
+        } else {
+          setLessonDropIndicator(null);
+        }
       }
     };
 
@@ -198,13 +332,14 @@ export function CalendarView() {
       draggingLessonRef.current = null;
       mouseDragActiveRef.current = false;
       setDragOverDayKey(null);
+      setLessonDropIndicator(null);
+      setIsDraggingLesson(false);
 
       if (!dragging || !wasLessonName) return;
 
       const targetDayKey = findDayKeyAtPoint(ev.clientX, ev.clientY);
       if (targetDayKey) {
-        const targetDay = weekDays.find(d => format(d, 'yyyy-MM-dd') === targetDayKey);
-        if (targetDay) void moveLessonToDate(wasLessonName, targetDay);
+        void handleLessonDrop(wasLessonName, targetDayKey, ev.clientY);
       }
     };
 
@@ -290,6 +425,28 @@ export function CalendarView() {
   };
 
   const today = new Date();
+
+  const renderLessonDropLine = (
+    dayKey: string,
+    index: number,
+    placement: "top" | "bottom" = "top",
+  ) => {
+    if (lessonDropIndicator?.dayKey !== dayKey || lessonDropIndicator.index !== index) {
+      return null;
+    }
+
+    return (
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-0 right-0 z-10 h-[2px] rounded-full"
+        style={{
+          top: placement === "top" ? "-5px" : undefined,
+          bottom: placement === "bottom" ? "-5px" : undefined,
+          background: "var(--tp-accent)",
+        }}
+      />
+    );
+  };
 
   return (
     <div
@@ -405,13 +562,18 @@ export function CalendarView() {
                     {t('calendar.placeholders.freeDay')}
                   </div>
                 ) : (
-                  lessons.map((lesson, lIdx) => {
+                  <>
+                    {lessons.map((lesson, lIdx) => {
                     // Clean title: strip date token, "Lesson" prefix, trailing IDs
                     const rawStem = (lesson.name || "").replace(/\.json$/i, "");
+                    const uniqueStemMatch = rawStem.match(/^(Lesson|Stunde|Mindmap)-(\d+)$/i);
+                    const uniqueTitle = uniqueStemMatch
+                      ? `${uniqueStemMatch[1]} ${uniqueStemMatch[2]}`
+                      : "";
                     const withoutDate = rawStem.replace(/\d{4}-\d{2}-\d{2}-?/, "");
                     const withoutLesson = withoutDate.replace(/^Lesson-?/i, "");
                     const withoutTrailingId = withoutLesson.replace(/-?\d{3,6}$/, "").replace(/-$/, "");
-                    const derivedTitle = withoutTrailingId.replace(/-/g, " ").trim();
+                    const derivedTitle = uniqueTitle || withoutTrailingId.replace(/-/g, " ").trim();
 
                     const lessonName = lesson.relativePath || lesson.name || "";
                     const isSelected = lessonName ? selectedLessons.has(lessonName) : false;
@@ -425,10 +587,16 @@ export function CalendarView() {
                     const cleanTitle = (derivedTitle && !titleEqualsSubject)
                       ? derivedTitle
                        : t('calendar.defaultLessonTitle', { date: format(day, "MMM d", { locale: dateLocale }) });
+                    const renameSeed = uniqueTitle || derivedTitle || rawStem;
                     return (
                       <div
-                        key={lIdx}
-                        data-lesson-card
+                        key={`${lessonName}:${lIdx}`}
+                        className={`relative ${isDraggingLesson ? "pointer-events-none" : ""}`}
+                      >
+                        {renderLessonDropLine(dayKey, lIdx)}
+                        <div
+                          data-lesson-card
+                          data-lesson-path={lessonName}
                         className="w-full rounded-lg overflow-hidden"
                         style={{
                           background: isSelected ? "var(--tp-accent-softer)" : "var(--tp-bg-2)",
@@ -458,6 +626,43 @@ export function CalendarView() {
                         </button>
 
                         {/* Action row — always visible, compact */}
+                        {renamingLesson === lessonName && (
+                          <div className="px-2.5 pb-1.5">
+                            <input
+                              autoFocus
+                              value={renameValue}
+                              aria-label={t('sidebar.contextMenu.rename')}
+                              onChange={(event) => setRenameValue(event.target.value)}
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
+                              onBlur={() => {
+                                if (!renameCancelledRef.current) {
+                                  void commitLessonRename();
+                                }
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void commitLessonRename();
+                                } else if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  renameCancelledRef.current = true;
+                                  renameTargetRef.current = null;
+                                  setRenamingLesson(null);
+                                  setRenameValue("");
+                                }
+                              }}
+                              className="w-full rounded-md border px-2 py-1 text-[13px] font-semibold outline-none"
+                              style={{
+                                background: "var(--tp-bg-3)",
+                                borderColor: "var(--tp-accent)",
+                                color: "var(--tp-t-1)",
+                              }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Action row - always visible, compact */}
                         <div
                           className="flex items-center px-1.5 pb-1.5"
                           style={{ borderTop: "1px solid var(--tp-b-1)" }}
@@ -487,6 +692,22 @@ export function CalendarView() {
                             {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                           </button>
 
+                          {/* Rename */}
+                          {lessonName && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                beginRenameLesson(event, lessonName, renameSeed);
+                              }}
+                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                              title={t('sidebar.contextMenu.rename')}
+                              aria-label={t('sidebar.contextMenu.rename')}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+
                           {/* Delete */}
                           {lessonName && (
                             <button
@@ -515,9 +736,13 @@ export function CalendarView() {
                             </button>
                           )}
                         </div>
+                        </div>
+                        {lIdx === lessons.length - 1 &&
+                          renderLessonDropLine(dayKey, lessons.length, "bottom")}
                       </div>
                     )
-                  })
+                  })}
+                  </>
                 )}
               </div>
 
