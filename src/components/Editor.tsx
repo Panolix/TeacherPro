@@ -2424,7 +2424,7 @@ export function Editor() {
       clientX?: number,
       clientY?: number,
     ): boolean => {
-      if (!editor) {
+      if (!editor || payload.itemType === "folder") {
         return false;
       }
 

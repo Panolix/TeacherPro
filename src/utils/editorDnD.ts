@@ -31,7 +31,7 @@ export function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDrop
     relativePath = dataTransfer.getData("text/plain");
   }
 
-  if (!relativePath) {
+  if (!relativePath || itemType === "folder") {
     return null;
   }
 

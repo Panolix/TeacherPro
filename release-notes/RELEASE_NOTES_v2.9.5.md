@@ -21,9 +21,9 @@ Subject DB edge cases found in an end-to-end audit.
   setting, the TopBar expand button works, and opening Notes, AI Chat or the
   Method Bank no longer force-opens the explorer.
 
-- **Safer materials** - folder drags insert as folders, importing the vault or
-  Materials folder into itself is blocked, and uppercase `.PDF` files are
-  scanned correctly.
+- **Safer materials** - folders are navigation only and can no longer be
+  inserted into lessons or mindmaps. Importing the vault or Materials folder
+  into itself is blocked, and uppercase `.PDF` files are scanned correctly.
 
 - **Stable calendar ordering** - opening and saving a lesson preserves its
   manual calendar position; reschedules and reorders are serialized.
@@ -38,8 +38,8 @@ Subject DB edge cases found in an end-to-end audit.
   folder operations cannot escape the vault.
 - The sidebar collapse state is shared with the TopBar and persists across
   launches.
-- Dragging a material folder into a lesson or mindmap creates a folder item
-  instead of a file item.
+- Material folders can no longer be inserted into lessons or mindmaps by drag,
+  double-click, or the context menu; only files can be added.
 - Clearing lesson notes now uses the native confirmation dialog.
 - The clear-formatting button only affects the current selection instead of
   the whole document.

@@ -275,7 +275,7 @@ function getMaterialDropPayload(dataTransfer: DataTransfer): MaterialDropPayload
     relativePath = dataTransfer.getData("text/plain");
   }
 
-  if (!relativePath) {
+  if (!relativePath || itemType === "folder") {
     return null;
   }
 
@@ -923,6 +923,9 @@ export function MindmapView() {
       preferredPosition?: { x: number; y: number },
       sourceNodeId?: string,
     ) => {
+      if (payload.itemType === "folder") {
+        return;
+      }
       pushHistory();
       const fileName = payload.relativePath.split("/").pop() || payload.relativePath;
       const nodeId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;

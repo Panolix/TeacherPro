@@ -1204,6 +1204,9 @@ export function SidebarMinimal() {
   // Insert a material at the editor cursor or as a new mindmap node.
   const insertMaterialAtCursor = useCallback(
     (relativePath: string, isDirectory: boolean) => {
+      // Folders are navigation, not document content. Only files may be
+      // inserted into lessons or mindmaps.
+      if (isDirectory) return;
       if (!activeFilePath) return;
       if (currentView !== "editor" && currentView !== "mindmap") return;
       setPendingMaterialDrop({
@@ -1253,12 +1256,12 @@ export function SidebarMinimal() {
         onClick: () => revealMaterial(entry.relativePath),
       });
 
-      if (currentView === "editor" && activeFilePath) {
+      if (isFile && currentView === "editor" && activeFilePath) {
         items.push({ type: "divider" });
         items.push({
           label: t('sidebar.contextMenu.insertAtCursor'),
           icon: <FileText className="w-4 h-4" />,
-          onClick: () => insertMaterialAtCursor(entry.relativePath, entry.isDirectory),
+          onClick: () => insertMaterialAtCursor(entry.relativePath, false),
         });
       }
 
@@ -1309,26 +1312,10 @@ export function SidebarMinimal() {
           <div
             role="button"
             tabIndex={0}
-            draggable={true}
+            draggable={false}
             onClick={() =>
               setExpandedMaterials((prev) => ({ ...prev, [key]: !prev[key] }))
             }
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "copy";
-              e.dataTransfer.setData(
-                "application/teacherpro-material",
-                JSON.stringify({
-                  relativePath: entry.relativePath,
-                  itemType: "folder",
-                  isDirectory: true,
-                }),
-              );
-              e.dataTransfer.setData("application/teacherpro-file", entry.relativePath);
-              e.dataTransfer.setData("text/plain", entry.relativePath);
-              setDraggedMaterial({ relativePath: entry.relativePath, isDirectory: true });
-            }}
-            onDragEnd={() => setDraggedMaterial(null)}
-            onDoubleClick={() => insertMaterialAtCursor(entry.relativePath, true)}
             onContextMenu={(e) => ctxMenu.open(e, buildMaterialMenu(entry))}
             className="w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md cursor-pointer transition-colors select-none text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
             style={{ paddingLeft: `${8 + depth * 12}px`, WebkitUserSelect: "none" }}

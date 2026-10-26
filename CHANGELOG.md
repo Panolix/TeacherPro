@@ -18,9 +18,9 @@
 - **Sidebar collapse/reopen** - the sidebar now uses the persisted store state,
   so the TopBar expand button works and the state survives restarts. Opening
   Notes, AI Chat or the Method Bank no longer force-opens the explorer.
-- **Folder drag/drop** - material folder drags now carry `isDirectory` and both
-  drop parsers accept `itemType`, so folders insert as folders in lessons and
-  mindmaps.
+- **Folder insertion removed** - material folders are navigation only.
+  Dragging, double-clicking, or choosing a folder no longer inserts it into a
+  lesson or mindmap; only files can be added.
 - **Clear notes button** - uses the native dialog plugin instead of
   `window.confirm`, which is blocked in the Tauri webview.
 - **Clear formatting scope** - the eraser now only clears the current selection
