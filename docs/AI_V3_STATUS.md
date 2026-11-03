@@ -2,6 +2,17 @@
 
 > **STATUS (2026-10-17): ALL PHASES P0–P5 COMPLETE.** The sections below are the
 > historical handoff from the P0–P3 work and are kept for context; the remaining
+> **2026-11-03 update:** engine pin moved to **b11960** (llama.cpp v0.8.0);
+> Gemma 4 entries moved to the official **QAT q4_0** GGUFs; MTP is now wired
+> for Gemma 4 E2B/E4B/12B/26B/31B and Qwen3.8-27B; Auto/model recommendations
+> are hardware-aware; the selected model is persisted backend-side. The GPU
+> probe now covers NVIDIA, AMD, Intel and Apple (Windows registry, Linux DRM,
+> macOS `system_profiler`) and marks unified/shared memory correctly. Context
+> size has an Auto/manual setting, the engine warms up in the background after
+> load (prompt caching is enabled by default), and Settings has an on-demand
+> local TTFT/tok-s benchmark.
+> The phase notes below are historical and may still mention b11669/old filenames.
+>
 > P3/P4/P5 items listed further down have since been implemented and committed:
 > - P3 fixes: downloader hardening (`.part`/resume/416/clean-EOF), correct
 >   special-token/config SHA-256 pins, `run_blocking` panic fix, serialized

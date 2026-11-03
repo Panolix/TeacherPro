@@ -45,7 +45,7 @@ function resolveAccentColor(accentValue: string): string {
 }
 
 function App() {
-  const { initVault, accentColor, language } = useAppStore();
+  const { initVault, accentColor, language, aiV3ChatModelId } = useAppStore();
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -67,6 +67,17 @@ function App() {
     // AI v3: no runtime auto-start. The engine is lazy-started on first AI use
     // (see src-tauri/src/ai/engine.rs) — nothing runs until the user needs it.
   }, []);
+
+  // Keep the backend's remembered model in sync with the device-local UI
+  // setting. This does not start the engine; it only makes Auto/token counting
+  // resolve to the same model as chat after a restart.
+  useEffect(() => {
+    void invoke("ai_set_selected_model", { modelId: aiV3ChatModelId ?? null }).catch(
+      (err) => {
+        console.error("Failed to sync selected AI model:", err);
+      },
+    );
+  }, [aiV3ChatModelId]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-tp-theme", "dark");

@@ -148,31 +148,23 @@ struct ErrorResponse {
 fn prepare_chat_connection(
     app: &AppHandle,
     model_id: Option<&str>,
+    num_ctx: Option<u32>,
 ) -> Result<(&'static catalog::ModelEntry, u16, String), String> {
     let target = match model_id {
         Some(id) => Some(catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?),
         None => {
             let selected = app.state::<AiState>().selected();
-            selected.as_deref().and_then(catalog::find_model)
+            selected
+                .as_deref()
+                .and_then(catalog::find_model)
+                .filter(|model| catalog::is_downloaded(app, model))
         }
     };
-    let (_, port, key) = {
-        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
-        match target {
-            Some(want) if want.id != loaded.id => {
-                engine::start_engine(app, Some(want.id), None)?;
-                engine::wait_for_ready(app)?;
-                engine::connection(app).ok_or("Engine connection missing after switch.")?
-            }
-            _ => (loaded, port, key),
-        }
-    };
-    let model = target.unwrap_or_else(|| {
-        engine::connection(app)
-            .map(|(m, _, _)| m)
-            .unwrap_or(catalog::SMOKE_MODEL)
-    });
-    Ok((model, port, key))
+
+    match target {
+        Some(want) => engine::ensure_model_ready(app, want, num_ctx),
+        None => engine::ensure_ready_for_request(app, num_ctx),
+    }
 }
 
 /// Async command contract: sync Tauri commands run on the main thread, where
@@ -189,16 +181,15 @@ pub async fn ai_chat(
     max_tokens: Option<u32>,
     thinking: Option<bool>,
     model_id: Option<String>,
+    num_ctx: Option<u32>,
 ) -> Result<(), String> {
     let cancel = Arc::new(AtomicBool::new(false));
     lock_unpoisoned(&state.stream_cancels).insert(request_id.clone(), cancel.clone());
 
     let prepared = {
         let app_for_ready = app.clone();
-        run_blocking(move || {
-            prepare_chat_connection(&app_for_ready, model_id.as_deref())
-        })
-        .await?
+        run_blocking(move || prepare_chat_connection(&app_for_ready, model_id.as_deref(), num_ctx))
+            .await?
     };
     let (model, port, key) = prepared;
 
@@ -434,6 +425,21 @@ pub struct GenerateResult {
     pub usage: Option<Usage>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchmarkResult {
+    pub model_id: String,
+    pub model_name: String,
+    pub backend: Option<String>,
+    pub used_mtp: bool,
+    pub ctx: Option<u32>,
+    pub ttft_ms: u64,
+    pub total_ms: u64,
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub tokens_per_sec: f64,
+}
+
 #[tauri::command]
 /// One-shot (non-streaming) generation. Async contract: the request waits up
 /// to the 600 s HTTP timeout, and sync Tauri commands run on the main thread
@@ -446,9 +452,18 @@ pub async fn ai_generate_text_v2(
     system_prompt: Option<String>,
     temperature: Option<f64>,
     max_tokens: Option<u32>,
+    num_ctx: Option<u32>,
 ) -> Result<GenerateResult, String> {
     run_blocking(move || {
-        generate_text_sync(&app, model_id, prompt, system_prompt, temperature, max_tokens)
+        generate_text_sync(
+            &app,
+            model_id,
+            prompt,
+            system_prompt,
+            temperature,
+            max_tokens,
+            num_ctx,
+        )
     })
     .await
 }
@@ -460,6 +475,7 @@ fn generate_text_sync(
     system_prompt: Option<String>,
     temperature: Option<f64>,
     max_tokens: Option<u32>,
+    num_ctx: Option<u32>,
 ) -> Result<GenerateResult, String> {
     let target_model = match model_id.as_deref() {
         Some(id) => catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?,
@@ -468,30 +484,15 @@ fn generate_text_sync(
             selected
                 .as_deref()
                 .and_then(catalog::find_model)
-                .or_else(|| {
-                    catalog::auto_start_order().find(|m| {
-                        catalog::model_file_path(app, m)
-                            .map(|p| p.is_file())
-                            .unwrap_or(false)
-                    })
-                })
+                .filter(|model| catalog::is_downloaded(app, model))
+                .or_else(|| catalog::first_downloaded_auto(app))
                 .ok_or_else(|| "No model downloaded yet.".to_string())?
         }
     };
 
-    // Switching models kills the old child and spawns a new engine on a new
-    // ephemeral port with a new API key, so the connection tuple must be
-    // re-read after the switch instead of reusing the pre-switch values.
-    let (model, port, key) = {
-        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
-        if loaded.id != target_model.id {
-            engine::start_engine(app, Some(target_model.id), None)?;
-            engine::wait_for_ready(app)?;
-            engine::connection(app).ok_or("Engine connection missing after switch.")?
-        } else {
-            (loaded, port, key)
-        }
-    };
+    // Start the target directly. Starting Auto first and switching afterwards
+    // would load two models on a cold start.
+    let (model, port, key) = engine::ensure_model_ready(app, target_model, num_ctx)?;
 
     let mut messages = Vec::new();
     if let Some(sys) = system_prompt.as_deref().filter(|s| !s.is_empty()) {
@@ -590,12 +591,26 @@ pub fn ai_generate_ready(app: AppHandle) -> Result<bool, String> {
 /// with a 60 s timeout each — on the main thread that would freeze the UI for
 /// the whole batch, so the serial loop runs on the blocking pool.
 #[tauri::command]
-pub async fn ai_count_tokens(app: AppHandle, texts: Vec<String>) -> Result<Vec<u64>, String> {
-    run_blocking(move || count_tokens_sync(&app, texts)).await
+pub async fn ai_count_tokens(
+    app: AppHandle,
+    model_id: Option<String>,
+    num_ctx: Option<u32>,
+    texts: Vec<String>,
+) -> Result<Vec<u64>, String> {
+    run_blocking(move || count_tokens_sync(&app, model_id, num_ctx, &texts)).await
 }
 
-fn count_tokens_sync(app: &AppHandle, texts: Vec<String>) -> Result<Vec<u64>, String> {
-    let (model, port, key) = engine::ensure_ready_for_request(app)?;
+fn count_tokens_sync(
+    app: &AppHandle,
+    model_id: Option<String>,
+    num_ctx: Option<u32>,
+    texts: &[String],
+) -> Result<Vec<u64>, String> {
+    let target = model_id.as_deref().and_then(catalog::find_model);
+    let (_model, port, key) = match target {
+        Some(want) => engine::ensure_model_ready(app, want, num_ctx)?,
+        None => engine::ensure_ready_for_request(app, num_ctx)?,
+    };
     let url = format!("http://127.0.0.1:{port}/tokenize");
     let agent = ureq::AgentBuilder::new()
         .timeout_connect(Duration::from_secs(10))
@@ -604,7 +619,7 @@ fn count_tokens_sync(app: &AppHandle, texts: Vec<String>) -> Result<Vec<u64>, St
         .build();
 
     let mut out = Vec::with_capacity(texts.len());
-    for text in &texts {
+    for text in texts {
         let body = serde_json::json!({ "content": text, "add_special": false });
         let response = agent
             .post(&url)
@@ -621,8 +636,152 @@ fn count_tokens_sync(app: &AppHandle, texts: Vec<String>) -> Result<Vec<u64>, St
             .unwrap_or(0);
         out.push(n);
     }
-    let _ = model;
     Ok(out)
+}
+
+/// Local, on-demand benchmark. Runs one fixed streaming prompt and reports
+/// TTFT / decode speed. Nothing runs unless the user clicks the button.
+#[tauri::command]
+pub async fn ai_benchmark(
+    app: AppHandle,
+    model_id: Option<String>,
+    num_ctx: Option<u32>,
+) -> Result<BenchmarkResult, String> {
+    run_blocking(move || benchmark_sync(&app, model_id, num_ctx)).await
+}
+
+fn benchmark_sync(
+    app: &AppHandle,
+    model_id: Option<String>,
+    num_ctx: Option<u32>,
+) -> Result<BenchmarkResult, String> {
+    {
+        let ai = app.state::<AiState>();
+        if !lock_unpoisoned(&ai.stream_cancels).is_empty() {
+            return Err("AI is busy; wait for the current response to finish.".into());
+        }
+    }
+
+    let (model, port, key) = prepare_chat_connection(app, model_id.as_deref(), num_ctx)?;
+    let messages = vec![ChatMsg {
+        role: "user".into(),
+        content: "Explain photosynthesis in one short sentence.".into(),
+    }];
+    let body = build_chat_body(
+        model.id,
+        &messages,
+        Some(0.2),
+        Some(96),
+        Some(false),
+        model.supports_thinking,
+        model.thinking_control,
+        true,
+    );
+
+    let start = Instant::now();
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(10))
+        .timeout_read(Duration::from_secs(180))
+        .timeout(Duration::from_secs(300))
+        .build();
+    let response = agent
+        .post(&format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .set("Authorization", &format!("Bearer {key}"))
+        .set("Content-Type", "application/json")
+        .send_string(&body)
+        .map_err(|e| format!("Benchmark request failed: {e}"))?;
+
+    let mut reader = std::io::BufReader::new(response.into_reader());
+    let mut first_token: Option<Duration> = None;
+    let mut usage: Option<Usage> = None;
+    let mut completed = false;
+
+    loop {
+        let mut line = String::new();
+        match std::io::BufRead::read_line(&mut reader, &mut line) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(e) => return Err(format!("Benchmark stream failed: {e}")),
+        }
+        let line = line.trim_end();
+        if !line.starts_with("data:") {
+            continue;
+        }
+        let payload = line[5..].trim();
+        if payload == "[DONE]" {
+            completed = true;
+            break;
+        }
+        let Ok(chunk) = serde_json::from_str::<SseChunk>(payload) else {
+            continue;
+        };
+        if let Some(error) = chunk.error {
+            return Err(error
+                .message
+                .unwrap_or_else(|| "The AI engine returned an error.".to_string()));
+        }
+        if let Some(chunk_usage) = chunk.usage {
+            usage = Some(chunk_usage);
+        }
+        if let Some(choice) = chunk.choices.first() {
+            let has_token = choice
+                .delta
+                .content
+                .as_deref()
+                .map(|text| !text.is_empty())
+                .unwrap_or(false)
+                || choice
+                    .delta
+                    .reasoning_content
+                    .as_deref()
+                    .map(|text| !text.is_empty())
+                    .unwrap_or(false);
+            if has_token && first_token.is_none() {
+                first_token = Some(start.elapsed());
+            }
+            if choice.finish_reason.is_some() {
+                completed = true;
+            }
+        }
+    }
+
+    let total = start.elapsed();
+    if !completed && usage.is_none() {
+        return Err("Benchmark ended before the model returned a response.".into());
+    }
+    let ttft = first_token.unwrap_or(total);
+    let (prompt_tokens, completion_tokens) = usage
+        .map(|u| (u.prompt_tokens, u.completion_tokens))
+        .unwrap_or((0, 0));
+    let decode_secs = total.saturating_sub(ttft).as_secs_f64();
+    let tokens_per_sec = if decode_secs > 0.0 && completion_tokens > 0 {
+        completion_tokens as f64 / decode_secs
+    } else {
+        0.0
+    };
+
+    let (backend, used_mtp, ctx) = {
+        let ai = app.state::<AiState>();
+        let guard = lock_unpoisoned(&ai.engine);
+        (
+            guard.variant.map(|v| v.to_string()),
+            guard.used_mtp,
+            guard.ctx,
+        )
+    };
+
+    Ok(BenchmarkResult {
+        model_id: model.id.to_string(),
+        model_name: model.name.to_string(),
+        backend,
+        used_mtp,
+        ctx,
+        ttft_ms: ttft.as_millis() as u64,
+        total_ms: total.as_millis() as u64,
+        prompt_tokens,
+        completion_tokens,
+        tokens_per_sec,
+    })
 }
 
 /// Grammar-enforced structured generation: the model cannot produce output
@@ -640,9 +799,18 @@ pub async fn ai_structured(
     temperature: Option<f64>,
     max_tokens: Option<u32>,
     model_id: Option<String>,
+    num_ctx: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     run_blocking(move || {
-        structured_sync(&app, messages, schema, temperature, max_tokens, model_id)
+        structured_sync(
+            &app,
+            messages,
+            schema,
+            temperature,
+            max_tokens,
+            model_id,
+            num_ctx,
+        )
     })
     .await
 }
@@ -655,26 +823,22 @@ fn structured_sync(
     temperature: Option<f64>,
     max_tokens: Option<u32>,
     model_id: Option<String>,
+    num_ctx: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     let target = match model_id.as_deref() {
         Some(id) => Some(catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?),
         None => {
             let selected = app.state::<AiState>().selected();
-            selected.as_deref().and_then(catalog::find_model)
+            selected
+                .as_deref()
+                .and_then(catalog::find_model)
+                .filter(|model| catalog::is_downloaded(app, model))
         }
     };
-    let (model, port, key) = {
-        let (loaded, port, key) = engine::ensure_ready_for_request(app)?;
-        match target {
-            Some(want) if want.id != loaded.id => {
-                engine::start_engine(app, Some(want.id), None)?;
-                engine::wait_for_ready(app)?;
-                engine::connection(app).ok_or("Engine connection missing after switch.")?
-            }
-            _ => (loaded, port, key),
-        }
+    let (model, port, key) = match target {
+        Some(want) => engine::ensure_model_ready(app, want, num_ctx)?,
+        None => engine::ensure_ready_for_request(app, num_ctx)?,
     };
-    let _ = model;
 
     let mut body = serde_json::json!({
         "model": model.id,

@@ -14,10 +14,12 @@ import {
   CheckCircle2,
   Database,
   Trash2,
+  Gauge,
+  Languages,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { useAppStore, type AccentColor } from "../store";
+import { AI_CONTEXT_SIZES, useAppStore, type AccentColor } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { SubjectDbManager } from "./SubjectDbManager";
 
@@ -36,6 +38,9 @@ interface EngineStatusDto {
   port: number | null;
   ctx: number | null;
   variant: string | null;
+  usedMtp: boolean;
+  startupMs: number | null;
+  warmupMs: number | null;
   error: string | null;
 }
 
@@ -54,11 +59,19 @@ interface CatalogModelDto {
   origin: string;
   sizeBytes: number;
   minRamGb: number;
+  minVramGb: number;
   numCtx: number;
   supportsThinking: boolean;
   recommended: boolean;
+  recommendedForHardware: boolean;
+  translationQuality: "excellent" | "good" | "basic" | "limited";
   downloaded: boolean;
   filePresent: boolean;
+  mtpAvailable: boolean;
+  mtpDownloaded: boolean;
+  mtpSize: number;
+  legacyPresent: boolean;
+  legacySizeBytes: number;
 }
 
 interface CatalogInfoDto {
@@ -67,14 +80,42 @@ interface CatalogInfoDto {
   engineInstalled: boolean;
   modelsDir: string;
   models: CatalogModelDto[];
+  recommendedId: string | null;
+  autoStartId: string | null;
   cudaPackAvailable: boolean;
   cudaPackInstalled: boolean;
   cudaPackSize: number;
 }
 
 interface HardwareInfoDto {
-  gpu: { name: string; vramMb: number } | null;
+  gpu: {
+    name: string;
+    vramMb: number;
+    vendor?: string;
+    unifiedMemory?: boolean;
+  } | null;
   totalRamGb: number;
+}
+
+interface BenchmarkResultDto {
+  modelId: string;
+  modelName: string;
+  backend: string | null;
+  usedMtp: boolean;
+  ctx: number | null;
+  ttftMs: number;
+  totalMs: number;
+  promptTokens: number;
+  completionTokens: number;
+  tokensPerSec: number;
+}
+
+function engineBackendLabel(variant: string | null | undefined): string {
+  if (!variant) return "CPU";
+  if (variant.includes("metal")) return "Metal";
+  if (variant.includes("cuda")) return "CUDA";
+  if (variant.includes("vulkan")) return "Vulkan";
+  return "CPU";
 }
 
 const TRANSLATE_LANGUAGES = [
@@ -117,6 +158,8 @@ export function SettingsModal({ open, onClose }: Props) {
     setAiV3ChatModelId,
     aiV3RewriteModelId,
     setAiV3RewriteModelId,
+    aiV3ContextSize,
+    setAiV3ContextSize,
     aiPersistChats,
     setAiPersistChats,
     aiChatHistoryLimit,
@@ -139,6 +182,30 @@ export function SettingsModal({ open, onClose }: Props) {
 
   const { t } = useTranslation();
 
+  const translationLabel = (quality: CatalogModelDto["translationQuality"]) =>
+    t(
+      quality === "excellent"
+        ? "settings.aiV3.translationExcellent"
+        : quality === "good"
+          ? "settings.aiV3.translationGood"
+          : quality === "limited"
+            ? "settings.aiV3.translationLimited"
+            : "settings.aiV3.translationBasic",
+    );
+
+  const translationBadgeStyle = (quality: CatalogModelDto["translationQuality"]) => {
+    switch (quality) {
+      case "excellent":
+        return { background: "rgba(34,197,94,0.16)", color: "#4ade80" };
+      case "good":
+        return { background: "rgba(59,130,246,0.16)", color: "#60a5fa" };
+      case "limited":
+        return { background: "rgba(239,68,68,0.16)", color: "#f87171" };
+      default:
+        return { background: "rgba(245,158,11,0.16)", color: "#fbbf24" };
+    }
+  };
+
   const [tab, setTab] = useState<SettingsTab>("appearance");
 
   // ===== AI runtime / model management state =====
@@ -150,6 +217,9 @@ export function SettingsModal({ open, onClose }: Props) {
   const [hardware, setHardware] = useState<HardwareInfoDto | null>(null);
   const [packProgress, setPackProgress] = useState<DownloadProgressDto | null>(null);
   const [deletingModelId, setDeletingModelId] = useState<string | null>(null);
+  const [benchmarking, setBenchmarking] = useState(false);
+  const [benchmarkResult, setBenchmarkResult] = useState<BenchmarkResultDto | null>(null);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || tab !== "ai") return;
@@ -269,6 +339,40 @@ export function SettingsModal({ open, onClose }: Props) {
     }
   };
 
+  const runBenchmark = async () => {
+    setBenchmarking(true);
+    setBenchmarkError(null);
+    setBenchmarkResult(null);
+    try {
+      const result = await invoke<BenchmarkResultDto>("ai_benchmark", {
+        modelId: aiV3ChatModelId ?? null,
+        numCtx: aiV3ContextSize,
+      });
+      setBenchmarkResult(result);
+      setEngineStatus(await invoke<EngineStatusDto>("ai_engine_status"));
+      setCatalog(await invoke<CatalogInfoDto>("ai_catalog_info"));
+    } catch (e) {
+      setBenchmarkError(String(e));
+    } finally {
+      setBenchmarking(false);
+    }
+  };
+
+  const removeLegacyModel = async (modelId: string) => {
+    const model = catalog?.models.find((m) => m.id === modelId);
+    const confirmed = await ask(
+      t("settings.aiV3.removeLegacyConfirm", { name: model?.name ?? modelId }),
+      { title: t("settings.aiV3.removeLegacyConfirmTitle"), kind: "warning" },
+    );
+    if (!confirmed) return;
+    try {
+      await invoke("ai_delete_legacy_model", { modelId });
+      setCatalog(await invoke<CatalogInfoDto>("ai_catalog_info"));
+    } catch (e) {
+      console.error("remove legacy model files failed:", e);
+    }
+  };
+
   const activateModel = async (modelId: string) => {
     try {
       setEngineStatus(await invoke<EngineStatusDto>("ai_select_model", { modelId }));
@@ -344,6 +448,24 @@ export function SettingsModal({ open, onClose }: Props) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
+
+  const selectedContextModelId =
+    aiV3ChatModelId ?? catalog?.autoStartId ?? catalog?.recommendedId ?? null;
+  const contextMax = Math.max(
+    4096,
+    catalog?.models.find((model) => model.id === selectedContextModelId)?.numCtx ??
+      131072,
+  );
+  const contextOptions = AI_CONTEXT_SIZES.filter((size) => size <= contextMax);
+
+  // If the user switches to a model with a smaller window, do not leave a
+  // value selected that the model cannot actually use.
+  useEffect(() => {
+    if (aiV3ContextSize === null || aiV3ContextSize <= contextMax) return;
+    const fallback =
+      [...AI_CONTEXT_SIZES].reverse().find((size) => size <= contextMax) ?? null;
+    setAiV3ContextSize(fallback);
+  }, [aiV3ContextSize, contextMax, setAiV3ContextSize]);
 
   if (!open) return null;
 
@@ -521,7 +643,12 @@ export function SettingsModal({ open, onClose }: Props) {
                     {t("settings.aiV3.subtitle")}
                   </p>
                   <div className="flex flex-col gap-2">
-                    {catalog?.models.map((model) => {
+                    {[...(catalog?.models ?? [])]
+                      .sort(
+                        (a, b) =>
+                          Number(b.recommendedForHardware) - Number(a.recommendedForHardware),
+                      )
+                      .map((model) => {
                       const dl = v3Downloads[model.id];
                       const isActive = dl && ["queued", "downloading", "verifying"].includes(dl.state);
                       const pct = dl && dl.total > 0 ? Math.round((dl.received / dl.total) * 100) : 0;
@@ -532,31 +659,55 @@ export function SettingsModal({ open, onClose }: Props) {
                           style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-panel-muted)" }}
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="truncate text-[13px] font-medium text-[var(--tp-text-primary)]">
                                 {model.name}
                               </span>
-                              <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: "var(--tp-panel-elevated)", color: "var(--tp-text-muted)" }}>
-                                {model.tier}
+                              {model.recommendedForHardware && (
+                                <span
+                                  className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium"
+                                  style={{ background: "var(--tp-accent)", color: "#fff" }}
+                                >
+                                  {t("settings.aiV3.recommendedForPc")}
+                                </span>
+                              )}
+                              <span
+                                className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px]"
+                                style={translationBadgeStyle(model.translationQuality)}
+                              >
+                                <Languages className="w-3 h-3" />
+                                {translationLabel(model.translationQuality)}
                               </span>
                               {model.origin === "eu" && (
                                 <span className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]" style={{ background: "var(--tp-accent)", color: "#fff" }}>
                                   EU
                                 </span>
                               )}
-                              {hardware?.gpu &&
-                                model.sizeBytes <= hardware.gpu.vramMb * 1024 * 1024 * 0.9 && (
-                                  <span
-                                    className="shrink-0 rounded-full px-1.5 py-0.5 text-[11px]"
-                                    style={{ background: "rgba(34,197,94,0.16)", color: "#4ade80" }}
-                                    title={t("settings.aiV3.fitsVramHint")}
-                                  >
-                                    {t("settings.aiV3.fitsVram")}
-                                  </span>
-                                )}
                             </div>
                             <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
-                              {(model.sizeBytes / 1e9).toFixed(1)} GB · RAM {model.minRamGb}+ GB · ctx {model.numCtx}
+                              {model.tier} · {(model.sizeBytes / 1e9).toFixed(1)} GB · VRAM{" "}
+                              {model.minVramGb}+ GB · RAM {model.minRamGb}+ GB ·{" "}
+                              {Math.round(model.numCtx / 1024)}K ctx
+                              {model.mtpAvailable && " · MTP"}
+                              {hardware?.gpu && !hardware.gpu.unifiedMemory && (
+                                <>
+                                  {" "}·{" "}
+                                  {hardware.gpu.vramMb >= model.minVramGb * 1024 &&
+                                  hardware.totalRamGb >= model.minRamGb ? (
+                                    <span style={{ color: "#4ade80" }}>
+                                      {t("settings.aiV3.fitsVram")}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "#f87171" }}>
+                                      {t("settings.aiV3.mayNotFit")}
+                                    </span>
+                                  )}
+                                </>
+                              )}
+                              {model.legacyPresent &&
+                                ` · ${t("settings.aiV3.legacySize", {
+                                  size: (model.legacySizeBytes / 1e9).toFixed(1),
+                                })}`}
                             </div>
                           </div>
                           {model.downloaded ? (
@@ -572,6 +723,25 @@ export function SettingsModal({ open, onClose }: Props) {
                                 >
                                   {t("settings.aiV3.use")}
                                 </button>
+                              )}
+                              {model.mtpAvailable && !model.mtpDownloaded && (
+                                isActive ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[11px]"
+                                    style={{ color: "var(--tp-t-4)" }}
+                                  >
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    {pct}%
+                                  </span>
+                                ) : (
+                                  <button
+                                    className="tp-btn inline-flex items-center gap-1.5"
+                                    onClick={() => void startDownload(model.id)}
+                                  >
+                                    <HardDriveDownload className="w-3.5 h-3.5" />
+                                    {t("settings.aiV3.downloadMtp")}
+                                  </button>
+                                )
                               )}
                               <button
                                 className="tp-btn inline-flex items-center justify-center"
@@ -609,6 +779,16 @@ export function SettingsModal({ open, onClose }: Props) {
                               <HardDriveDownload className="w-3.5 h-3.5" /> {t("settings.aiV3.download")}
                             </button>
                           )}
+                          {model.legacyPresent && (
+                            <button
+                              className="tp-btn shrink-0 inline-flex items-center justify-center"
+                              title={t("settings.aiV3.removeLegacyHint")}
+                              aria-label={t("settings.aiV3.removeLegacy")}
+                              onClick={() => void removeLegacyModel(model.id)}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {dl?.error && (
                             <span className="text-[11px] text-red-400">{dl.error}</span>
                           )}
@@ -625,21 +805,104 @@ export function SettingsModal({ open, onClose }: Props) {
                   >
                     <div className="text-[var(--tp-text-primary)]">
                       {hardware?.gpu
-                        ? t("settings.aiV3.gpuDetected", {
-                            name: hardware.gpu.name,
-                            vram: Math.round(hardware.gpu.vramMb / 1024),
-                          })
+                        ? hardware.gpu.unifiedMemory
+                          ? t(
+                              hardware.gpu.vendor === "apple"
+                                ? "settings.aiV3.gpuDetectedUnified"
+                                : "settings.aiV3.gpuDetectedShared",
+                              {
+                                name: hardware.gpu.name,
+                                vram: Math.round(hardware.gpu.vramMb / 1024),
+                              },
+                            )
+                          : t("settings.aiV3.gpuDetected", {
+                              name: hardware.gpu.name,
+                              vram: Math.round(hardware.gpu.vramMb / 1024),
+                            })
                         : t("settings.aiV3.gpuNone")}
                     </div>
                     <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
                       {t("settings.aiV3.ramDetected", { ram: hardware?.totalRamGb ?? "?" })}
                     </div>
                     <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                      {t("settings.aiV3.engineBackend", {
+                        backend: engineBackendLabel(
+                          engineStatus?.variant ?? catalog?.engineVariant,
+                        ),
+                      })}
+                    </div>
+                    {engineStatus?.startupMs != null && (
+                      <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                        {t("settings.aiV3.startupTime", {
+                          seconds: (engineStatus.startupMs / 1000).toFixed(1),
+                        })}
+                      </div>
+                    )}
+                    {engineStatus?.warmupMs != null && (
+                      <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                        {t("settings.aiV3.warmupTime", {
+                          seconds: (engineStatus.warmupMs / 1000).toFixed(1),
+                        })}
+                      </div>
+                    )}
+                    {catalog?.autoStartId && (
+                      <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                        {t("settings.aiV3.autoStart", {
+                          name:
+                            catalog.models.find((m) => m.id === catalog.autoStartId)?.name ??
+                            catalog.autoStartId,
+                        })}
+                      </div>
+                    )}
+                    {engineStatus?.usedMtp && (
+                      <div className="text-[11px]" style={{ color: "#4ade80" }}>
+                        {t("settings.aiV3.mtpActive")}
+                      </div>
+                    )}
+                    {hardware?.gpu?.vendor === "apple" && (
+                      <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                        {t("settings.aiV3.appleMetalNote")}
+                      </div>
+                    )}
+                    <div className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
                       {t("settings.aiV3.embedModel")}
                     </div>
                   </div>
 
-                  {catalog?.cudaPackAvailable && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      className="tp-btn inline-flex items-center gap-1.5"
+                      onClick={() => void runBenchmark()}
+                      disabled={benchmarking}
+                      title={t("settings.aiV3.benchmarkHint")}
+                    >
+                      {benchmarking ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Gauge className="w-3.5 h-3.5" />
+                      )}
+                      {t("settings.aiV3.runBenchmark")}
+                    </button>
+                    {benchmarkResult && (
+                      <span className="text-[11px]" style={{ color: "var(--tp-t-4)" }}>
+                        {t("settings.aiV3.benchmarkResult", {
+                          backend: benchmarkResult.backend ?? "?",
+                          ttft: benchmarkResult.ttftMs,
+                          tps: benchmarkResult.tokensPerSec.toFixed(1),
+                          tokens: benchmarkResult.completionTokens,
+                          ctx: benchmarkResult.ctx ?? "?",
+                          mtp: benchmarkResult.usedMtp ? " · MTP" : "",
+                        })}
+                      </span>
+                    )}
+                    {benchmarkError && (
+                      <span className="text-[11px] text-red-400">{benchmarkError}</span>
+                    )}
+                  </div>
+
+                  {catalog?.cudaPackAvailable &&
+                    (hardware?.gpu?.vendor === "nvidia" ||
+                      catalog.cudaPackInstalled) && (
                     <div
                       className="mt-2 flex items-center gap-3 rounded-lg border px-3 py-2"
                       style={{ borderColor: "var(--tp-border-strong)", background: "var(--tp-panel-muted)" }}
@@ -755,6 +1018,27 @@ export function SettingsModal({ open, onClose }: Props) {
                       </select>
                     </FormRow>
                   </div>
+                  <FormRow
+                    label={t("settings.aiV3.contextSize")}
+                    hint={t("settings.aiV3.contextHint", {
+                      max: Math.round(contextMax / 1024),
+                    })}
+                  >
+                    <select
+                      className="tp-input"
+                      value={aiV3ContextSize ?? ""}
+                      onChange={(e) =>
+                        setAiV3ContextSize(e.target.value ? Number(e.target.value) : null)
+                      }
+                    >
+                      <option value="">{t("settings.aiV3.contextAuto")}</option>
+                      {contextOptions.map((size) => (
+                        <option key={size} value={size}>
+                          {size / 1024}K
+                        </option>
+                      ))}
+                    </select>
+                  </FormRow>
                   <p className="text-[11px] mt-2" style={{ color: "var(--tp-t-4)" }}>
                     {t("settings.aiV3.routingHint")}
                   </p>

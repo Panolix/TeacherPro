@@ -123,6 +123,7 @@ export function Editor() {
     setAiStatusMessage,
     aiV3ChatModelId,
     aiV3RewriteModelId,
+    aiV3ContextSize,
     aiChatHistoryLimit,
     aiTemperature,
     aiSystemPrompt,
@@ -1387,6 +1388,7 @@ export function Editor() {
           prompt,
           systemPrompt: rewriteSystemPrompt,
           temperature: 0.35,
+          numCtx: aiV3ContextSize,
         });
 
         const transformedText = normalizeAiFragmentOutput(result.text, sourceText);
@@ -1429,6 +1431,7 @@ export function Editor() {
     [
       aiEnabled,
       aiV3RewriteModelId,
+      aiV3ContextSize,
       aiTemperature,
       aiTranslateTargetLanguage,
       editor,
@@ -1548,7 +1551,10 @@ export function Editor() {
           id: string | null;
           numCtx: number;
           supportsThinking: boolean;
-        }>("ai_effective_model", { modelId: aiV3ChatModelId ?? null });
+        }>("ai_effective_model", {
+          modelId: aiV3ChatModelId ?? null,
+          numCtx: aiV3ContextSize,
+        });
         if (info.numCtx > 0) modelNumCtx = info.numCtx;
         modelSupportsThinkingNow = info.supportsThinking;
       } catch {
@@ -1730,6 +1736,8 @@ export function Editor() {
       let exactCounts: number[] | null = null;
       try {
         exactCounts = await tauriInvoke<number[]>("ai_count_tokens", {
+          modelId: aiV3ChatModelId ?? null,
+          numCtx: aiV3ContextSize,
           texts: [lessonContext, ragContext, effectiveSystemPrompt, questionContent, userText, ...recentMessages.map((m) => m.text)],
         });
       } catch {
@@ -1852,6 +1860,7 @@ export function Editor() {
               maxTokens: finalNumPredict,
               thinking: thinkMode,
               modelId: aiV3ChatModelId ?? undefined,
+              numCtx: aiV3ContextSize,
             });
           })
           .then(() => {
@@ -1889,7 +1898,7 @@ export function Editor() {
       chatBusyRef.current = false;
       setIsChatBusy(false);
     }
-  }, [aiEnabled, aiV3ChatModelId, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
+  }, [aiEnabled, aiV3ChatModelId, aiV3ContextSize, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
 
   // Fetch subject DB list when chat or the draft dialog opens (so dropdown is populated)
   useEffect(() => {
@@ -3210,6 +3219,8 @@ export function Editor() {
         activeFile={activeChatFile}
         subjectDatabases={subjectDatabases}
         methodBankItems={methodBankItems}
+        modelId={aiV3ChatModelId}
+        numCtx={aiV3ContextSize}
       />
 
       {/* Notes Panel - Left Side */}

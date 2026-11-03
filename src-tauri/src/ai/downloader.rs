@@ -93,7 +93,11 @@ pub fn ai_download_model_start(
     part_name.push(".part");
     let part = PathBuf::from(part_name);
 
-    if dest.is_file() {
+    let mtp_missing = model
+        .mtp_file
+        .map(|file| !models_dir.join(file).is_file())
+        .unwrap_or(false);
+    if dest.is_file() && !(mtp_missing && model.mtp_size.is_some()) {
         let existing = std::fs::metadata(&dest).map_err(|e| e.to_string())?.len();
         return Ok(DownloadProgress {
             model_id: model.id.to_string(),
@@ -103,6 +107,13 @@ pub fn ai_download_model_start(
             error: None,
         });
     }
+
+    let total = if dest.is_file() {
+        // Main GGUF already present: only the MTP draft head is missing.
+        model.mtp_size.unwrap_or(0)
+    } else {
+        model.size_bytes + model.mtp_size.unwrap_or(0)
+    };
 
     {
         let mut guard = lock_unpoisoned(&state.downloads);
@@ -117,10 +128,7 @@ pub fn ai_download_model_start(
         }
         guard.insert(
             model.id.to_string(),
-            DownloadJob::new(
-                model.id.to_string(),
-                model.size_bytes + model.mtp_size.unwrap_or(0),
-            ),
+            DownloadJob::new(model.id.to_string(), total),
         );
     }
 
@@ -208,6 +216,30 @@ pub fn ai_delete_model(
         remove_file_if_present(&PathBuf::from(mtp_part_name))?;
     }
 
+    for legacy in model.legacy_filenames {
+        remove_file_if_present(&models_dir.join(legacy))?;
+        let mut part_name = models_dir.join(legacy).into_os_string();
+        part_name.push(".part");
+        remove_file_if_present(&PathBuf::from(part_name))?;
+    }
+
+    Ok(())
+}
+
+/// Remove only superseded model files (e.g. the pre-QAT Gemma downloads), so
+/// users can reclaim disk space without deleting the current model.
+#[tauri::command]
+pub fn ai_delete_legacy_model(app: AppHandle, model_id: String) -> Result<(), String> {
+    let model =
+        catalog::find_model(&model_id).ok_or_else(|| format!("Unknown model: {model_id}"))?;
+    let models_dir = catalog::models_dir(&app)?;
+    for legacy in model.legacy_filenames {
+        let path = models_dir.join(legacy);
+        remove_file_if_present(&path)?;
+        let mut part_name = path.into_os_string();
+        part_name.push(".part");
+        remove_file_if_present(&PathBuf::from(part_name))?;
+    }
     Ok(())
 }
 
@@ -225,46 +257,57 @@ fn run_download(
     part: PathBuf,
     job: DownloadJob,
 ) {
-    if let Err(e) = download_verified(
-        model.url,
-        model.size_bytes,
-        &part,
-        &dest,
-        model.sha256,
-        &job,
-        0,
-    ) {
-        fail(&job, e);
-        return;
+    let main_exists = dest.is_file();
+    if !main_exists {
+        if let Err(e) = download_verified(
+            model.url,
+            model.size_bytes,
+            &part,
+            &dest,
+            model.sha256,
+            &job,
+            0,
+        ) {
+            fail(&job, e);
+            return;
+        }
     }
 
-    // Optional MTP draft head (Gemma workstation models) — same HF repo,
-    // sibling file. Downloaded as part of the same job (aggregate progress).
-    if let (Some(mtp_file), Some(mtp_sha), Some(mtp_size)) =
-        (model.mtp_file, model.mtp_sha256, model.mtp_size)
-    {
+    // Optional MTP draft head (Gemma/Qwen models). The head can live in a
+    // subfolder of the models dir, so create the parent and keep aggregate
+    // progress across both files. When only the head is missing, progress
+    // starts at zero instead of pretending the main GGUF is being re-downloaded.
+    if let (Some(mtp_file), Some(mtp_url), Some(mtp_sha), Some(mtp_size)) = (
+        model.mtp_file,
+        model.mtp_url,
+        model.mtp_sha256,
+        model.mtp_size,
+    ) {
         if job.cancel.load(Ordering::Relaxed) {
             fail(&job, "cancelled".into());
             return;
         }
-        if let Some(mtp_url) = catalog::mtp_download_url(model) {
-            let mtp_dest = dest.with_file_name(mtp_file);
-            let mut mtp_part_name = mtp_dest.as_os_str().to_os_string();
-            mtp_part_name.push(".part");
-            let mtp_part = PathBuf::from(mtp_part_name);
-            if !mtp_dest.is_file() {
-                if let Err(e) = download_verified(
-                    &mtp_url,
-                    mtp_size,
-                    &mtp_part,
-                    &mtp_dest,
-                    mtp_sha,
-                    &job,
-                    model.size_bytes,
-                ) {
-                    fail(&job, format!("MTP draft download failed: {e}"));
-                    return;
-                }
+        let Some(models_root) = dest.parent() else {
+            fail(&job, "Model destination has no parent directory.".into());
+            return;
+        };
+        let mtp_dest = models_root.join(mtp_file);
+        if let Some(parent) = mtp_dest.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                fail(&job, format!("Could not create MTP folder: {e}"));
+                return;
+            }
+        }
+        let mut mtp_part_name = mtp_dest.as_os_str().to_os_string();
+        mtp_part_name.push(".part");
+        let mtp_part = PathBuf::from(mtp_part_name);
+        if !mtp_dest.is_file() {
+            let mtp_base = if main_exists { 0 } else { model.size_bytes };
+            if let Err(e) = download_verified(
+                mtp_url, mtp_size, &mtp_part, &mtp_dest, mtp_sha, &job, mtp_base,
+            ) {
+                fail(&job, format!("MTP draft download failed: {e}"));
+                return;
             }
         }
     }
@@ -608,6 +651,11 @@ fn perform_engine_pack(
     if !dest_dir.join(pack.entry).is_file() {
         return Err("CUDA pack extracted but the engine binary is missing.".into());
     }
+    std::fs::write(
+        dest_dir.join(catalog::PACK_VERSION_FILE),
+        catalog::ENGINE_PIN,
+    )
+    .map_err(|e| format!("Failed to write CUDA pack version marker: {e}"))?;
     let _ = std::fs::remove_dir_all(&dl_dir);
     Ok(())
 }

@@ -595,6 +595,7 @@
       subtitle:
         "Download a model once; it runs entirely on this computer. The engine starts automatically when you first use AI.",
       download: "Download",
+      downloadMtp: "Get MTP head",
       cancel: "Cancel",
       downloaded: "Downloaded",
       verifying: "Verifying...",
@@ -608,8 +609,38 @@
         "Auto uses your selected model, or the best downloaded one. Switching models restarts the engine.",
       systemTitle: "Your system",
       gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
-      gpuNone: "No NVIDIA GPU detected — using the Vulkan/CPU engine",
+      gpuDetectedUnified: "GPU: {{name}} · {{vram}} GB unified memory",
+      gpuDetectedShared: "GPU: {{name}} · {{vram}} GB shared memory",
+      gpuNone: "No supported GPU detected — using the CPU engine",
       ramDetected: "System RAM: {{ram}} GB",
+      engineBackend: "Engine: {{backend}}",
+      startupTime: "Engine startup: {{seconds}} s",
+      warmupTime: "Background warmup: {{seconds}} s",
+      autoStart: "Auto will use: {{name}}",
+      mtpActive: "MTP speculative decoding active",
+      appleMetalNote:
+        "Apple Silicon uses the Metal backend with the same GGUF models; MLX-only models are not supported by this engine.",
+      recommendedForPc: "Recommended",
+      translationExcellent: "Best translation",
+      translationGood: "Good translation",
+      translationBasic: "Basic translation",
+      translationLimited: "English-first",
+
+      contextSize: "Context window",
+      contextAuto: "Auto (hardware-based)",
+      contextHint:
+        "Auto picks a safe value for your GPU/RAM. Manual options are limited to the selected chat model (max {{max}}K).",
+      runBenchmark: "Benchmark chat model",
+      benchmarkHint:
+        "Runs one short local prompt and reports TTFT and decode speed. Nothing runs until you click.",
+      benchmarkResult:
+        "{{backend}} · {{ttft}} ms TTFT · {{tps}} tok/s · {{tokens}} tokens · {{ctx}} ctx{{mtp}}",
+      legacySize: "old {{size}} GB",
+      removeLegacy: "Remove old version",
+      removeLegacyHint: "Delete superseded model files; the current model is not affected",
+      removeLegacyConfirm:
+        "Delete the old files for \"{{name}}\"? The current model is not affected.",
+      removeLegacyConfirmTitle: "Remove old model files",
       embedModel: "Embedding model: IBM Granite 311M Multilingual R2 (Apache 2.0)",
       cudaPack: "CUDA acceleration pack",
       cudaPackDesc:
@@ -618,7 +649,7 @@
       installPack: "Install",
       removePack: "Remove",
       fitsVram: "GPU-fit",
-      fitsVramHint: "This model fits into your GPU's VRAM",
+      mayNotFit: "May not fit VRAM",
     },
     tabs: {
       appearance: "Appearance",

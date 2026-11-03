@@ -59,7 +59,7 @@ function unpack(assetPath, destDir, entry) {
 
 /**
  * llama.cpp release archives may nest everything under one directory
- * (`llama-b11669/...`), while the Windows zip keeps files at the root.
+ * (`llama-<pin>/...`), while the Windows zip keeps files at the root.
  * Normalize so `<destDir>/<entry>` always exists (dylibs must stay siblings).
  */
 function flattenTopLevel(destDir, entry) {

@@ -1,6 +1,6 @@
 [package]
 name = "TeacherPro"
-version = "2.9.5"
+version = "2.10.0"
 description = "TeacherPro desktop app"
 authors = ["you"]
 edition = "2021"
@@ -40,4 +40,5 @@ whatlang = "0.16"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = ["Win32_System_SystemInformation"] }
+winreg = "0.56"
 

@@ -21,6 +21,9 @@ interface Props {
   activeFile: string | null;
   subjectDatabases: SubjectDbInfo[];
   methodBankItems: MethodBankItem[];
+  /** Chat model selection; keeps drafts on the same model as chat. */
+  modelId: string | null;
+  numCtx: number | null;
 }
 
 export interface DraftPhase {
@@ -77,6 +80,8 @@ export function DraftGeneratorDialog({
   activeFile: defaultFileProp,
   subjectDatabases,
   methodBankItems,
+  modelId,
+  numCtx,
 }: Props) {
   const { t } = useTranslation();
   const [topic, setTopic] = useState(defaultTopic);
@@ -160,6 +165,8 @@ export function DraftGeneratorDialog({
         schema: DRAFT_SCHEMA,
         temperature: 0.7,
         maxTokens: 4096,
+        modelId: modelId ?? null,
+        numCtx,
       });
       const phases = Array.isArray(value.phases)
         ? value.phases

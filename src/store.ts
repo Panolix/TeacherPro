@@ -150,6 +150,8 @@ interface SaveLessonOptions {
   allowRename?: boolean;
 }
 
+export const AI_CONTEXT_SIZES: number[] = [4096, 8192, 16384, 32768, 65536, 131072];
+
 interface UISettings {
   themeMode: ThemeMode;
   accentColor: AccentColor;
@@ -171,6 +173,7 @@ interface UISettings {
   aiEnabled: boolean;
   aiV3ChatModelId: string | null;
   aiV3RewriteModelId: string | null;
+  aiV3ContextSize: number | null;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -213,6 +216,7 @@ interface AppState {
   aiEnabled: boolean;
   aiV3ChatModelId: string | null;
   aiV3RewriteModelId: string | null;
+  aiV3ContextSize: number | null;
   aiPersistChats: boolean;
   aiChatHistoryLimit: number;
   aiTemperature: number;
@@ -304,6 +308,7 @@ interface AppState {
   setAiEnabled: (enabled: boolean) => void;
   setAiV3ChatModelId: (modelId: string | null) => void;
   setAiV3RewriteModelId: (modelId: string | null) => void;
+  setAiV3ContextSize: (size: number | null) => void;
   setAiPersistChats: (enabled: boolean) => void;
   setAiChatHistoryLimit: (limit: number) => void;
   setAiTemperature: (temp: number) => void;
@@ -683,6 +688,7 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   aiEnabled: false,
   aiV3ChatModelId: null,
   aiV3RewriteModelId: null,
+  aiV3ContextSize: null,
   aiPersistChats: true,
   aiChatHistoryLimit: 20,
   aiTemperature: 0.7,
@@ -741,6 +747,11 @@ function normalizeUiSettings(raw: Partial<UISettings> | null | undefined): UISet
       typeof source.aiV3RewriteModelId === "string" && source.aiV3RewriteModelId.trim()
         ? source.aiV3RewriteModelId
         : null,
+    aiV3ContextSize:
+      typeof source.aiV3ContextSize === "number" &&
+      AI_CONTEXT_SIZES.includes(source.aiV3ContextSize)
+        ? source.aiV3ContextSize
+        : null,
     aiTranslateTargetLanguage:
       typeof source.aiTranslateTargetLanguage === "string" && source.aiTranslateTargetLanguage.trim()
         ? source.aiTranslateTargetLanguage
@@ -780,6 +791,7 @@ function applyUiSettingsToState(settings: UISettings): Partial<AppState> {
     aiEnabled: settings.aiEnabled,
     aiV3ChatModelId: settings.aiV3ChatModelId,
     aiV3RewriteModelId: settings.aiV3RewriteModelId,
+    aiV3ContextSize: settings.aiV3ContextSize,
     aiPersistChats: settings.aiPersistChats,
     aiChatHistoryLimit: settings.aiChatHistoryLimit,
     aiTemperature: settings.aiTemperature,
@@ -1366,6 +1378,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   aiEnabled: DEFAULT_UI_SETTINGS.aiEnabled,
   aiV3ChatModelId: DEFAULT_UI_SETTINGS.aiV3ChatModelId,
   aiV3RewriteModelId: DEFAULT_UI_SETTINGS.aiV3RewriteModelId,
+  aiV3ContextSize: DEFAULT_UI_SETTINGS.aiV3ContextSize,
   aiPersistChats: DEFAULT_UI_SETTINGS.aiPersistChats,
   aiChatHistoryLimit: DEFAULT_UI_SETTINGS.aiChatHistoryLimit,
   aiTemperature: DEFAULT_UI_SETTINGS.aiTemperature,
@@ -1536,6 +1549,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ aiV3RewriteModelId: modelId });
     void persistUiSettings({ aiV3RewriteModelId: modelId });
   },
+  setAiV3ContextSize: (size) => {
+    const normalized = size !== null && AI_CONTEXT_SIZES.includes(size) ? size : null;
+    set({ aiV3ContextSize: normalized });
+    void persistUiSettings({ aiV3ContextSize: normalized });
+  },
   setAiStatusMessage: (message) => {
     set({ aiStatusMessage: message });
   },
@@ -1656,6 +1674,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             // Device-specific: AI model routing and runtime config
             delete (mergedSettings as any).aiV3ChatModelId;
             delete (mergedSettings as any).aiV3RewriteModelId;
+            delete (mergedSettings as any).aiV3ContextSize;
             delete (mergedSettings as any).aiEnabled;
             delete (mergedSettings as any).aiPersistChats;
             delete (mergedSettings as any).aiChatHistoryLimit;

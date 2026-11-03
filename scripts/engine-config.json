@@ -1,6 +1,6 @@
 {
-  "$comment": "TeacherPro engine pin. 'pin' is the llama.cpp build tag blessed by the semver release marker (v0.7.0 nightly-tag.txt -> b11669). Bump deliberately per app release; recompute sha256 with: node scripts/fetch-engines.mjs --print-hashes llama-<pin>-bin-win-vulkan-x64.zip ...",
-  "pin": "b11669",
+  "$comment": "TeacherPro engine pin. 'pin' is the llama.cpp build tag blessed by the semver release marker (v0.8.0 nightly-tag.txt -> b11960). Bump deliberately per app release; recompute sha256 with: node scripts/fetch-engines.mjs --print-hashes llama-<pin>-bin-win-vulkan-x64.zip ...",
+  "pin": "b11960",
   "downloadBase": "https://github.com/ggml-org/llama.cpp/releases/download",
   "platformToVariant": {
     "win32-x64": "windows-x64-vulkan",
@@ -10,23 +10,23 @@
   },
   "engines": {
     "windows-x64-vulkan": {
-      "asset": "llama-b11669-bin-win-vulkan-x64.zip",
-      "sha256": "2c07574e7bde71321cb785282b20cc821e951132149eeceeea32ddebdbf0598e",
+      "asset": "llama-b11960-bin-win-vulkan-x64.zip",
+      "sha256": "bac6914b5e83523eb008c6789eaa12669f93fbc196c3b9e8237b6672323b33e9",
       "entry": "llama-server.exe"
     },
     "macos-arm64-metal": {
-      "asset": "llama-b11669-bin-macos-arm64.tar.gz",
-      "sha256": "dbed55493d72bc1ba2babc8770d669c2289b5bc4ee9fb2a4dfc158d45b7d13fd",
+      "asset": "llama-b11960-bin-macos-arm64.tar.gz",
+      "sha256": "58e5a5e1d7c2bf66cedd9c29e0323f3e570660a70a1e2156d32eed08f4cc1e3c",
       "entry": "llama-server"
     },
     "macos-x64-cpu": {
-      "asset": "llama-b11669-bin-macos-x64.tar.gz",
-      "sha256": "cab28238d78158109b48deb27b05d50e0dcef56275d2e76da9ca8281526c7532",
+      "asset": "llama-b11960-bin-macos-x64.tar.gz",
+      "sha256": "d1e6c9ddcaed9a3b1bb8f3d946bdb3481c7b919357a4029dcb747762397f1da5",
       "entry": "llama-server"
     },
     "linux-x64-vulkan": {
-      "asset": "llama-b11669-bin-ubuntu-vulkan-x64.tar.gz",
-      "sha256": "e8709e5ba6c1b093dea7f3de57f4aba842f9a188fba6b465782d65d6fcfa4d9f",
+      "asset": "llama-b11960-bin-ubuntu-vulkan-x64.tar.gz",
+      "sha256": "164199e978304bb32a8a6c24b8efa015528ddf286821596eab676c90b375feac",
       "entry": "llama-server"
     }
   }

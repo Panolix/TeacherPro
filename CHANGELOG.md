@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.10.0] - 2026-11-03
+
+### Added
+- **Hardware-aware AI** - GPU probing now covers NVIDIA, AMD, Intel and Apple
+  on Windows, Linux and macOS, including dedicated vs. unified/shared memory.
+  Auto model selection and recommendations use the detected hardware.
+- **Context-window control** - Auto or manual 4K-128K context, limited to the
+  selected chat model's maximum. Applies to chat, rewrite/translate, drafts and
+  token counting.
+- **Local benchmark** - on-demand TTFT, decode tokens/sec, backend, context and
+  MTP status in Settings. It runs only when clicked.
+- **MTP speculative decoding** - Gemma 4 E2B/E4B/12B/26B-A4B/31B on CUDA/Metal
+  and Qwen3.8-27B on CUDA. Existing models can download only the missing MTP
+  head with **Get MTP head**.
+- **Model catalog updates** - Gemma 4 entries moved to official QAT `q4_0`
+  GGUFs; Ministral 3 8B and 14B added; Qwen3.8-27B MTP head added.
+- **Translation quality badges** - Best translation, Good translation, Basic
+  translation and English-first, with complete German translations.
+- **CUDA pack version marker** - old engine binaries are rejected instead of
+  being silently reused after an update.
+
+### Changed
+- Bundled llama.cpp engine and Windows CUDA pack updated from `b11669` to
+  **`b11960`** (v0.8.0).
+- Auto start now includes XL/workstation models as a fallback, so a machine
+  with only a large model installed no longer fails.
+- The selected chat model is persisted backend-side on startup without
+  starting the engine.
+- Warmup runs in the background after readiness, so it no longer inflates the
+  displayed engine startup time.
+- Model downloads can represent an MTP-head-only download.
+- The old info hover tooltips were replaced by a single visible detail line.
+
+### Fixed
+- Cold starts no longer load the Auto model and then switch to the requested
+  model, causing two model loads.
+- A context-window change now reloads the engine only when the window actually
+  changes.
+- Token counting and draft generation now use the selected model instead of
+  falling back to Auto.
+- Auto no longer fails when the only downloaded model is an XL/workstation
+  model.
+- Old pre-QAT Gemma files are detected as legacy and can be removed from the
+  model row.
+- Existing Qwen3.8-27B installs can download the missing MTP head without
+  re-downloading the main GGUF.
+- CUDA pack detection now checks the engine version instead of treating any
+  existing `llama-server.exe` as current.
+
+### Notes
+- No vault migration is required.
+- CUDA pack users must reinstall the pack once to get `b11960`; until then the
+  app uses the bundled Vulkan engine.
+- Gemma 4 QAT files use new filenames and must be downloaded once. Old files
+  are flagged as legacy.
+- Qwen3.8-27B MTP is CUDA-only. Linux still uses Vulkan and has no CUDA/ROCm
+  pack in this release. macOS uses Metal; MLX-only models are not supported.
+
 ## [2.9.5] - 2026-10-26
 
 ### Fixed

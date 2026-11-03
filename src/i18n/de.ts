@@ -596,6 +596,7 @@
       subtitle:
         "Einmal herunterladen, läuft vollständig auf diesem Computer. Die Engine startet automatisch bei der ersten KI-Nutzung.",
       download: "Herunterladen",
+      downloadMtp: "MTP-Head laden",
       cancel: "Abbrechen",
       downloaded: "Heruntergeladen",
       verifying: "Wird geprüft...",
@@ -609,8 +610,38 @@
         "Automatisch nutzt dein gewähltes Modell oder das beste heruntergeladene. Ein Modellwechsel startet die Engine neu.",
       systemTitle: "Dein System",
       gpuDetected: "GPU: {{name}} · {{vram}} GB VRAM",
-      gpuNone: "Keine NVIDIA-GPU erkannt — Vulkan/CPU-Engine wird verwendet",
+      gpuDetectedUnified: "GPU: {{name}} · {{vram}} GB Unified Memory",
+      gpuDetectedShared: "GPU: {{name}} · {{vram}} GB gemeinsamer Speicher",
+      gpuNone: "Keine unterstützte GPU erkannt — die CPU-Engine wird verwendet",
       ramDetected: "Arbeitsspeicher: {{ram}} GB",
+      engineBackend: "Engine: {{backend}}",
+      startupTime: "Engine-Start: {{seconds}} s",
+      warmupTime: "Hintergrund-Warmup: {{seconds}} s",
+      autoStart: "Automatisch verwendet: {{name}}",
+      mtpActive: "MTP-Speculative-Decoding aktiv",
+      appleMetalNote:
+        "Apple Silicon nutzt das Metal-Backend mit denselben GGUF-Modellen; reine MLX-Modelle werden von dieser Engine nicht unterstützt.",
+      recommendedForPc: "Empfohlen",
+      translationExcellent: "Beste Übersetzung",
+      translationGood: "Gut für Übersetzungen",
+      translationBasic: "Basis-Übersetzung",
+      translationLimited: "Englisch-zentriert",
+
+      contextSize: "Kontextfenster",
+      contextAuto: "Automatisch (hardwarebasiert)",
+      contextHint:
+        "Automatisch wählt einen sicheren Wert für GPU/RAM. Manuelle Optionen sind auf das gewählte Chat-Modell begrenzt (max. {{max}}K).",
+      runBenchmark: "Chat-Modell benchmarken",
+      benchmarkHint:
+        "Führt einen kurzen lokalen Prompt aus und zeigt TTFT sowie Decode-Geschwindigkeit. Läuft nur auf Klick.",
+      benchmarkResult:
+        "{{backend}} · {{ttft}} ms TTFT · {{tps}} Tok/s · {{tokens}} Tokens · {{ctx}} Kontext{{mtp}}",
+      legacySize: "alt {{size}} GB",
+      removeLegacy: "Alte Version entfernen",
+      removeLegacyHint: "Ersetzte Modelldateien löschen; das aktuelle Modell bleibt erhalten",
+      removeLegacyConfirm:
+        "Die alten Dateien für „{{name}}“ löschen? Das aktuelle Modell bleibt erhalten.",
+      removeLegacyConfirmTitle: "Alte Modelldateien entfernen",
       embedModel: "Embedding-Modell: IBM Granite 311M Multilingual R2 (Apache 2.0)",
       cudaPack: "CUDA-Beschleunigungspaket",
       cudaPackDesc:
@@ -619,7 +650,7 @@
       installPack: "Installieren",
       removePack: "Entfernen",
       fitsVram: "GPU-passend",
-      fitsVramHint: "Dieses Modell passt in den VRAM deiner GPU",
+      mayNotFit: "Passt evtl. nicht in VRAM",
     },
     tabs: {
       appearance: "Erscheinungsbild",

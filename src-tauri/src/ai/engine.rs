@@ -38,6 +38,11 @@ pub struct EngineState {
     pub attempt_index: usize,
     /// Whether the current spawn included MTP speculative decoding.
     pub used_mtp: bool,
+    /// Wall-clock time from spawn to the first ready health response.
+    pub startup_ms: Option<u64>,
+    /// Background warmup duration, filled in after readiness.
+    pub warmup_ms: Option<u64>,
+    pub started_at: Option<Instant>,
 }
 
 impl EngineState {
@@ -53,6 +58,9 @@ impl EngineState {
             child: None,
             attempt_index: 0,
             used_mtp: false,
+            startup_ms: None,
+            warmup_ms: None,
+            started_at: None,
         }
     }
 }
@@ -63,7 +71,6 @@ struct EngineAttempt {
     dir: PathBuf,
     entry: &'static str,
     label: &'static str, // cuda | metal | vulkan | cpu
-    mtp_capable: bool,
 }
 
 /// Preferred backend first: an installed & detected CUDA pack, then the
@@ -71,16 +78,13 @@ struct EngineAttempt {
 fn engine_attempts(app: &AppHandle) -> Vec<EngineAttempt> {
     let mut attempts = Vec::new();
     if let Some(pack) = catalog::CUDA_PACK.as_ref() {
-        if super::hardware::probe().gpu.is_some() {
+        if super::hardware::cached().gpu.is_some() && catalog::cuda_pack_installed(app) {
             if let Ok(dir) = catalog::engine_pack_dir(app) {
-                if dir.join(pack.entry).is_file() {
-                    attempts.push(EngineAttempt {
-                        dir,
-                        entry: pack.entry,
-                        label: "cuda",
-                        mtp_capable: true,
-                    });
-                }
+                attempts.push(EngineAttempt {
+                    dir,
+                    entry: pack.entry,
+                    label: "cuda",
+                });
             }
         }
     }
@@ -96,21 +100,17 @@ fn engine_attempts(app: &AppHandle) -> Vec<EngineAttempt> {
             dir,
             entry: variant.entry,
             label,
-            mtp_capable: label == "metal",
         });
     }
     attempts
 }
 
 fn mtp_usable(app: &AppHandle, model: &ModelEntry, attempt: &EngineAttempt) -> bool {
-    let Some(mtp_file) = model.mtp_file else {
-        return false;
-    };
-    if !attempt.mtp_capable {
+    if model.mtp_file.is_none() || !model.mtp_backends.contains(&attempt.label) {
         return false;
     }
-    catalog::models_dir(app)
-        .map(|dir| dir.join(mtp_file).is_file())
+    catalog::mtp_file_path(app, model)
+        .map(|path| path.map(|p| p.is_file()).unwrap_or(false))
         .unwrap_or(false)
 }
 
@@ -122,6 +122,9 @@ pub struct EngineStatus {
     pub port: Option<u16>,
     pub ctx: Option<u32>,
     pub variant: Option<String>,
+    pub used_mtp: bool,
+    pub startup_ms: Option<u64>,
+    pub warmup_ms: Option<u64>,
     pub error: Option<String>,
 }
 
@@ -132,6 +135,9 @@ pub fn snapshot(engine: &EngineState) -> EngineStatus {
         port: engine.port,
         ctx: engine.ctx,
         variant: engine.variant.map(|v| v.to_string()),
+        used_mtp: engine.used_mtp,
+        startup_ms: engine.startup_ms,
+        warmup_ms: engine.warmup_ms,
         error: engine.error.clone(),
     }
 }
@@ -180,11 +186,25 @@ pub fn ai_selected_model(app: AppHandle) -> Result<Option<String>, String> {
     Ok(app.state::<AiState>().selected())
 }
 
+/// Remember the persisted UI model without starting the engine. Called on app
+/// startup so Auto and token counting use the same model as chat after restart.
+#[tauri::command]
+pub fn ai_set_selected_model(app: AppHandle, model_id: Option<String>) {
+    let selected = model_id.and_then(|id| catalog::find_model(&id).map(|m| m.id.to_string()));
+    app.state::<AiState>().set_selected(selected);
+}
+
 #[tauri::command]
 pub fn ai_engine_stop(app: AppHandle) -> EngineStatus {
     shutdown(&app);
     let state = app.state::<AiState>();
     with_state(&state, |e| snapshot(e))
+}
+
+fn resolve_ctx(model: &ModelEntry, num_ctx: Option<u32>) -> u32 {
+    num_ctx
+        .map(|ctx| ctx.clamp(512, model.num_ctx))
+        .unwrap_or_else(|| catalog::effective_ctx(model, super::hardware::cached()))
 }
 
 /// Start the engine for the given model (None → first downloaded in auto order).
@@ -200,25 +220,29 @@ pub fn start_engine(
         Some(id) => catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?,
         None => {
             let selected = app.state::<AiState>().selected();
-            let candidate = selected.as_deref().and_then(catalog::find_model);
-            candidate
-                .or_else(|| {
-                    catalog::auto_start_order().find(|m| {
-                        catalog::model_file_path(app, m)
-                            .map(|p| p.is_file())
-                            .unwrap_or(false)
-                    })
-                })
+            selected
+                .as_deref()
+                .and_then(catalog::find_model)
+                .filter(|model| catalog::is_downloaded(app, model))
+                .or_else(|| catalog::first_downloaded_auto(app))
                 .ok_or_else(|| "No model downloaded yet. Download a model first.".to_string())?
         }
     };
 
-    let (current_status, current_model) =
-        with_state(&ai, |e| (e.status.clone(), e.model_id.clone()));
-    if matches!(
-        current_status.as_str(),
-        STATUS_STARTING | STATUS_LOADING | STATUS_READY
-    ) && current_model.as_deref() == Some(model.id)
+    let ctx = resolve_ctx(model, num_ctx);
+    let (current_status, current_model, current_ctx) =
+        with_state(&ai, |e| (e.status.clone(), e.model_id.clone(), e.ctx));
+    if matches!(current_status.as_str(), STATUS_STARTING | STATUS_LOADING)
+        && current_model.as_deref() == Some(model.id)
+    {
+        if current_ctx == Some(ctx) {
+            return Ok(with_state(&ai, |e| snapshot(e)));
+        }
+        return Err("Engine is already starting; wait for it to become ready.".into());
+    }
+    if current_status == STATUS_READY
+        && current_model.as_deref() == Some(model.id)
+        && current_ctx == Some(ctx)
     {
         return Ok(with_state(&ai, |e| snapshot(e)));
     }
@@ -248,10 +272,9 @@ pub fn start_engine(
         ));
     }
 
-    let ctx = num_ctx.unwrap_or(model.num_ctx).clamp(512, 262_144);
-
     let attempt = &attempts[0];
     let use_mtp = mtp_usable(app, model, attempt);
+    let startup_started = Instant::now();
     let spawned = spawn_engine(app, model, &model_path, ctx, attempt, use_mtp)?;
 
     with_state(&ai, |e| {
@@ -264,6 +287,9 @@ pub fn start_engine(
         e.variant = Some(attempt.label);
         e.attempt_index = 0;
         e.used_mtp = use_mtp;
+        e.startup_ms = None;
+        e.warmup_ms = None;
+        e.started_at = Some(startup_started);
         e.child = Some(spawned.child);
     });
 
@@ -325,9 +351,9 @@ fn spawn_engine(
         .arg(&api_key)
         .stdin(std::process::Stdio::null());
 
+    let mut mtp_applied = false;
     if use_mtp {
-        if let Some(mtp_file) = model.mtp_file {
-            let mtp_path = catalog::models_dir(app)?.join(mtp_file);
+        if let Some(mtp_path) = catalog::mtp_file_path(app, model)? {
             if mtp_path.is_file() {
                 command
                     .arg("--spec-draft-model")
@@ -335,9 +361,17 @@ fn spawn_engine(
                     .arg("--spec-type")
                     .arg("draft-mtp")
                     .arg("--spec-draft-n-max")
-                    .arg("2");
+                    .arg(model.mtp_draft_max.to_string())
+                    .arg("--spec-draft-p-min")
+                    .arg("0.75");
+                mtp_applied = true;
             }
         }
+    }
+    // Free fallback for models without a draft head (or when MTP is not
+    // supported on the resolved backend): n-gram speculative decoding.
+    if !mtp_applied {
+        command.arg("--spec-type").arg("ngram-simple");
     }
 
     let child = command
@@ -349,6 +383,26 @@ fn spawn_engine(
         api_key,
         child,
     })
+}
+
+fn warmup_model(port: u16, api_key: &str, model_id: &str) {
+    let body = serde_json::json!({
+        "model": model_id,
+        "messages": [{ "role": "user", "content": "Hi" }],
+        "max_tokens": 1,
+        "temperature": 0.0,
+        "stream": false,
+    });
+    let agent = ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_secs(5))
+        .timeout_read(Duration::from_secs(30))
+        .timeout(Duration::from_secs(35))
+        .build();
+    let _ = agent
+        .post(&format!("http://127.0.0.1:{port}/v1/chat/completions"))
+        .set("Authorization", &format!("Bearer {api_key}"))
+        .set("Content-Type", "application/json")
+        .send_string(&body.to_string());
 }
 
 fn poll_until_ready(app: AppHandle, model_id: &str) {
@@ -408,9 +462,28 @@ fn poll_until_ready(app: AppHandle, model_id: &str) {
             Ok(_) => {
                 with_app_state(&app, |e| {
                     if e.model_id.as_deref() == Some(model_id) && e.status != STATUS_STOPPED {
+                        e.startup_ms = e
+                            .started_at
+                            .map(|started| started.elapsed().as_millis() as u64);
                         e.status = STATUS_READY.to_string();
                         e.error = None;
                     }
+                });
+                // Background warmup: one tiny completion so the first real
+                // request does not pay the template/first-inference cost.
+                // It must not delay readiness, so it runs after the state flip.
+                let key_for_warmup = key.clone();
+                let model_for_warmup = model_id.to_string();
+                let app_for_warmup = app.clone();
+                std::thread::spawn(move || {
+                    let started = Instant::now();
+                    warmup_model(port, &key_for_warmup, &model_for_warmup);
+                    let elapsed = started.elapsed().as_millis() as u64;
+                    with_app_state(&app_for_warmup, |e| {
+                        if e.model_id.as_deref() == Some(model_for_warmup.as_str()) {
+                            e.warmup_ms = Some(elapsed);
+                        }
+                    });
                 });
                 return;
             }
@@ -454,6 +527,7 @@ fn attempt_retry(app: &AppHandle, model_id: &str) {
         with_state(&ai, |e| {
             kill_child(e);
             e.status = STATUS_FAILED.to_string();
+            e.used_mtp = false;
             if e.error.is_none() {
                 e.error = Some("Engine failed to start (all backends tried).".into());
             }
@@ -472,14 +546,16 @@ fn attempt_retry(app: &AppHandle, model_id: &str) {
         Err(e) => {
             with_state(&ai, |s| {
                 s.status = STATUS_FAILED.to_string();
+                s.used_mtp = false;
                 s.error = Some(e);
             });
             return;
         }
     };
-    let ctx = with_state(&ai, |e| e.ctx.unwrap_or(model.num_ctx));
+    let ctx = with_state(&ai, |e| e.ctx.unwrap_or_else(|| resolve_ctx(model, None)));
     with_state(&ai, kill_child);
 
+    let startup_started = Instant::now();
     match spawn_engine(app, model, &model_path, ctx, attempt, use_mtp) {
         Ok(spawned) => {
             with_state(&ai, |e| {
@@ -490,6 +566,9 @@ fn attempt_retry(app: &AppHandle, model_id: &str) {
                 e.variant = Some(attempt.label);
                 e.attempt_index = next_idx;
                 e.used_mtp = use_mtp;
+                e.startup_ms = None;
+                e.warmup_ms = None;
+                e.started_at = Some(startup_started);
                 e.child = Some(spawned.child);
             });
             let app_handle = app.clone();
@@ -528,6 +607,10 @@ pub fn shutdown(app: &AppHandle) {
         e.port = None;
         e.ctx = None;
         e.api_key = None;
+        e.used_mtp = false;
+        e.startup_ms = None;
+        e.warmup_ms = None;
+        e.started_at = None;
     });
 }
 
@@ -540,7 +623,6 @@ pub fn kill_on_exit(app: &AppHandle) {
 }
 
 /// Connection info for client.rs: (model_entry, port, api_key).
-#[allow(dead_code)]
 pub fn connection(app: &AppHandle) -> Option<(&'static ModelEntry, u16, String)> {
     let state = app.state::<AiState>();
     let guard = lock_unpoisoned(&state.engine);
@@ -556,21 +638,66 @@ pub fn connection(app: &AppHandle) -> Option<(&'static ModelEntry, u16, String)>
     ))
 }
 
+fn current_ctx(app: &AppHandle) -> Option<u32> {
+    with_app_state(app, |e| e.ctx)
+}
+
+/// Ensure the engine is running on a specific model and context. This must be
+/// used when the request already names a model: starting Auto first and
+/// switching afterwards would load two models on a cold start.
+pub fn ensure_model_ready(
+    app: &AppHandle,
+    target: &'static ModelEntry,
+    num_ctx: Option<u32>,
+) -> Result<(&'static ModelEntry, u16, String), String> {
+    let desired_ctx = resolve_ctx(target, num_ctx);
+
+    if let Some((model, port, key)) = connection(app) {
+        if model.id == target.id && current_ctx(app) == Some(desired_ctx) {
+            return Ok((model, port, key));
+        }
+    }
+
+    let status = with_app_state(app, |e| e.status.clone());
+    if matches!(status.as_str(), STATUS_STARTING | STATUS_LOADING) {
+        wait_for_ready(app)?;
+        if let Some((model, port, key)) = connection(app) {
+            if model.id == target.id && current_ctx(app) == Some(desired_ctx) {
+                return Ok((model, port, key));
+            }
+        }
+    }
+
+    start_engine(app, Some(target.id), Some(desired_ctx))?;
+    wait_for_ready(app)?;
+    connection(app).ok_or_else(|| "Engine connection missing after model switch.".to_string())
+}
+
 /// Ensure the engine is running for generation/chat: lazy-start on idle,
 /// wait for readiness on loading. Returns (model_entry, port, api_key).
 pub fn ensure_ready_for_request(
     app: &AppHandle,
+    num_ctx: Option<u32>,
 ) -> Result<(&'static ModelEntry, u16, String), String> {
-    if let Some((model, port, key)) = connection(app) {
-        return Ok((model, port, key));
-    }
     let status = with_app_state(app, |e| e.status.clone());
     if matches!(status.as_str(), STATUS_STARTING | STATUS_LOADING) {
         wait_for_ready(app)?;
-    } else {
-        start_engine(app, None, None)?;
-        wait_for_ready(app)?;
     }
+
+    if let Some((model, port, key)) = connection(app) {
+        let desired_ctx = resolve_ctx(model, num_ctx);
+        if current_ctx(app) == Some(desired_ctx) {
+            return Ok((model, port, key));
+        }
+        // Same model but a different context window: reload it.
+        start_engine(app, Some(model.id), Some(desired_ctx))?;
+        wait_for_ready(app)?;
+        return connection(app)
+            .ok_or_else(|| "Engine connection missing after context change.".to_string());
+    }
+
+    start_engine(app, None, num_ctx)?;
+    wait_for_ready(app)?;
     connection(app).ok_or_else(|| "Engine started but connection info is missing.".to_string())
 }
 
