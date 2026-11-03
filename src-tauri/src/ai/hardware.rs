@@ -352,6 +352,9 @@ fn detect_macos_gpus(total_ram_gb: u32) -> Vec<GpuInfo> {
 
 // ── Shared helpers ──────────────────────────────────────────────────────
 
+// Called from the Windows registry probe and the macOS system_profiler probe.
+// Neither is compiled on Linux, where the function is therefore unused.
+#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 fn vendor_from_name(name: &str) -> &'static str {
     let name = name.to_ascii_lowercase();
     if name.contains("apple") {
