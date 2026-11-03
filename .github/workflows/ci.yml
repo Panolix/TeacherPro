@@ -50,7 +50,15 @@ jobs:
         run: npm run lint
 
       - name: Rust clippy
-        run: cargo clippy -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy -- -D warnings 2>&1 | tee clippy.log
+        working-directory: src-tauri
+
+      - name: Rust clippy failure details
+        if: failure()
+        run: |
+          echo "::error::$(grep -m 1 -A 10 -E '^error(\\[|:)' clippy.log | tr '\n' ' ')"
         working-directory: src-tauri
 
       - name: Verify scrollbar invariants
