@@ -1,16 +1,17 @@
 # TeacherPro
 
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-blue.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-[![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/release.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#)
+[![CI](https://github.com/Panolix/TeacherPro/actions/workflows/ci.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions/workflows/ci.yml)
+![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)
 
 TeacherPro is a desktop app for planning lessons. It combines a lesson-plan
 editor, a weekly calendar, note-taking, a method bank and mindmaps in one
 window, and keeps everything in a folder you choose on your own disk — no
 account, no cloud, no subscription.
 
-It's built with Tauri (Rust) and React. I made it for my own teaching work and
-use it daily; it's shared here in case it's useful to someone else.
+It's built with Tauri (Rust) and React, and the interface is available in
+English and German. I made it for my own teaching work and use it daily; it's
+shared here in case it's useful to someone else.
 
 <p align="center">
   <img src="public/icon.png" width="150" alt="TeacherPro">
@@ -55,9 +56,6 @@ Avoid editing the same vault from two machines at the same time: the app has
 no merge or conflict detection, and simultaneous autosaves can overwrite each
 other.
 
-If you want to know what the vault looks like before committing to it, create
-an empty folder and poke around after a few minutes of use.
-
 ## What's included
 
 **Lessons.** A rich-text editor with headings, lists, checklists, quotes,
@@ -97,9 +95,11 @@ AI is optional and runs entirely on your machine. TeacherPro starts its own
 `llama-server` process when needed and shuts it down with the app — there is no
 Ollama install, no runtime to set up and nothing sent to the internet.
 
-- **Models** are downloaded in Settings → KI-Funktionen as GGUF files from
-  Hugging Face and verified with SHA-256 when downloaded. Sizes range from
-  small models for older laptops to 27B models for machines with a big GPU.
+- **Models** are downloaded in Settings → AI Features as GGUF files from
+  Hugging Face and verified with SHA-256 when downloaded. The catalog runs from
+  a 2B model for older laptops up to 31B, plus a 35B-A3B mixture-of-experts
+  model for machines with a large GPU. A hardware probe recommends a model for
+  the detected GPU and memory.
 - **Chat** streams token by token, supports thinking models, and can be stopped
   mid-answer. The rewrite/translate actions in the editor use the same engine.
 - **Knowledge bases.** You can import PDFs into subject databases. They're
@@ -113,8 +113,10 @@ Ollama install, no runtime to set up and nothing sent to the internet.
   installed from Settings to run the chat model on the GPU. Without it the app
   uses the bundled Vulkan build; either way it falls back cleanly if something
   fails.
+- **Benchmark.** Settings can measure prompt and decode speed for the selected
+  model on demand; it runs only when clicked.
 
-AI settings live in Settings → KI-Funktionen. Nothing AI-related is enabled by
+AI settings live in Settings → AI Features. Nothing AI-related is enabled by
 default, and disabling it leaves the rest of the app untouched.
 
 ## Installation
@@ -142,7 +144,7 @@ Without signing there isn't a nicer workaround; the command only removes the
 
 ## Building from source
 
-You need Node.js 20+ and a recent stable Rust toolchain. On Linux you also need
+You need Node.js 20.19+ and a recent stable Rust toolchain. On Linux you also need
 the usual Tauri system packages (webkit2gtk, gtk3, etc.) — see the
 [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
@@ -169,8 +171,8 @@ Releases are tag-driven. Write the notes in
 `release-notes/RELEASE_NOTES_vX.Y.Z.md`, then push a matching tag:
 
 ```bash
-git tag v2.8.0
-git push origin v2.8.0
+git tag v2.10.1
+git push origin v2.10.1
 ```
 
 The Release workflow builds the Windows, macOS and Linux installers and
@@ -179,9 +181,7 @@ an existing version from the Actions tab.
 
 ## Documentation
 
-- [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) — feature map and recent work
-- [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) — early architecture notes
-- [docs/AI_V3_PLAN.md](docs/AI_V3_PLAN.md) — how the AI stack works
+- [docs/FEATURE_TRACKER.md](docs/FEATURE_TRACKER.md) — implementation notes for maintainers
 - [release-notes/](release-notes/) — notes for every release
 
 ## Third-party models

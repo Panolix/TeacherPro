@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.1] - 2026-11-03
+
+### Changed
+- README update: corrected the English AI settings label, refreshed the model
+  catalog description, and removed internal planning-document links. No
+  application code changed.
+
 ## [2.10.0] - 2026-11-03
 
 ### Added
