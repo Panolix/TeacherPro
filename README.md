@@ -204,6 +204,8 @@ See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the details.
 TeacherPro is licensed under
 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 
+**License text:** [human-readable summary](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [full legal code](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode.en) · [SPDX entry](https://spdx.org/licenses/CC-BY-NC-SA-4.0.html) · [LICENSE](LICENSE)
+
 **Source-available, not open source.** You may use, fork, modify and share it
 for non-commercial purposes, provided you credit **Panagiotis Smponias**, link
 back to this repository, state what you changed, and license your version
