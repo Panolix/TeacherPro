@@ -375,6 +375,7 @@ fn vendor_from_name(name: &str) -> &'static str {
     }
 }
 
+#[allow(dead_code)] // Windows-only probe helper; also exercised by cross-platform tests.
 fn is_virtual_gpu(name: &str) -> bool {
     const VIRTUAL_MARKERS: &[&str] = &[
         "microsoft basic",
