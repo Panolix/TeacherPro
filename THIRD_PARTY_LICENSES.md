@@ -1,6 +1,6 @@
 # Third-Party Components & Licenses
 
-TeacherPro itself is licensed under CC BY-NC 4.0 (see `LICENSE`). The following
+TeacherPro itself is licensed under CC BY-NC-SA 4.0 (see `LICENSE`). The following
 third-party components are used at runtime or are downloaded on demand.
 
 ## Models

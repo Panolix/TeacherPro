@@ -1,6 +1,6 @@
 # TeacherPro
 
-[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
+[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-blue.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Build Status](https://github.com/Panolix/TeacherPro/actions/workflows/release.yml/badge.svg)](https://github.com/Panolix/TeacherPro/actions)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue.svg)](#)
 
@@ -202,6 +202,12 @@ See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the details.
 ## License
 
 TeacherPro is licensed under
-[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You can use,
-modify and share it, but not sell it or ship it as part of a commercial
-product. The full text is in [LICENSE](LICENSE).
+[CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+**Source-available, not open source.** You may use, fork, modify and share it
+for non-commercial purposes, provided you credit **Panagiotis Smponias**, link
+back to this repository, state what you changed, and license your version
+under the same terms.
+
+**Commercial use requires a paid license** — see [COMMERCIAL.md](COMMERCIAL.md).
+Attribution, share-alike and trademark terms: [NOTICE](NOTICE).

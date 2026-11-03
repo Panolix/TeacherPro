@@ -34,6 +34,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "copyright": "Copyright (c) 2025-2026 Panagiotis Smponias. Licensed under CC BY-NC-SA 4.0.",
     "resources": [
       "resources/engines/"
     ],
