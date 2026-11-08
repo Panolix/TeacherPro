@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.1] - 2026-11-08
+
+### Changed
+- The weekly planner now uses more of the available window width: its maximum
+  content width is 1800px instead of 1600px. Large displays no longer show wide
+  empty gutters on either side of the week.
+
 ## [2.11.0] - 2026-11-08
 
 ### Changed

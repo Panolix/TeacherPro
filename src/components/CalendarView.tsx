@@ -459,7 +459,7 @@ export function CalendarView() {
 
   return (
     <div
-      className="tp-calendar-page mx-auto w-full max-w-[1600px] px-6 pt-5 pb-6 h-full flex flex-col gap-3.5"
+      className="tp-calendar-page mx-auto w-full max-w-[1800px] px-6 pt-5 pb-6 h-full flex flex-col gap-3.5"
       style={{ background: "var(--tp-bg-app)" }}
     >
       {/* Controls row */}
