@@ -92,32 +92,30 @@ export function MiniCalendar() {
 
             let color = "var(--tp-t-2)";
             if (!isCurrentMonth) color = "var(--tp-t-4)";
-            if (isSelected) color = "#fff";
+            if (isSelected) color = "var(--tp-accent)";
 
             return (
               <button
                 key={format(day, "yyyy-MM-dd")}
                 onClick={() => setSelectedDate(day)}
-                className="aspect-square inline-flex items-center justify-center rounded-[6px] border box-border tabular-nums transition-colors text-[13px]"
+                aria-label={format(day, "PPPP", { locale: dateLocale })}
+                aria-current={isCurrentDay ? "date" : undefined}
+                className={`box-border inline-flex aspect-square items-center justify-center rounded-[var(--tp-radius-control)] border tabular-nums transition-colors ${
+                  isSelected
+                    ? ""
+                    : "hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                }`}
                 style={{
                   color,
-                  borderColor:
-                    isCurrentDay && !isSelected ? "var(--tp-accent)" : "transparent",
-                  background: isSelected ? "var(--tp-accent)" : "transparent",
+                  borderColor: isSelected
+                    ? "var(--tp-accent)"
+                    : isCurrentDay
+                      ? "var(--tp-b-3)"
+                      : "transparent",
+                  background: isSelected
+                    ? "var(--tp-accent-tint)"
+                    : "transparent",
                   fontWeight: isSelected ? 600 : 400,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    (e.currentTarget as HTMLButtonElement).style.background =
-                      "var(--tp-bg-4)";
-                    (e.currentTarget as HTMLButtonElement).style.color = "var(--tp-t-1)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-                    (e.currentTarget as HTMLButtonElement).style.color = color;
-                  }
                 }}
               >
                 {format(day, "d")}
@@ -129,7 +127,7 @@ export function MiniCalendar() {
         {vaultPath && (
           <button
             onClick={handleCreateLessonForDate}
-            className="tp-mini-cal-create mt-3 w-full h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[13px] font-medium"
+            className="tp-mini-cal-create mt-3 w-full h-7 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
           >
             <Plus className="w-4 h-4" />
             {t("calendar.createLesson", { date: format(selectedDate, "MMM d", { locale: dateLocale }) })}

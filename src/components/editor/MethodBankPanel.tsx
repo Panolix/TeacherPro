@@ -83,7 +83,7 @@ export function MethodBankPanel({ open, onClose, loading, error, items, onInsert
               aria-label={t("editor.methodBank.searchMethods")}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t("editor.methodBank.searchMethods")}
-              className="h-9 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-sm text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
+              className="h-8 w-full rounded-md border border-[var(--tp-border-strong)] bg-[var(--tp-panel-elevated)] px-3 text-[12.5px] text-[var(--tp-text-primary)] outline-none placeholder:text-[var(--tp-text-muted)] focus:border-[var(--tp-accent)]"
             />
             <div className="flex flex-wrap gap-1.5">
               {([

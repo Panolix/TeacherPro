@@ -11,6 +11,8 @@ import {
   Download,
   Save,
   Table,
+  Plus,
+  Loader2,
 } from "lucide-react";
 import { useAppStore } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
@@ -30,6 +32,7 @@ export function TopBar() {
     setSidebarOpen,
     setCurrentView,
     editorActions,
+    mindmapActions,
   } = useAppStore();
   const { t } = useTranslation();
 
@@ -65,7 +68,7 @@ export function TopBar() {
             type="button"
             onClick={() => setSidebarOpen(true)}
             title={t('topbar.expandSidebar')}
-            className="tp-chrome-btn h-8 w-8 inline-flex items-center justify-center rounded-md"
+            className="tp-chrome-btn h-7 w-7 inline-flex items-center justify-center rounded-md"
           >
             <PanelLeft className="w-4 h-4" />
           </button>
@@ -87,7 +90,7 @@ export function TopBar() {
           }`}
           title={t('topbar.openWeeklyPlanner')}
         >
-          <CalendarDays className="w-3.5 h-3.5" />
+          <CalendarDays className="w-4 h-4" />
           <span>{t('topbar.weeklyView')}</span>
         </button>
       </div>
@@ -137,32 +140,32 @@ export function TopBar() {
         )}
       </div>
 
-      {/* RIGHT — editor action buttons (shown only when editor is active) */}
+      {/* RIGHT — one action slot for the active view */}
       <div className="flex items-center gap-1.5">
         {currentView === "editor" && editorActions && (
           <>
             <TopAct
               label={t('topbar.insertLessonTable')}
-              icon={<Table className="w-3.5 h-3.5" />}
+              icon={<Table className="w-4 h-4" />}
               onClick={editorActions.insertTable}
             />
             {editorActions.aiEnabled && (
               <TopAct
                 label={t('topbar.aiChat')}
-                icon={<MessageSquare className="w-3.5 h-3.5" />}
+                icon={<MessageSquare className="w-4 h-4" />}
                 onClick={editorActions.toggleChat}
                 active={editorActions.chatOpen}
               />
             )}
             <TopAct
               label={t('topbar.notes')}
-              icon={<FileText className="w-3.5 h-3.5" />}
+              icon={<FileText className="w-4 h-4" />}
               onClick={editorActions.toggleNotes}
               active={editorActions.notesOpen}
             />
             <TopAct
               label={t('topbar.methods')}
-              icon={<BookOpen className="w-3.5 h-3.5" />}
+              icon={<BookOpen className="w-4 h-4" />}
               onClick={editorActions.toggleMethodBank}
               active={editorActions.methodBankOpen}
             />
@@ -171,31 +174,79 @@ export function TopBar() {
               style={{ background: "var(--tp-b-1)" }}
               aria-hidden="true"
             />
+            {editorActions.isPdfBusy && (
+              <BusyPill label={t('topbar.renderingPdf')} />
+            )}
             <TopAct
               iconOnly
               title={t('topbar.previewPdf')}
-              icon={<Eye className="w-3.5 h-3.5" />}
+              icon={<Eye className="w-4 h-4" />}
               onClick={editorActions.preview}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
               iconOnly
               title={t('topbar.printSavePdf')}
-              icon={<Printer className="w-3.5 h-3.5" />}
+              icon={<Printer className="w-4 h-4" />}
               onClick={editorActions.print}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
               iconOnly
               title={t('topbar.exportPdf')}
-              icon={<Download className="w-3.5 h-3.5" />}
+              icon={<Download className="w-4 h-4" />}
               onClick={editorActions.export}
               disabled={editorActions.isPdfBusy}
             />
             <TopAct
               label={t('topbar.save')}
-              icon={<Save className="w-3.5 h-3.5" />}
+              icon={<Save className="w-4 h-4" />}
               onClick={editorActions.save}
+              primary
+            />
+          </>
+        )}
+
+        {currentView === "mindmap" && mindmapActions && (
+          <>
+            <TopAct
+              label={t('topbar.addNode')}
+              icon={<Plus className="w-4 h-4" />}
+              onClick={mindmapActions.addNode}
+            />
+            <div
+              className="mx-1 h-5 w-px"
+              style={{ background: "var(--tp-b-1)" }}
+              aria-hidden="true"
+            />
+            {mindmapActions.isPdfBusy && (
+              <BusyPill label={t('topbar.renderingPdf')} />
+            )}
+            <TopAct
+              iconOnly
+              title={t('topbar.previewPdf')}
+              icon={<Eye className="w-4 h-4" />}
+              onClick={mindmapActions.preview}
+              disabled={mindmapActions.isPdfBusy}
+            />
+            <TopAct
+              iconOnly
+              title={t('topbar.printSavePdf')}
+              icon={<Printer className="w-4 h-4" />}
+              onClick={mindmapActions.print}
+              disabled={mindmapActions.isPdfBusy}
+            />
+            <TopAct
+              iconOnly
+              title={t('topbar.exportPdf')}
+              icon={<Download className="w-4 h-4" />}
+              onClick={mindmapActions.export}
+              disabled={mindmapActions.isPdfBusy}
+            />
+            <TopAct
+              label={t('topbar.save')}
+              icon={<Save className="w-4 h-4" />}
+              onClick={mindmapActions.save}
               primary
             />
           </>
@@ -225,19 +276,22 @@ function TopAct({
   disabled?: boolean;
 }) {
   const showActionButtonLabels = useAppStore((s) => s.showActionButtonLabels);
-  const isAccent = Boolean(primary || active);
+  const toneClass = primary
+    ? "border border-transparent bg-[var(--tp-accent)] text-white hover:brightness-110"
+    : active
+      ? "border border-[var(--tp-accent)] bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
+      : "border border-[var(--tp-b-1)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
+      aria-label={title ?? label}
       aria-pressed={active}
-      className={`tp-topact h-[30px] inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium disabled:opacity-50${
-        isAccent ? " tp-topact--accent" : ""
-      }`}
+      className={`inline-flex h-[var(--tp-control-md)] select-none items-center gap-1.5 rounded-[var(--tp-radius-control)] text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${toneClass}`}
       style={{
-        padding: iconOnly ? "0 8px" : "0 10px",
+        padding: iconOnly ? "0 6px" : "0 10px",
       }}
     >
       {icon}
@@ -245,6 +299,21 @@ function TopAct({
         <span className="hidden @min-[1000px]:inline">{label}</span>
       )}
     </button>
+  );
+}
+
+/** Compact, non-blocking progress hint for multi-second PDF work. */
+function BusyPill({ label }: { label: string }) {
+  return (
+    <span
+      className="hidden items-center gap-1.5 text-[var(--tp-font-body-sm)] @min-[900px]:inline-flex"
+      style={{ color: "var(--tp-t-3)" }}
+      role="status"
+      aria-live="polite"
+    >
+      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+      {label}
+    </span>
   );
 }
 

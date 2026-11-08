@@ -1,10 +1,12 @@
-﻿import { format, startOfWeek, addDays, isSameDay } from "date-fns";
+import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
 import { useEffect, useRef, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical, Pencil } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
+import { Button } from "./ui/Button";
+import { IconButton } from "./ui/IconButton";
 
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -15,6 +17,7 @@ export function CalendarView() {
     index: number;
   } | null>(null);
   const [isDraggingLesson, setIsDraggingLesson] = useState(false);
+  const [draggingLesson, setDraggingLesson] = useState<string | null>(null);
   const [isDeletingLessons, setIsDeletingLessons] = useState(false);
   const [renamingLesson, setRenamingLesson] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -90,6 +93,7 @@ export function CalendarView() {
     setDragOverDayKey(null);
     setLessonDropIndicator(null);
     setIsDraggingLesson(false);
+    setDraggingLesson(null);
   }, [start.getTime()]);
 
   // We could filter `lessonPlans` by date if we stored it in the filename,
@@ -260,7 +264,7 @@ export function CalendarView() {
   /**
    * Mouse-based drag for lesson cards.
    * HTML5 dragstart on div elements does not fire reliably in WKWebView (Tauri/macOS).
-   * We use mousedown → mousemove → mouseup with a floating ghost chip instead.
+   * We use mousedown ? mousemove ? mouseup with a floating ghost chip instead.
    */
   const startMouseDrag = (e: React.MouseEvent, lessonName: string, title: string) => {
     if (!lessonName) return;
@@ -280,6 +284,7 @@ export function CalendarView() {
         mouseDragActiveRef.current = true;
         draggingLessonRef.current = lessonName;
         setIsDraggingLesson(true);
+        setDraggingLesson(lessonName);
 
         ghost = document.createElement('div');
         Object.assign(ghost.style, {
@@ -295,7 +300,7 @@ export function CalendarView() {
           color: 'var(--tp-t-1, #fff)',
           whiteSpace: 'nowrap',
           boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-          transform: 'rotate(-2deg)',
+          transform: 'scale(1.03)',
           opacity: '0.95',
           userSelect: 'none',
         });
@@ -334,6 +339,7 @@ export function CalendarView() {
       setDragOverDayKey(null);
       setLessonDropIndicator(null);
       setIsDraggingLesson(false);
+      setDraggingLesson(null);
 
       if (!dragging || !wasLessonName) return;
 
@@ -425,6 +431,9 @@ export function CalendarView() {
   };
 
   const today = new Date();
+  // Resolve the week once; the columns below read from this list.
+  const weekLessons = weekDays.map((day) => getLessonsForDate(day));
+  const weekHasLessons = weekLessons.some((lessons) => lessons.length > 0);
 
   const renderLessonDropLine = (
     dayKey: string,
@@ -450,92 +459,97 @@ export function CalendarView() {
 
   return (
     <div
-      className="tp-calendar-page px-5 pt-4 pb-6 h-full flex flex-col gap-3"
+      className="tp-calendar-page mx-auto w-full max-w-[1600px] px-6 pt-5 pb-6 h-full flex flex-col gap-3.5"
       style={{ background: "var(--tp-bg-app)" }}
     >
       {/* Controls row */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2.5">
         <div
-          className="inline-flex rounded-md overflow-hidden"
+          className="inline-flex overflow-hidden rounded-[var(--tp-radius-control)]"
           style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-1)" }}
         >
           <button
             onClick={prevWeek}
-            className="h-8 w-8 inline-flex items-center justify-center text-[var(--tp-t-2)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+            className="inline-flex h-[var(--tp-control-md)] w-[var(--tp-control-md)] items-center justify-center text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
             title={t('calendar.navigation.previousWeek')}
+            aria-label={t('calendar.navigation.previousWeek')}
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={nextWeek}
-            className="h-8 w-8 inline-flex items-center justify-center text-[var(--tp-t-2)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+            className="inline-flex h-[var(--tp-control-md)] w-[var(--tp-control-md)] items-center justify-center text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
             title={t('calendar.navigation.nextWeek')}
+            aria-label={t('calendar.navigation.nextWeek')}
           >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
-        <button
-          onClick={goToToday}
-          className="h-8 px-3.5 rounded-md text-sm font-medium bg-[var(--tp-bg-1)] border border-[var(--tp-b-1)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
-        >
+        <Button variant="secondary" size="sm" onClick={goToToday}>
           {t('calendar.navigation.today')}
-        </button>
+        </Button>
         <span
-          className="text-[15px] font-semibold tracking-[-0.01em]"
+          className="text-[14px] font-semibold tracking-[-0.01em]"
           style={{ color: "var(--tp-t-1)" }}
         >
           {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, "MMM d", { locale: dateLocale }), end: format(addDays(start, 6), "MMM d, yyyy", { locale: dateLocale }) })}
         </span>
 
+        <Button
+          variant="primary"
+          size="sm"
+          leadingIcon={<Plus className="h-3.5 w-3.5" />}
+          onClick={() => void createNewLesson(new Date())}
+        >
+          {t('calendar.actions.newLesson')}
+        </Button>
+
         <div className="flex-1" />
 
-        <button
-          onClick={handleDeleteSelected}
+        <IconButton
+          label={
+            isDeletingLessons
+              ? t('calendar.actions.moving')
+              : t('calendar.tooltips.moveToTrash')
+          }
+          icon={<Trash2 className="h-4 w-4" />}
+          tone={selectedLessons.size > 0 ? "danger" : "default"}
           disabled={selectedLessons.size === 0 || isDeletingLessons}
-          className={`h-9 w-9 inline-flex items-center justify-center rounded-md disabled:cursor-not-allowed disabled:opacity-40 ${
-            selectedLessons.size > 0 ? "hover:brightness-125" : ""
-          }`}
-          title={isDeletingLessons ? t('calendar.actions.moving') : t('calendar.tooltips.moveToTrash')}
-          style={{
-            background: selectedLessons.size > 0 ? "rgba(239, 68, 68, 0.12)" : "transparent",
-            border: selectedLessons.size > 0
-              ? "1px solid rgba(239, 68, 68, 0.4)"
-              : "1px solid transparent",
-            color: selectedLessons.size > 0 ? "#fca5a5" : "var(--tp-t-3)",
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+          onClick={handleDeleteSelected}
+          className={selectedLessons.size > 0 ? "border border-[rgba(239,68,68,0.35)]" : ""}
+        />
       </div>
 
       {/* Day columns */}
-      <div className="flex-1 grid grid-cols-7 gap-3 min-h-0">
+      <div className="relative min-h-0 flex-1 overflow-x-auto pb-1">
+        <div className="grid h-full min-w-[812px] grid-cols-[repeat(7,minmax(108px,1fr))] gap-3.5">
         {weekDays.map((day, idx) => {
-          const lessons = getLessonsForDate(day);
+          const lessons = weekLessons[idx];
           const dayKey = format(day, "yyyy-MM-dd");
           const isDropTarget = dragOverDayKey === dayKey;
           const isToday = isSameDay(day, today);
 
           const borderColor = isDropTarget
             ? "var(--tp-accent)"
-            : isToday
-              ? "var(--tp-accent)"
-              : "var(--tp-b-1)";
+            : "var(--tp-b-1)";
 
           return (
             <div
               key={idx}
               data-day-key={dayKey}
-              className="tp-calendar-day-card flex flex-col rounded-xl overflow-hidden transition-colors backdrop-blur-[2px]"
+              aria-current={isToday ? "date" : undefined}
+              className="tp-calendar-day-card flex flex-col rounded-[var(--tp-radius-card)] overflow-hidden transition-colors backdrop-blur-[2px]"
               style={{
-                background: isDropTarget ? "var(--tp-accent-softer)" : "var(--tp-bg-1)",
+                background: isDropTarget
+                  ? "var(--tp-accent-tint-soft)"
+                  : "color-mix(in srgb, var(--tp-bg-1) 55%, transparent)",
                 border: `1px solid ${borderColor}`,
-                boxShadow: isToday ? "0 0 0 1px var(--tp-accent-softer)" : undefined,
+                boxShadow: isToday ? "inset 0 2px 0 var(--tp-accent)" : undefined,
               }}
             >
               {/* Day header */}
               <div
-                className="px-3 py-3 shrink-0"
+                className="px-3.5 py-3 shrink-0"
                 style={{ borderBottom: "1px solid var(--tp-b-1)" }}
               >
                 <div
@@ -544,24 +558,27 @@ export function CalendarView() {
                 >
                   {format(day, "EEE", { locale: dateLocale })}
                 </div>
-                <div
-                  className="text-[17px] font-semibold leading-none mt-0.5 tabular-nums"
-                  style={{ color: isToday ? "var(--tp-accent)" : "var(--tp-t-1)" }}
-                >
-                  {format(day, "d")}
+                <div className="mt-0.5 flex items-center gap-2">
+                  <span
+                    className="text-[15px] font-semibold leading-none tabular-nums"
+                    style={{ color: isToday ? "var(--tp-accent)" : "var(--tp-t-1)" }}
+                  >
+                    {format(day, "d")}
+                  </span>
+                  {isToday && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: "var(--tp-accent)" }}
+                      title={t('calendar.navigation.today')}
+                      aria-label={t('calendar.navigation.today')}
+                    />
+                  )}
                 </div>
               </div>
 
               {/* Lessons list */}
-              <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
-                {lessons.length === 0 ? (
-                  <div
-                    className="h-full flex items-center justify-center text-[12px] italic min-h-[60px]"
-                    style={{ color: "var(--tp-t-4)" }}
-                  >
-                    {t('calendar.placeholders.freeDay')}
-                  </div>
-                ) : (
+              <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                {lessons.length === 0 ? null : (
                   <>
                     {lessons.map((lesson, lIdx) => {
                     // Clean title: strip date token, "Lesson" prefix, trailing IDs
@@ -597,20 +614,24 @@ export function CalendarView() {
                         <div
                           data-lesson-card
                           data-lesson-path={lessonName}
-                        className="w-full rounded-lg overflow-hidden"
-                        style={{
-                          background: isSelected ? "var(--tp-accent-softer)" : "var(--tp-bg-2)",
-                          border: `1px solid ${isSelected ? "var(--tp-accent)" : "var(--tp-b-2)"}`,
-                          borderLeft: `3px solid ${subjectColor || "var(--tp-accent)"}`,
-                        }}
-                      >
-                        {/* Title row — clickable to open */}
+                          className="group w-full overflow-hidden rounded-[var(--tp-radius-control)]"
+                          style={{
+                            background: isSelected
+                              ? "var(--tp-accent-tint-soft)"
+                              : "var(--tp-bg-2)",
+                            border: `1px solid ${isSelected ? "var(--tp-accent)" : "var(--tp-b-2)"}`,
+                            borderLeft: `3px solid ${subjectColor || "var(--tp-accent)"}`,
+                            opacity: draggingLesson === lessonName ? 0.4 : 1,
+                            transition: "opacity 120ms var(--tp-ease)",
+                          }}
+                        >
+                        {/* Title row � clickable to open */}
                         <button
                           onClick={() => lessonName && openLesson(lessonName)}
-                          className="w-full px-2.5 pt-2.5 pb-1.5 text-left hover:bg-[var(--tp-bg-4)]"
+                          className="w-full px-3 pt-2.5 pb-2 text-left hover:bg-[var(--tp-bg-4)]"
                         >
                           <div
-                            className="text-[13px] font-semibold leading-snug"
+                            className="text-[12px] font-semibold leading-snug"
                             style={{ color: "var(--tp-t-1)", wordBreak: "break-word" }}
                           >
                             {cleanTitle}
@@ -625,9 +646,9 @@ export function CalendarView() {
                           )}
                         </button>
 
-                        {/* Action row — always visible, compact */}
+                        {/* Inline rename */}
                         {renamingLesson === lessonName && (
-                          <div className="px-2.5 pb-1.5">
+                          <div className="px-2 pb-1">
                             <input
                               autoFocus
                               value={renameValue}
@@ -652,7 +673,7 @@ export function CalendarView() {
                                   setRenameValue("");
                                 }
                               }}
-                              className="w-full rounded-md border px-2 py-1 text-[13px] font-semibold outline-none"
+                              className="w-full rounded-md border px-2 py-1 text-[12px] font-semibold outline-none"
                               style={{
                                 background: "var(--tp-bg-3)",
                                 borderColor: "var(--tp-accent)",
@@ -662,12 +683,12 @@ export function CalendarView() {
                           </div>
                         )}
 
-                        {/* Action row - always visible, compact */}
+                        {/* Action row - revealed on hover/focus */}
                         <div
                           className="flex items-center px-1.5 pb-1.5"
                           style={{ borderTop: "1px solid var(--tp-b-1)" }}
                         >
-                          {/* Drag grip — onMouseDown starts mouse-based drag (reliable in WKWebView) */}
+                          {/* Drag grip � onMouseDown starts mouse-based drag (reliable in WKWebView) */}
                           <div
                             onMouseDown={(e) => startMouseDrag(e, lessonName, cleanTitle)}
                             className="h-6 w-6 inline-flex items-center justify-center rounded cursor-grab active:cursor-grabbing select-none"
@@ -685,9 +706,15 @@ export function CalendarView() {
                               event.stopPropagation();
                               if (lessonName) toggleSelectedLesson(lessonName);
                             }}
-                            className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                            className={`h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] transition-opacity hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] ${
+                              isSelected
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
+                            }`}
                             style={isSelected ? { color: "var(--tp-accent)" } : undefined}
                             title={isSelected ? t('calendar.tooltips.deselect') : t('calendar.tooltips.select')}
+                            aria-label={isSelected ? t('calendar.tooltips.deselect') : t('calendar.tooltips.select')}
+                            aria-pressed={isSelected}
                           >
                             {isSelected ? <CheckSquare className="h-3.5 w-3.5" /> : <Square className="h-3.5 w-3.5" />}
                           </button>
@@ -700,7 +727,7 @@ export function CalendarView() {
                                 event.stopPropagation();
                                 beginRenameLesson(event, lessonName, renameSeed);
                               }}
-                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] opacity-0 transition-opacity hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)] group-hover:opacity-100 group-focus-within:opacity-100"
                               title={t('sidebar.contextMenu.rename')}
                               aria-label={t('sidebar.contextMenu.rename')}
                             >
@@ -729,8 +756,9 @@ export function CalendarView() {
                                 }
                               }}
                               disabled={isDeletingLessons}
-                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] disabled:opacity-30 disabled:cursor-not-allowed hover:text-red-400 hover:bg-red-400/10"
+                              className="h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] opacity-0 transition-opacity hover:bg-red-400/10 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-30 group-hover:opacity-100 group-focus-within:opacity-100"
                               title={t('calendar.tooltips.moveToTrash')}
+                              aria-label={t('calendar.tooltips.moveToTrash')}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
@@ -748,27 +776,27 @@ export function CalendarView() {
 
               {/* Day footer */}
       <div
-                className="shrink-0 flex items-center justify-center gap-1 p-2"
+                className="shrink-0 flex items-center justify-center gap-1 p-2.5"
                 style={{ borderTop: "1px solid var(--tp-b-1)" }}
               >
                 <button
                   onClick={() => void createNewLesson(day)}
-                  className="h-9 w-9 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--tp-t-3)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                   title={t('calendar.actions.add')}
+                  aria-label={t('calendar.actions.add')}
                 >
                   <Plus className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => void handleDeleteAllForDate(day)}
                   disabled={isDeletingLessons || lessons.length === 0}
-                  className={`h-9 w-9 inline-flex items-center justify-center rounded transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-                    lessons.length > 0 && !isDeletingLessons ? "hover:[filter:brightness(1.15)]" : ""
-                  }`}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded text-[var(--tp-t-3)] transition-colors hover:bg-[rgba(239,68,68,0.12)] hover:text-[#f87171] disabled:cursor-not-allowed disabled:opacity-30"
                   title={isDeletingLessons ? t('calendar.actions.deleting') : t('calendar.tooltips.moveAllForDate', { count: lessons.length })}
+                  aria-label={isDeletingLessons ? t('calendar.actions.deleting') : t('calendar.tooltips.moveAllForDate', { count: lessons.length })}
                   style={{
-                    color: isDeletingLessons ? "var(--tp-t-3)" : lessons.length > 0 ? "#ef4444" : "var(--tp-t-4)",
-                    background: isDeletingLessons ? "transparent" : lessons.length > 0 ? "rgba(239,68,68,0.12)" : "transparent",
-                    border: isDeletingLessons ? "1px solid transparent" : lessons.length > 0 ? "1px solid rgba(239,68,68,0.35)" : "1px solid transparent",
+                    color: lessons.length > 0 ? "var(--tp-t-3)" : "var(--tp-t-4)",
+                    background: "transparent",
+                    border: "1px solid transparent",
                   }}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -777,6 +805,32 @@ export function CalendarView() {
             </div>
           );
         })}
+        </div>
+
+        {!weekHasLessons && (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div
+              className="rounded-[var(--tp-radius-card)] px-4 py-3 text-center shadow-sm"
+              style={{
+                background: "color-mix(in srgb, var(--tp-bg-1) 92%, transparent)",
+                border: "1px solid var(--tp-b-1)",
+              }}
+            >
+              <p
+                className="text-[var(--tp-font-body-sm)] font-medium"
+                style={{ color: "var(--tp-t-2)" }}
+              >
+                {t('calendar.placeholders.emptyWeek')}
+              </p>
+              <p
+                className="mt-1 text-[var(--tp-font-caption)]"
+                style={{ color: "var(--tp-t-4)" }}
+              >
+                {t('calendar.placeholders.emptyWeekHint')}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

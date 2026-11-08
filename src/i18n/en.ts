@@ -125,6 +125,14 @@
       fontGroupHandwriting: "Handwriting",
       fontGroupSystem: "System fonts",
       railLabel: "Formatting toolbar",
+      reset: "Reset",
+      groups: {
+        text: "Text",
+        color: "Color",
+        blocks: "Blocks",
+        insert: "Insert",
+        history: "History",
+      },
       taskList: "Checklist",
       alignLeft: "Align left",
       alignCenter: "Align center",
@@ -480,6 +488,8 @@
     printSavePdf: "Print or Save PDF",
     exportPdf: "Export PDF",
     save: "Save",
+    addNode: "Add Node",
+    renderingPdf: "Rendering PDF…",
   },
 
   calendar: {
@@ -503,9 +513,12 @@
       add: "Add",
       deleting: "Deleting...",
       all: "All",
+      newLesson: "New lesson",
     },
     placeholders: {
       freeDay: "Free day",
+      emptyWeek: "No lessons planned this week",
+      emptyWeekHint: "Create your first lesson for this week.",
     },
     tooltips: {
       dragToReschedule: "Drag to move or reorder",
@@ -590,6 +603,7 @@
   settings: {
     title: "Settings",
     close: "Close settings",
+    autosaveHint: "Changes save automatically.",
     aiV3: {
       title: "AI Models (local engine)",
       subtitle:

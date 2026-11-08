@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { ask } from "@tauri-apps/plugin-dialog";
 import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -45,7 +46,12 @@ function resolveAccentColor(accentValue: string): string {
 }
 
 function App() {
-  const { initVault, accentColor, language, aiV3ChatModelId } = useAppStore();
+  const initVault = useAppStore((state) => state.initVault);
+  const accentColor = useAppStore((state) => state.accentColor);
+  const language = useAppStore((state) => state.language);
+  const aiV3ChatModelId = useAppStore((state) => state.aiV3ChatModelId);
+  const activeFilePath = useAppStore((state) => state.activeFilePath);
+  const documentSaveState = useAppStore((state) => state.documentSaveState);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -66,7 +72,7 @@ function App() {
 
     // AI v3: no runtime auto-start. The engine is lazy-started on first AI use
     // (see src-tauri/src/ai/engine.rs) — nothing runs until the user needs it.
-  }, []);
+  }, [initVault]);
 
   // Keep the backend's remembered model in sync with the device-local UI
   // setting. This does not start the engine; it only makes Auto/token counting
@@ -86,6 +92,25 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  // Reflect the open document and its dirty state in the native window title.
+  useEffect(() => {
+    const stem = activeFilePath
+      ? (activeFilePath.split(/[\/\\]/).pop() || "").replace(/\.json$/i, "")
+      : null;
+    const dirty =
+      documentSaveState === "dirty" || documentSaveState === "saving";
+    const title = stem ? `${dirty ? "● " : ""}${stem} — TeacherPro` : "TeacherPro";
+    try {
+      void getCurrentWindow()
+        .setTitle(title)
+        .catch(() => {
+          /* not running under Tauri (e.g. browser preview) */
+        });
+    } catch {
+      /* window API unavailable outside Tauri */
+    }
+  }, [activeFilePath, documentSaveState]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -130,8 +155,16 @@ function App() {
         const flushResult = await runCloseFlushers();
         if (!flushResult.ok) {
           const language = useAppStore.getState().language;
-          const discard = window.confirm(
+          // window.confirm is blocked in the Tauri webview and always
+          // returns false; use the native dialog plugin instead.
+          const discard = await ask(
             translate(language, "statusBar.closeSaveFailed"),
+            {
+              title: translate(language, "statusBar.saveFailed"),
+              kind: "warning",
+              okLabel: translate(language, "common.yes"),
+              cancelLabel: translate(language, "common.no"),
+            },
           );
           if (!discard) {
             // Keep the window open. The dirty state is still intact, so the
@@ -171,7 +204,7 @@ function App() {
   }, []);
 
   return (
-    <div className="tp-app-shell flex h-screen w-screen overflow-hidden bg-[#1e1e1e] text-slate-800">
+    <div className="tp-app-shell flex h-screen w-screen overflow-hidden bg-[var(--tp-bg-app)] text-[var(--tp-t-2)]">
       <ErrorBoundary panelName="sidebar">
         <SidebarMinimal />
       </ErrorBoundary>

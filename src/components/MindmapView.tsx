@@ -20,7 +20,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
-import { Eye, Plus, Save, Printer, Download, X, FolderOpen, ExternalLink } from "lucide-react";
+import { Plus, X, FolderOpen, ExternalLink } from "lucide-react";
+import { Button } from "./ui/Button";
 import { useTranslation } from "../i18n/useTranslation";
 import { join } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
@@ -352,6 +353,7 @@ export function MindmapView() {
     setPendingMaterialDrop,
     logDebug,
     setDocumentSaveState,
+    setMindmapActions,
   } = useAppStore();
   const { t } = useTranslation();
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -1618,6 +1620,39 @@ export function MindmapView() {
     }
   };
 
+  // Expose the canvas actions to the shared TopBar. The ref keeps the
+  // registered callbacks current without re-registering on every render.
+  const mindmapActionsRef = useRef({
+    save: handleSave,
+    preview: handlePreviewPDF,
+    print: handlePrintPDF,
+    export: handleExportPDF,
+    addNode: handleAddNode,
+  });
+  mindmapActionsRef.current = {
+    save: handleSave,
+    preview: handlePreviewPDF,
+    print: handlePrintPDF,
+    export: handleExportPDF,
+    addNode: handleAddNode,
+  };
+
+  useEffect(() => {
+    if (!activeFilePath) {
+      setMindmapActions(null);
+      return;
+    }
+    setMindmapActions({
+      save: () => mindmapActionsRef.current.save(),
+      preview: () => mindmapActionsRef.current.preview(),
+      print: () => mindmapActionsRef.current.print(),
+      export: () => mindmapActionsRef.current.export(),
+      addNode: () => mindmapActionsRef.current.addNode(),
+      isPdfBusy,
+    });
+    return () => setMindmapActions(null);
+  }, [activeFilePath, isPdfBusy, setMindmapActions]);
+
   if (!activeFilePath) {
     return (
       <div className="tp-mindmap h-full flex items-center justify-center" style={{ background: "var(--tp-bg-app)" }}>
@@ -1640,55 +1675,40 @@ export function MindmapView() {
 
   return (
     <div className="tp-mindmap h-full w-full bg-[#121212] relative flex flex-col print:bg-white">
-      <div className="absolute top-0 left-0 w-full p-3 z-10 pointer-events-none flex justify-between print:hidden">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-gray-100 pointer-events-auto">{t("mindmap.workspaceTitle")}</h1>
-            <p className="text-gray-400 text-[12.5px] pointer-events-auto mt-1">
-              {t("mindmap.workspaceHint")}
-            </p>
+      {nodes.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center print:hidden">
+          <div
+            className="pointer-events-auto flex max-w-[320px] flex-col items-center gap-3 rounded-[var(--tp-radius-card)] border border-dashed p-6 text-center"
+            style={{
+              borderColor: "var(--tp-b-3)",
+              background: "color-mix(in srgb, var(--tp-bg-1) 90%, transparent)",
+            }}
+          >
+            <div>
+              <p
+                className="text-[var(--tp-font-title)] font-semibold"
+                style={{ color: "var(--tp-t-1)" }}
+              >
+                {t("mindmap.workspaceTitle")}
+              </p>
+              <p
+                className="mt-1 text-[var(--tp-font-body-sm)]"
+                style={{ color: "var(--tp-t-3)" }}
+              >
+                {t("mindmap.workspaceHint")}
+              </p>
+            </div>
+            <Button
+              variant="primary"
+              size="sm"
+              leadingIcon={<Plus className="h-3.5 w-3.5" />}
+              onClick={handleAddNode}
+            >
+              {t("mindmap.addNode")}
+            </Button>
           </div>
-          <button
-            onClick={handleAddNode}
-            className="pointer-events-auto bg-[#2d2d2d] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white px-3 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium flex items-center gap-2 h-fit mt-1"
-          >
-            <Plus className="w-4 h-4" /> {t("mindmap.addNode")}
-          </button>
         </div>
-        <div className="pointer-events-auto flex items-center gap-2 h-fit mt-1">
-          <button
-            onClick={handlePreviewPDF}
-            title={isPdfBusy ? t("mindmap.actions.previewPdf") + " (busy)" : t("mindmap.actions.previewPdf")}
-            disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handlePrintPDF}
-            title={isPdfBusy ? t("mindmap.actions.printSavePdf") + " (busy)" : t("mindmap.actions.printSavePdf")}
-            disabled={isPdfBusy}
-            className="bg-[#2f2f2f] hover:bg-[var(--tp-bg-5)] border border-[#444] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            <Printer className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleExportPDF}
-            title={isPdfBusy ? t("mindmap.actions.exportPdf") + " (busy)" : t("mindmap.actions.exportPdf")}
-            disabled={isPdfBusy}
-            className="bg-[#333] hover:bg-[var(--tp-bg-6)] text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-          <button
-            onClick={handleSave}
-            title={t("mindmap.actions.saveMindmap")}
-            className="tp-accent-btn text-white min-w-9 h-8 px-2.5 py-1.5 rounded-md shadow-sm transition-colors text-[12.5px] font-medium inline-flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Custom Node Edit Modal */}
       {editingNodeId && (

@@ -81,6 +81,57 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
     };
   }, [onClose]);
 
+  // Move keyboard focus into the menu when it opens.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const first = ref.current?.querySelector<HTMLElement>(
+        ".tp-cm-item:not(.disabled)",
+      );
+      (first ?? ref.current)?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!ref.current) return;
+    const items = Array.from(
+      ref.current.querySelectorAll<HTMLElement>(
+        ":scope > .tp-cm-item:not(.disabled)",
+      ),
+    );
+    if (items.length === 0) return;
+    const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const delta = event.key === "ArrowDown" ? 1 : -1;
+      const next =
+        activeIndex < 0
+          ? event.key === "ArrowDown"
+            ? 0
+            : items.length - 1
+          : (activeIndex + delta + items.length) % items.length;
+      items[next]?.focus();
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      items[event.key === "Home" ? 0 : items.length - 1]?.focus();
+    } else if (event.key === "Enter" || event.key === " ") {
+      const focused = document.activeElement as HTMLElement | null;
+      if (
+        focused?.classList.contains("tp-cm-item") &&
+        !focused.classList.contains("disabled")
+      ) {
+        event.preventDefault();
+        focused.click();
+      }
+    } else if (event.key === "ArrowRight" && activeIndex >= 0) {
+      if (items[activeIndex].classList.contains("has-submenu")) {
+        event.preventDefault();
+        items[activeIndex].click();
+      }
+    }
+  };
+
   // Reposition root menu so it fully fits inside the viewport
   useLayoutEffect(() => {
     if (!ref.current) return;
@@ -190,9 +241,18 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
   return (
     <div
       ref={ref}
+      role="menu"
+      tabIndex={-1}
+      aria-label="Menu"
       className="tp-context-menu"
-      style={{ position: "fixed", top: pos.y, left: pos.x, zIndex: 1000 }}
+      style={{
+        position: "fixed",
+        top: pos.y,
+        left: pos.x,
+        zIndex: "var(--tp-z-popover)",
+      }}
       onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={handleKeyDown}
     >
       {items.map((entry, idx) => renderItem(entry, idx))}
     </div>
@@ -279,6 +339,10 @@ function SubmenuItem({
   return (
     <div
       ref={itemRef}
+      role="menuitem"
+      tabIndex={item.disabled ? -1 : 0}
+      aria-disabled={item.disabled || undefined}
+      aria-haspopup={hasSubmenu || undefined}
       className={`tp-cm-item ${item.danger ? "danger" : ""} ${item.active ? "active" : ""} ${item.disabled ? "disabled" : ""} ${hasSubmenu ? "has-submenu" : ""}`}
       onMouseEnter={onMouseEnterItem}
       onMouseLeave={onMouseLeaveItem}
@@ -292,8 +356,9 @@ function SubmenuItem({
       {hasSubmenu && isOpen && (
         <div
           ref={submenuRef}
+          role="menu"
           className="tp-context-menu tp-cm-submenu-pop"
-          style={submenuStyle}
+          style={{ ...submenuStyle, zIndex: "var(--tp-z-dialog)" }}
           onMouseEnter={onSubmenuMouseEnter}
           onMouseLeave={onSubmenuMouseLeave}
         >
@@ -319,6 +384,9 @@ function renderSubItem(entry: ContextMenuEntry, idx: number, onClose: () => void
   return (
     <div
       key={`si-${idx}`}
+      role="menuitem"
+      tabIndex={it.disabled ? -1 : 0}
+      aria-disabled={it.disabled || undefined}
       className={`tp-cm-item ${it.danger ? "danger" : ""} ${it.active ? "active" : ""} ${it.disabled ? "disabled" : ""}`}
       onClick={(e) => {
         if (it.disabled) return;

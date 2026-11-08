@@ -8,7 +8,7 @@ import {
   Calendar,
   Search,
   Clock,
-  ChevronLeft,
+  PanelLeft,
   FolderPlus,
   ChevronRight,
   X,
@@ -29,6 +29,8 @@ import { useAppStore, type MaterialEntry, type VaultRoot } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { MiniCalendar } from "./MiniCalendar";
 import { SettingsModal } from "./SettingsModal";
+import { Dialog } from "./ui/Dialog";
+import { Button } from "./ui/Button";
 import { ContextMenu, useContextMenu, type ContextMenuEntry } from "./ContextMenu";
 import { MaterialPreviewModal } from "./MaterialPreviewModal";
 import { VaultItemPreviewModal } from "./VaultItemPreviewModal";
@@ -945,12 +947,9 @@ export function SidebarMinimal() {
           <div
             data-folder-path={node.relativePath}
             data-vault-row
-            className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors text-left cursor-pointer select-none ${
-              isSelected
-                ? "bg-[var(--tp-accent)]/15 text-white"
-                : vaultItemDragActive
-                  ? "text-gray-400"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+            data-active={isSelected}
+            className={`tp-tree-row w-full flex items-center gap-1.5 px-2 py-1.5 text-left cursor-pointer select-none ${
+              vaultItemDragActive ? "opacity-60" : ""
             } ${isDropTarget ? "tp-drop-target" : ""}`}
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             onDragEnter={(e) => {
@@ -996,7 +995,7 @@ export function SidebarMinimal() {
             >
               <FolderIcon expanded={isExpanded} />
               <span className="truncate font-medium">{node.name}</span>
-              <span className="ml-auto text-[12.5px] text-gray-500">{node.children.length}</span>
+              <span className="ml-auto tp-tree-meta">{node.children.length}</span>
             </div>
           </div>
           {isExpanded && node.children.length > 0 && (
@@ -1028,12 +1027,9 @@ export function SidebarMinimal() {
         {renderSidebarDropLine(fileFolderPath, node.fileIndex ?? 0)}
         <div
           data-vault-row
-          className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md transition-colors select-none ${
-            isActive
-              ? "bg-[var(--tp-accent)]/10 text-white"
-              : vaultItemDragActive
-                ? "text-gray-400"
-                : "text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+          data-active={isActive}
+          className={`tp-tree-row w-full flex items-center gap-1.5 px-2 py-1.5 select-none ${
+            vaultItemDragActive ? "opacity-60" : ""
           }`}
           style={{ paddingLeft: `${8 + depth * 12}px`, WebkitUserSelect: "none" }}
         >
@@ -1317,7 +1313,7 @@ export function SidebarMinimal() {
               setExpandedMaterials((prev) => ({ ...prev, [key]: !prev[key] }))
             }
             onContextMenu={(e) => ctxMenu.open(e, buildMaterialMenu(entry))}
-            className="w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md cursor-pointer transition-colors select-none text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+            className="tp-tree-row w-full flex items-center gap-1.5 px-2 py-1.5 cursor-pointer select-none"
             style={{ paddingLeft: `${8 + depth * 12}px`, WebkitUserSelect: "none" }}
           >
             <ChevronRight
@@ -1325,7 +1321,7 @@ export function SidebarMinimal() {
             />
             <FolderIcon expanded={isExpanded} />
             <span className="truncate font-medium">{entry.name}</span>
-            <span className="ml-auto text-[12.5px] text-gray-500">{entry.children.length}</span>
+            <span className="ml-auto tp-tree-meta">{entry.children.length}</span>
           </div>
           {isExpanded && entry.children.length > 0 && (
             <ul className="space-y-0.5">
@@ -1357,7 +1353,7 @@ export function SidebarMinimal() {
           }}
           onDragEnd={() => setDraggedMaterial(null)}
           onContextMenu={(e) => ctxMenu.open(e, buildMaterialMenu(entry))}
-          className="w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d] cursor-pointer transition-colors truncate select-none"
+          className="tp-tree-row w-full flex items-center gap-1.5 px-2 py-1.5 cursor-pointer truncate select-none"
           style={{ paddingLeft: `${8 + depth * 12 + 14}px`, WebkitUserSelect: "none" }}
           title={t('sidebar.material.tooltip', { name: entry.name })}
         >
@@ -1381,7 +1377,7 @@ export function SidebarMinimal() {
       return (
         <li key={key}>
           <div
-            className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] cursor-pointer transition-colors"
+            className="tp-tree-row group w-full flex items-center gap-1.5 px-2 py-1.5 cursor-pointer"
             style={{ paddingLeft: `${8 + depth * 12}px` }}
             onClick={() =>
               setExpandedTrashSections((prev) => ({ ...prev, [key]: !prev[key] }))
@@ -1418,7 +1414,7 @@ export function SidebarMinimal() {
                 restoreTrashEntry(fullPath, true);
               }}
               title={t('sidebar.contextMenu.restore')}
-              className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -1430,7 +1426,7 @@ export function SidebarMinimal() {
                 }
               }}
               title={t('sidebar.contextMenu.deletePermanently')}
-              className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -1449,7 +1445,7 @@ export function SidebarMinimal() {
     return (
       <li key={key}>
         <div
-          className="group w-full flex items-center gap-1.5 px-2 py-1.5 text-sm rounded-md text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] truncate transition-colors cursor-pointer"
+          className="tp-tree-row group w-full flex items-center gap-1.5 px-2 py-1.5 truncate cursor-pointer"
           style={{ paddingLeft: `${8 + depth * 12 + 14}px` }}
           onClick={() => {
             if (isTrashJson) {
@@ -1510,7 +1506,7 @@ export function SidebarMinimal() {
               restoreTrashEntry(fullPath, false);
             }}
             title={t('sidebar.contextMenu.restore')}
-            className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-emerald-400 hover:bg-emerald-400/10 transition-all"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
@@ -1522,7 +1518,7 @@ export function SidebarMinimal() {
               }
             }}
             title={t('sidebar.contextMenu.deletePermanently')}
-            className="opacity-0 group-hover:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
+            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 h-6 w-6 inline-flex items-center justify-center rounded text-[var(--tp-t-3)] hover:text-red-400 hover:bg-red-400/10 transition-all"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -1542,9 +1538,23 @@ export function SidebarMinimal() {
     const hasAny = lessonTree.length > 0 || mindmapTree.length > 0;
     if (!hasAny) {
       return (
-        <div className="px-2 py-4 text-sm text-gray-500 text-center">
-          {t('sidebar.empty')}
-        </div>
+        <li className="px-3 py-6 text-center">
+          <p
+            className="mx-auto max-w-[220px] text-[var(--tp-font-body-sm)] leading-relaxed"
+            style={{ color: "var(--tp-t-3)" }}
+          >
+            {t("sidebar.empty")}
+          </p>
+          <Button
+            variant="primary"
+            size="sm"
+            className="mt-3"
+            leadingIcon={<FileText className="h-3.5 w-3.5" />}
+            onClick={handleCreateLesson}
+          >
+            {t("sidebar.actions.newLesson")}
+          </Button>
+        </li>
       );
     }
     return <>{unifiedTree.map((node) => renderUnifiedNode(node, 0))}</>;
@@ -1576,7 +1586,7 @@ export function SidebarMinimal() {
           title={t('sidebar.rail.explorer')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "explorer" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1589,7 +1599,7 @@ export function SidebarMinimal() {
           title={t('sidebar.rail.search')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "search" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1602,7 +1612,7 @@ export function SidebarMinimal() {
           title={t('sidebar.rail.recent')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "recent" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1615,7 +1625,7 @@ export function SidebarMinimal() {
           title={t('sidebar.rail.calendar')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "calendar" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1630,7 +1640,7 @@ export function SidebarMinimal() {
           title={trashTotalCount > 0 ? `${t('sidebar.rail.trash')} (${trashTotalCount})` : t('sidebar.rail.trash')}
           className={`relative w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             activePanel === "trash" && pushPanelOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1651,7 +1661,7 @@ export function SidebarMinimal() {
           title={t('sidebar.rail.settings')}
           className={`w-11 h-11 inline-flex items-center justify-center rounded-[10px] transition-all ${
             settingsOpen
-              ? "bg-[var(--tp-accent)]/10 text-[var(--tp-accent)]"
+              ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
               : "text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           }`}
         >
@@ -1687,9 +1697,9 @@ export function SidebarMinimal() {
             <button
               onClick={() => setPushPanelOpen(false)}
               title={t('sidebar.closePanel')}
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors shrink-0 text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+              className="tp-chrome-btn h-7 w-7 inline-flex items-center justify-center rounded-md shrink-0"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <PanelLeft className="h-4 w-4" />
             </button>
           </div>
 
@@ -1702,7 +1712,7 @@ export function SidebarMinimal() {
                   <button
                     onClick={handleCreateLesson}
                     title={selectedFolder ? t('sidebar.tooltips.newLesson', { section: selectedFolder }) : t('sidebar.tooltips.newLessonRoot')}
-                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-7 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <FileText className="w-3.5 h-3.5 shrink-0" />
                     <span className="max-w-full truncate">{t('sidebar.actions.newLesson')}</span>
@@ -1710,7 +1720,7 @@ export function SidebarMinimal() {
                   <button
                     onClick={handleCreateMindmap}
                     title={selectedFolder ? t('sidebar.tooltips.newMindmap', { section: selectedFolder }) : t('sidebar.tooltips.newMindmapRoot')}
-                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-7 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <Network className="w-3.5 h-3.5 shrink-0" />
                     <span className="max-w-full truncate">{t('sidebar.actions.newMindmap')}</span>
@@ -1718,7 +1728,7 @@ export function SidebarMinimal() {
                   <button
                     onClick={handleCreateFolder}
                     title={selectedFolder ? t('sidebar.tooltips.newFolderIn', { section: selectedFolder }) : t('sidebar.tooltips.newFolderIn', { section: t('sidebar.sections.lessonPlans') })}
-                    className="tp-action-btn flex-1 min-w-0 h-9 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
+                    className="tp-action-btn flex-1 min-w-0 h-7 inline-flex items-center justify-center gap-1.5 rounded-md text-[12px] font-medium"
                   >
                     <FolderPlus className="w-3.5 h-3.5 shrink-0" />
                     <span className="max-w-full truncate">{t('sidebar.actions.newFolder')}</span>
@@ -1847,9 +1857,6 @@ export function SidebarMinimal() {
                       subtitle = item.folderPath
                         ? `${rootLabel} / ${item.folderPath.split("/").join(" / ")}`
                         : rootLabel;
-                      if (item.snippet) {
-                        subtitle += `  ·  ${item.snippet}`;
-                      }
                     } else if (item.kind === "material") {
                       subtitle = item.folderPath
                         ? `${t('sidebar.sections.materials')} / ${item.folderPath.split("/").join(" / ")}`
@@ -1887,7 +1894,7 @@ export function SidebarMinimal() {
                               });
                             }
                           }}
-                          className="w-full flex items-start gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                          className="tp-tree-row w-full flex items-start gap-2 px-2 py-1.5 text-left"
                         >
                           <div className="mt-0.5">
                             {item.kind === "lesson" ? (
@@ -1901,8 +1908,18 @@ export function SidebarMinimal() {
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px]">{displayName}</div>
-                            <div className="truncate text-[11px] text-gray-500">{subtitle}</div>
+                            <div className="truncate text-[var(--tp-font-body-sm)]">{displayName}</div>
+                            <div className="truncate text-[var(--tp-font-caption)]" style={{ color: "var(--tp-t-4)" }}>
+                              {subtitle}
+                            </div>
+                            {"snippet" in item && item.snippet && (
+                              <div
+                                className="mt-0.5 line-clamp-2 text-[var(--tp-font-caption)] leading-snug"
+                                style={{ color: "var(--tp-t-3)" }}
+                              >
+                                {item.snippet}
+                              </div>
+                            )}
                           </div>
                         </button>
                       </li>
@@ -1957,14 +1974,14 @@ export function SidebarMinimal() {
                               ),
                             )
                           }
-                          className="w-full flex items-start gap-2 px-2 py-1.5 text-sm rounded-md transition-colors text-left text-gray-400 hover:text-gray-200 hover:bg-[#2d2d2d]"
+                          className="tp-tree-row w-full flex items-start gap-2 px-2 py-1.5 text-left"
                         >
                           <div className="mt-0.5">
                             {r.type === "lesson" ? <LessonIcon /> : <MindmapIcon />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[13px]">{name}</div>
-                            <div className="truncate text-[11px] text-gray-500">{breadcrumb}</div>
+                            <div className="truncate text-[var(--tp-font-body-sm)]">{name}</div>
+                            <div className="truncate text-[var(--tp-font-caption)]" style={{ color: "var(--tp-t-4)" }}>{breadcrumb}</div>
                           </div>
                         </button>
                       </li>
@@ -2060,7 +2077,7 @@ export function SidebarMinimal() {
           <div className="px-4 pt-5">
             <button
               onClick={useAppStore.getState().openVault}
-              className="w-full flex items-center justify-center gap-2 h-9 rounded-md text-sm font-medium text-white transition-colors"
+              className="w-full flex items-center justify-center gap-2 h-8 rounded-md text-[12.5px] font-medium text-white transition-colors"
               style={{ background: "var(--tp-accent)" }}
             >
               <FolderOpen className="w-4 h-4" />
@@ -2106,133 +2123,100 @@ export function SidebarMinimal() {
       )}
 
       {/* Rename Modal */}
-      {renameModal && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              e.stopPropagation();
-              setRenameModal(null);
-            }
-          }}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px] pointer-events-none" />
-          <div
-            className="relative w-[min(420px,calc(100vw-1.5rem))] rounded-xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-2)" }}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--tp-b-1)" }}>
-              <h3 className="text-[14px] font-semibold" style={{ color: "var(--tp-t-1)" }}>
-                {t(renameModal.isDirectory ? 'sidebar.renameDialog.folderTitle' : 'sidebar.renameDialog.fileTitle')}
-              </h3>
-              <p className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                {t('sidebar.renameDialog.currentName', { name: renameModal.currentName })}
-              </p>
-            </div>
-            <div className="px-5 py-4">
-              <input
-                autoFocus
-                type="text"
-                value={renameInput}
-                onChange={(e) => setRenameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitRename();
-                  else if (e.key === "Escape") setRenameModal(null);
-                }}
-                placeholder={t('sidebar.renameDialog.newNamePlaceholder')}
-                className="w-full px-3 py-2 rounded-md text-sm outline-none"
-                style={{
-                  background: "var(--tp-bg-2)",
-                  border: "1px solid var(--tp-b-1)",
-                  color: "var(--tp-t-1)",
-                }}
-              />
-            </div>
-            <div
-              className="px-5 py-3 flex items-center justify-end gap-2"
-              style={{ borderTop: "1px solid var(--tp-b-1)" }}
+      <Dialog
+        open={!!renameModal}
+        onClose={() => setRenameModal(null)}
+        title={
+          renameModal
+            ? t(
+                renameModal.isDirectory
+                  ? "sidebar.renameDialog.folderTitle"
+                  : "sidebar.renameDialog.fileTitle",
+              )
+            : ""
+        }
+        description={
+          renameModal
+            ? t("sidebar.renameDialog.currentName", {
+                name: renameModal.currentName,
+              })
+            : undefined
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setRenameModal(null)}
             >
-              <button
-                onClick={() => setRenameModal(null)}
-                className="px-3 py-1.5 rounded-md text-[13px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={submitRename}
-                disabled={!renameInput.trim()}
-                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "var(--tp-accent)" }}
-              >
-                {t('common.rename')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={submitRename}
+              disabled={!renameInput.trim()}
+            >
+              {t("common.rename")}
+            </Button>
+          </>
+        }
+      >
+        <input
+          data-autofocus
+          type="text"
+          value={renameInput}
+          onChange={(e) => setRenameInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitRename();
+          }}
+          placeholder={t("sidebar.renameDialog.newNamePlaceholder")}
+          className="tp-input"
+        />
+      </Dialog>
 
       {/* New Folder Modal (Tauri webview blocks window.prompt) */}
-      {newFolderModalOpen && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center p-4"
-          onClick={() => setNewFolderModalOpen(false)}
-        >
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
-          <div
-            className="relative w-[min(420px,calc(100vw-1.5rem))] rounded-xl shadow-2xl overflow-hidden"
-            style={{ background: "var(--tp-bg-1)", border: "1px solid var(--tp-b-2)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-5 py-4" style={{ borderBottom: "1px solid var(--tp-b-1)" }}>
-              <h3 className="text-[14px] font-semibold" style={{ color: "var(--tp-t-1)" }}>
-                {t('sidebar.createFolderDialog.title')}
-              </h3>
-              <p className="text-[12px] mt-1" style={{ color: "var(--tp-t-3)" }}>
-                {selectedSub ? t('sidebar.createFolderDialog.inside', { name: selectedSub }) : t('sidebar.createFolderDialog.atVaultRoot')}
-              </p>
-            </div>
-            <div className="px-5 py-4">
-              <input
-                autoFocus
-                type="text"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitNewFolder();
-                  else if (e.key === "Escape") setNewFolderModalOpen(false);
-                }}
-                placeholder={t('sidebar.createFolderDialog.folderNamePlaceholder')}
-                className="w-full px-3 py-2 rounded-md text-sm outline-none"
-                style={{
-                  background: "var(--tp-bg-2)",
-                  border: "1px solid var(--tp-b-1)",
-                  color: "var(--tp-t-1)",
-                }}
-              />
-            </div>
-            <div
-              className="px-5 py-3 flex items-center justify-end gap-2"
-              style={{ borderTop: "1px solid var(--tp-b-1)" }}
+      <Dialog
+        open={newFolderModalOpen}
+        onClose={() => setNewFolderModalOpen(false)}
+        title={t("sidebar.createFolderDialog.title")}
+        description={
+          selectedSub
+            ? t("sidebar.createFolderDialog.inside", { name: selectedSub })
+            : t("sidebar.createFolderDialog.atVaultRoot")
+        }
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setNewFolderModalOpen(false)}
             >
-              <button
-                onClick={() => setNewFolderModalOpen(false)}
-                className="px-3 py-1.5 rounded-md text-[13px] text-[var(--tp-t-3)] hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={submitNewFolder}
-                disabled={!newFolderName.trim()}
-                className="px-3 py-1.5 rounded-md text-[13px] font-medium text-white hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "var(--tp-accent)" }}
-              >
-                {t('common.create')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={submitNewFolder}
+              disabled={!newFolderName.trim()}
+            >
+              {t("common.create")}
+            </Button>
+          </>
+        }
+      >
+        <input
+          data-autofocus
+          type="text"
+          value={newFolderName}
+          onChange={(e) => setNewFolderName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitNewFolder();
+          }}
+          placeholder={t("sidebar.createFolderDialog.folderNamePlaceholder")}
+          className="tp-input"
+        />
+      </Dialog>
     </>
   );
 }

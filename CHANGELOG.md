@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.11.0] - 2026-11-08
+
+### Changed
+- Unified the app on one control scale: 24px small icon actions, 28px standard
+  chrome buttons, 32-34px inputs and font selectors, and 44-48px navigation and
+  modal headers. Applied across the top bar, editor rail, sidebar, calendar,
+  settings, dialogs and chat panel.
+- Reworked the editor right rail with named Text / Color / Blocks / Insert /
+  History groups, centered 40x32px font selectors, a Reset action inside each
+  color palette, and cleaner alignment and subscript groups.
+- Restored the lesson meta strip to the transparent document-header treatment;
+  inputs no longer get opaque grey backgrounds.
+- Moved mindmap Save, Preview, Print and Export into the shared top bar. Added a
+  "Rendering PDF..." busy state and matched icon-only action sizing to labeled
+  actions.
+- Rebalanced the weekly planner: 1600px maximum width, denser day headers and
+  lesson cards, hover/focus card actions, quieter day footers, a subtle accent
+  dot for today, and horizontal scrolling at narrow window widths instead of
+  clipping.
+- Unified sidebar tree rows across explorer, search, recents, materials and
+  trash; search snippets now render on their own line.
+- Replaced the hand-rolled rename and new-folder dialogs with a shared dialog
+  primitive with focus trap, Escape/backdrop close and focus restoration.
+- Simplified Settings: one Done button plus an autosave hint instead of two exit
+  controls; inputs and number steppers now match the control scale.
+- Added a launch skeleton, dynamic window title with dirty marker, folder-based
+  vault label in the status bar, and a real save spinner.
+- Removed the duplicate "Editing" status-bar label and the unused `App.css`.
+
+### Fixed
+- The save-failure close prompt now uses the native dialog plugin instead of
+  `window.confirm`, which always returns `false` in the Tauri webview.
+- The welcome screen no longer flashes before the vault finishes loading.
+- The weekly planner no longer clips at the 960px minimum window width.
+- Inputs, selects and textareas now show a visible keyboard focus ring.
+- Context menus support keyboard roles and arrow-key, Home/End and Enter
+  navigation.
+- Icon-only controls now have accessible labels.
+
 ## [2.10.1] - 2026-11-03
 
 ### Changed

@@ -1,4 +1,4 @@
-ï»¿import { useEditor, EditorContent } from "@tiptap/react";
+import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
@@ -184,7 +184,7 @@ export function Editor() {
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
-  // Last colors picked in the rail â€” reused for one-click re-application.
+  // Last colors picked in the rail — reused for one-click re-application.
   const [highlightColor, setHighlightColor] = useState("#fef08a");
   const [textColor, setTextColor] = useState<string | null>(null);
   const [underlineColor, setUnderlineColor] = useState<string | null>(null);
@@ -340,7 +340,7 @@ export function Editor() {
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
 
-  // â”€â”€ Autosave machinery (ref-based, so typing no longer re-renders the tree) â”€â”€
+  // -- Autosave machinery (ref-based, so typing no longer re-renders the tree) --
   const editorRef = useRef<any>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   // Even while the user is typing without a 1.8 s pause, force a save at
@@ -390,7 +390,7 @@ export function Editor() {
   // The metadata values as last persisted. Autosave triggers compare against
   // these so a timer that fires after merely *opening* a lesson (the metadata
   // sync effects re-arm the autosave on load) can never write to disk when
-  // nothing actually changed â€” regardless of any JSON normalization noise
+  // nothing actually changed — regardless of any JSON normalization noise
   // between the store object and editor.getJSON().
   const lastSavedMetaRef = useRef({
     teacher: activeFileContent?.metadata?.teacher || "",
@@ -557,7 +557,7 @@ export function Editor() {
   const editor = useEditor({
     extensions: [
       // TextStyle must be declared first so it renders OUTSIDE other marks
-      // (e.g. <span style="--tp-underline:â€¦"><u>â€¦</u></span>). The underline
+      // (e.g. <span style="--tp-underline:…"><u>…</u></span>). The underline
       // then picks up the colour via CSS variable; otherwise text-decoration
       // would always be painted with the text colour only.
       TextStyle,
@@ -677,7 +677,7 @@ export function Editor() {
     editorRef.current = editor;
   }, [editor]);
 
-  // â”€â”€ Shared autosave snapshot helper â”€â”€
+  // -- Shared autosave snapshot helper --
   // The snapshot must be byte-identical across the debounced autosave and the
   // switch/unmount flush, so both go through this builder.
   const buildAutosavePayload = useCallback(() => {
@@ -748,7 +748,7 @@ export function Editor() {
     const effectivePlannedFor =
       parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
 
-    // Nothing changed since the last save â€” never touch the disk.
+    // Nothing changed since the last save — never touch the disk.
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
@@ -815,7 +815,7 @@ export function Editor() {
 
   // Flush pending edits for the lesson the editor currently holds. Runs when
   // the active lesson changes, the editor unmounts, or the window is closing
-  // (via the close-flush registry) â€” effect cleanup executes BEFORE the
+  // (via the close-flush registry) — effect cleanup executes BEFORE the
   // incoming lesson's content is loaded, so the editor still shows the
   // outgoing document here. Returns the write promise so the close flow can
   // await the flush before destroying the window.
@@ -832,7 +832,7 @@ export function Editor() {
     const effectivePlannedFor =
       parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
 
-    // Nothing changed since the last save â€” nothing to flush.
+    // Nothing changed since the last save — nothing to flush.
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
@@ -919,7 +919,7 @@ export function Editor() {
     }
 
     // Rebind the per-lesson autosave bookkeeping only when the lesson actually
-    // changes â€” a save updates activeFileContent under the same path, and
+    // changes — a save updates activeFileContent under the same path, and
     // resetting then would drop a freshly armed autosave timer.
     if (autosavePathRef.current !== activeFilePath) {
       const nextDocId = activeFileContent?.metadata?.createdAt ?? activeFilePath;
@@ -998,7 +998,7 @@ export function Editor() {
     // The editor may hold unsaved edits even though the store replaced the
     // content object (re-opening the already-active lesson re-parses the
     // file). Resetting the save baseline then would make the pending
-    // autosave believe the edits were saved â€” keep it until they persist.
+    // autosave believe the edits were saved — keep it until they persist.
     if (docDirtyRef.current) {
       return;
     }
@@ -1349,14 +1349,14 @@ export function Editor() {
         mode === "rewrite"
           ? [
               "You are a writing assistant. Your task is to REWRITE the text below.",
-              "You MUST change the wording â€” do NOT return the same text.",
+              "You MUST change the wording — do NOT return the same text.",
               toneInstruction[tone] ?? toneInstruction.improve,
               "Keep the same general length unless instructed to shorten.",
-              "Return ONLY the rewritten text, nothing else â€” no labels, no quotes, no markdown.",
+              "Return ONLY the rewritten text, nothing else — no labels, no quotes, no markdown.",
             ].join("\n")
           : [
               `You are a translator. Translate the text below into clear, natural ${targetLang}.`,
-              "Return ONLY the translated text, nothing else â€” no labels, no quotes, no markdown.",
+              "Return ONLY the translated text, nothing else — no labels, no quotes, no markdown.",
             ].join("\n");
 
       const prompt = `${instruction}\n\n${sourceText}`;
@@ -1616,7 +1616,7 @@ export function Editor() {
       if (plannedForInput) metaLines.push(`Planned for: ${plannedForInput}`);
       const metaHeader = metaLines.length > 0 ? metaLines.join("\n") + "\n" : "";
 
-      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan â€” no content yet)";
+      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
       const lessonTokens = estimateTokens(lessonBlock);
       const lessonContext = `<lesson_plan>\n${lessonBlock}\n</lesson_plan>`;
 
@@ -1741,7 +1741,7 @@ export function Editor() {
           texts: [lessonContext, ragContext, effectiveSystemPrompt, questionContent, userText, ...recentMessages.map((m) => m.text)],
         });
       } catch {
-        /* engine idle â€” estimates are fine for the bar */
+        /* engine idle — estimates are fine for the bar */
       }
       const countExact = (index: number, str: string) =>
         exactCounts && exactCounts[index] !== undefined ? exactCounts[index] : estimateTokens(str);
@@ -1819,7 +1819,7 @@ export function Editor() {
         );
       };
 
-      // AI v3: streaming relay â€” chunks arrive as ai-stream-{requestId} events.
+      // AI v3: streaming relay — chunks arrive as ai-stream-{requestId} events.
       await new Promise<void>((resolve, reject) => {
         let unlistenFn: (() => void) | null = null;
         const cleanup = () => {
@@ -3347,7 +3347,7 @@ export function Editor() {
                   max={30}
                   value={customTableDialog.rows}
                   onChange={(e) => setCustomTableDialog({ ...customTableDialog, rows: Math.max(1, Math.min(30, Number(e.target.value) || 1)) })}
-                  className="w-20 h-8 px-2 rounded-md text-[12px] text-center outline-none"
+                  className="w-20 h-7 px-2 rounded-md text-[12px] text-center outline-none"
                   style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-1)" }}
                 />
               </div>
@@ -3359,7 +3359,7 @@ export function Editor() {
                   max={12}
                   value={customTableDialog.cols}
                   onChange={(e) => setCustomTableDialog({ ...customTableDialog, cols: Math.max(1, Math.min(12, Number(e.target.value) || 1)) })}
-                  className="w-20 h-8 px-2 rounded-md text-[12px] text-center outline-none"
+                  className="w-20 h-7 px-2 rounded-md text-[12px] text-center outline-none"
                   style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)", color: "var(--tp-t-1)" }}
                 />
               </div>
@@ -3410,14 +3410,14 @@ export function Editor() {
             >
               <button
                 onClick={() => setCustomTableDialog(null)}
-                className="h-8 px-3 rounded-md text-[12px] font-medium transition-colors hover:brightness-125"
+                className="h-7 px-3 rounded-md text-[12px] font-medium transition-colors hover:brightness-125"
                 style={{ background: "var(--tp-bg-3)", color: "var(--tp-t-2)", border: "1px solid var(--tp-b-2)" }}
               >
                 {t("common.cancel")}
               </button>
               <button
                 onClick={confirmInsertCustomTable}
-                className="h-8 px-4 rounded-md text-[12px] font-medium text-white transition-colors hover:brightness-110"
+                className="h-7 px-4 rounded-md text-[12px] font-medium text-white transition-colors hover:brightness-110"
                 style={{ background: "var(--tp-accent)" }}
               >
                 {t("editor.insertTableDialog.title")}

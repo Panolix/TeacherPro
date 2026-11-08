@@ -286,7 +286,22 @@ interface AppState {
     aiEnabled: boolean;
   } | null;
   setEditorActions: (actions: AppState["editorActions"]) => void;
-  
+
+  /**
+   * Same bridge as editorActions, for the mindmap canvas. MindmapView
+   * registers its handlers on mount so the shared TopBar owns the action
+   * buttons instead of a second floating toolbar over the canvas.
+   */
+  mindmapActions: {
+    save: () => void;
+    preview: () => void;
+    print: () => void;
+    export: () => void;
+    addNode: () => void;
+    isPdfBusy: boolean;
+  } | null;
+  setMindmapActions: (actions: AppState["mindmapActions"]) => void;
+
   initVault: () => Promise<void>;
   setSidebarOpen: (isOpen: boolean) => void;
   setLessonZoomMode: (mode: "fit" | "fixed") => void;
@@ -1634,6 +1649,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCurrentView: (view) => set({ currentView: view }),
   editorActions: null,
   setEditorActions: (actions) => set({ editorActions: actions }),
+
+  mindmapActions: null,
+  setMindmapActions: (actions) => set({ mindmapActions: actions }),
 
   openVault: async () => {
     try {

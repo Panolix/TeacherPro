@@ -317,11 +317,11 @@ export const MenuBar = ({
 
   // --- Vertical Right Rail (v3 design) ---
   const railBtn = (isActive?: boolean) =>
-    `h-8 w-10 inline-flex items-center justify-center rounded-md transition-colors ${
+    `h-7 w-9 inline-flex items-center justify-center rounded-md transition-colors ${
       isActive ? "tp-rail-btn-active" : "tp-rail-btn"
     }`;
   const compactBtn = (isActive?: boolean) =>
-    `h-6 w-6 inline-flex items-center justify-center rounded ${
+    `h-7 w-7 inline-flex items-center justify-center rounded ${
       isActive ? "tp-rail-btn-active" : "tp-rail-btn"
     }`;
   const railDivider = (
@@ -330,6 +330,9 @@ export const MenuBar = ({
       style={{ background: "var(--tp-b-1)" }}
       aria-hidden="true"
     />
+  );
+  const railLabel = (label: string) => (
+    <div className="tp-rail-label">{label}</div>
   );
 
   return (
@@ -344,18 +347,22 @@ export const MenuBar = ({
         borderLeft: "1px solid var(--tp-b-1)",
       }}
     >
+      {railLabel(t("editor.toolbar.groups.text"))}
+
       {/* Font size — custom popover dropdown (OS-independent, escapes rail overflow via fixed positioning) */}
       <div ref={fontSizeWrapRef} className="relative">
         <button
           type="button"
           onClick={() => setFontSizeOpen((v) => !v)}
-          className="h-10 w-10 inline-flex items-center justify-center gap-0.5 rounded text-[12.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          className="relative h-8 w-10 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontSize")}
           aria-haspopup="listbox"
           aria-expanded={fontSizeOpen}
         >
-          <span>{currentFontSize.replace("pt", "")}</span>
-          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          <span className="w-full text-center leading-none">
+            {currentFontSize.replace("pt", "")}
+          </span>
+          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 opacity-60" />
         </button>
         {fontSizeOpen && (() => {
           const rect = fontSizeWrapRef.current?.getBoundingClientRect();
@@ -368,9 +375,9 @@ export const MenuBar = ({
                 position: "fixed",
                 top,
                 left,
-                zIndex: 1000,
-                background: "#222222",
-                border: "1px solid #333333",
+                zIndex: "var(--tp-z-dialog)",
+                background: "var(--tp-bg-2)",
+                border: "1px solid var(--tp-b-2)",
                 minWidth: "84px",
               }}
               role="listbox"
@@ -386,8 +393,8 @@ export const MenuBar = ({
                     }}
                     className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
                       isSelected
-                        ? "bg-[rgba(45,134,165,0.12)] text-[var(--tp-accent)]"
-                        : "text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                        ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
+                        : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                     }`}
                     role="option"
                     aria-selected={isSelected}
@@ -406,13 +413,13 @@ export const MenuBar = ({
         <button
           type="button"
           onClick={() => setFontFamilyOpen((v) => !v)}
-          className="h-10 w-10 inline-flex items-center justify-center gap-0.5 rounded text-[12.5px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          className="relative h-8 w-10 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontFamily")}
           aria-haspopup="listbox"
           aria-expanded={fontFamilyOpen}
         >
-          <span>Aa</span>
-          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          <span className="w-full text-center leading-none">Aa</span>
+          <ChevronDown className="pointer-events-none absolute right-1 top-1/2 h-2.5 w-2.5 -translate-y-1/2 opacity-60" />
         </button>
         {fontFamilyOpen && (() => {
           const rect = fontFamilyWrapRef.current?.getBoundingClientRect();
@@ -425,10 +432,12 @@ export const MenuBar = ({
                 position: "fixed",
                 top,
                 left,
-                zIndex: 1000,
-                background: "#222222",
-                border: "1px solid #333333",
+                zIndex: "var(--tp-z-dialog)",
+                background: "var(--tp-bg-2)",
+                border: "1px solid var(--tp-b-2)",
                 minWidth: "172px",
+                maxHeight: "60vh",
+                overflowY: "auto",
               }}
               role="listbox"
             >
@@ -439,7 +448,7 @@ export const MenuBar = ({
                 return (
                   <Fragment key={option.label}>
                     {showGroup && (
-                      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#6b7280]">
+                      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tp-t-4)]">
                         {option.group}
                       </div>
                     )}
@@ -454,8 +463,8 @@ export const MenuBar = ({
                       }}
                       className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
                         isSelected
-                          ? "bg-[rgba(45,134,165,0.12)] text-[var(--tp-accent)]"
-                          : "text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                          ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
+                          : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                       }`}
                       style={{ fontFamily: option.value ?? undefined }}
                       role="option"
@@ -509,56 +518,46 @@ export const MenuBar = ({
       </button>
 
       {railDivider}
+      {railLabel(t("editor.toolbar.groups.color"))}
 
-      {/* Colors A / U / H (each with hidden color picker + reset below) */}
-      <div
-        className="flex flex-col p-0.5 rounded gap-0.5"
-        style={{
-          background: "var(--tp-bg-2)",
-          border: "1px solid var(--tp-b-2)",
-        }}
-      >
-        <div className="flex gap-0.5 relative">
+      {/* Colors A / U / H — left click applies, right click opens the palette.
+          Reset lives inside the palette so the rail stays readable. */}
+      <div className="flex flex-col gap-0.5">
+        <div className="relative">
           <button
             type="button"
             onClick={() => applyTextStyleAttrs({ color: appliedTextColor })}
             onContextMenu={(event) => openPalette("text", event)}
-            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
+            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold"
             title={t("editor.toolbar.textColorToggle")}
-            style={{ background: currentTextColor, color: readableInk(currentTextColor) }}
+            style={{
+              background: currentTextColor,
+              color: readableInk(currentTextColor),
+              border: "1px solid var(--tp-b-3)",
+            }}
           >
             A
           </button>
-
-          <button
-            onClick={() => clearTextStyleAttr("color")}
-            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
-            title={t("editor.toolbar.resetTextColor")}
-          >
-            A-
-          </button>
+          <ChevronDown className="pointer-events-none absolute bottom-0.5 right-0.5 h-2.5 w-2.5 opacity-80" />
         </div>
-        <div className="flex gap-0.5 relative">
+        <div className="relative">
           <button
             type="button"
             onClick={() => applyUnderlineColor(appliedUnderlineColor)}
             onContextMenu={(event) => openPalette("underline", event)}
-            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold"
+            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold"
             title={t("editor.toolbar.underlineColorToggle")}
-            style={{ background: currentUnderlineColor, color: readableInk(currentUnderlineColor) }}
+            style={{
+              background: currentUnderlineColor,
+              color: readableInk(currentUnderlineColor),
+              border: "1px solid var(--tp-b-3)",
+            }}
           >
             U
           </button>
-
-          <button
-            onClick={() => clearTextStyleAttr("underlineColor")}
-            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
-            title={t("editor.toolbar.resetUnderlineColor")}
-          >
-            U-
-          </button>
+          <ChevronDown className="pointer-events-none absolute bottom-0.5 right-0.5 h-2.5 w-2.5 opacity-80" />
         </div>
-        <div className="flex gap-0.5">
+        <div className="relative">
           <button
             type="button"
             onClick={() => {
@@ -569,33 +568,30 @@ export const MenuBar = ({
               }
             }}
             onContextMenu={(event) => openPalette("highlight", event)}
-            className="tp-rail-color-btn inline-flex items-center justify-center h-6 w-6 rounded cursor-pointer relative text-[11px] font-bold hover:brightness-125"
+            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold hover:brightness-125"
             title={t("editor.toolbar.highlightToggle")}
-            style={{ background: currentHighlightColor, color: readableInk(currentHighlightColor) }}
+            style={{
+              background: currentHighlightColor,
+              color: readableInk(currentHighlightColor),
+              border: "1px solid var(--tp-b-3)",
+            }}
           >
             H
           </button>
-
-          <button
-            onClick={() => editor.chain().focus().unsetHighlight().run()}
-            className="h-6 w-6 rounded text-[11px] font-semibold tp-rail-btn"
-            title={t("editor.toolbar.clearHighlight")}
-          >
-            H-
-          </button>
+          <ChevronDown className="pointer-events-none absolute bottom-0.5 right-0.5 h-2.5 w-2.5 opacity-80" />
         </div>
       </div>
 
       {palette && (
         <div
           id="tp-rail-color-palette"
-          className="fixed z-[1000] p-1.5 rounded-lg shadow-2xl"
+          className="fixed z-[var(--tp-z-dialog)] p-1.5 rounded-lg shadow-2xl"
           style={{
             top: palette.top,
             left: palette.left,
-            background: "#222222",
-            border: "1px solid #333333",
-            width: "130px",
+            background: "var(--tp-bg-2)",
+            border: "1px solid var(--tp-b-2)",
+            width: "146px",
           }}
         >
           <div className="grid grid-cols-5 gap-1">
@@ -605,15 +601,32 @@ export const MenuBar = ({
                 type="button"
                 title={color}
                 onClick={() => applyPaletteColor(color)}
-                className="h-[20px] w-[20px] rounded border border-[#444] hover:scale-110 transition-transform"
+                className="h-[22px] w-[22px] rounded border border-[var(--tp-b-3)] transition-transform hover:scale-110"
                 style={{ background: color }}
               />
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (palette.kind === "text") {
+                clearTextStyleAttr("color");
+              } else if (palette.kind === "underline") {
+                clearTextStyleAttr("underlineColor");
+              } else {
+                editor.chain().focus().unsetHighlight().run();
+              }
+              setPalette(null);
+            }}
+            className="mt-1.5 w-full rounded px-2 py-1 text-left text-[var(--tp-font-body-sm)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+          >
+            {t("editor.toolbar.reset")}
+          </button>
         </div>
       )}
 
       {railDivider}
+      {railLabel(t("editor.toolbar.groups.blocks"))}
 
       {/* Headings */}
       <button
@@ -667,8 +680,7 @@ export const MenuBar = ({
 
       {/* Text alignment */}
       <div
-        className="grid grid-cols-2 p-0.5 gap-0.5 rounded"
-        style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)" }}
+        className="grid grid-cols-2 gap-0.5"
       >
         <button
           onClick={() => editor.chain().focus().setTextAlign("left").run()}
@@ -704,8 +716,7 @@ export const MenuBar = ({
 
       {/* Subscript / Superscript */}
       <div
-        className="grid grid-cols-2 p-0.5 gap-0.5 rounded"
-        style={{ background: "var(--tp-bg-2)", border: "1px solid var(--tp-b-2)" }}
+        className="grid grid-cols-2 gap-0.5"
       >
         <button
           onClick={() => editor.chain().focus().toggleSubscript().run()}
@@ -751,6 +762,7 @@ export const MenuBar = ({
       </button>
 
       {railDivider}
+      {railLabel(t("editor.toolbar.groups.insert"))}
 
       {/* Insert table */}
       <button
@@ -783,10 +795,10 @@ export const MenuBar = ({
                 position: "fixed",
                 top,
                 left,
-                zIndex: 1000,
+                zIndex: "var(--tp-z-dialog)",
                 width: "256px",
-                background: "#222222",
-                border: "1px solid #333333",
+                background: "var(--tp-bg-2)",
+                border: "1px solid var(--tp-b-2)",
               }}
             >
               <input
@@ -800,7 +812,7 @@ export const MenuBar = ({
                   }
                 }}
                 placeholder={t("editor.toolbar.linkUrlPlaceholder")}
-                className="w-full px-2 py-1.5 rounded bg-black/25 border border-[#3a3a3a] text-[12.5px] text-[#e5e5e5] outline-none focus:border-[#2d86a5]"
+                className="w-full px-2 py-1.5 rounded bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[12px] text-[var(--tp-t-1)] outline-none focus:border-[var(--tp-accent)]"
               />
               <div className="flex items-center gap-1.5">
                 <button
@@ -818,14 +830,14 @@ export const MenuBar = ({
                           void openUrl(href);
                         }
                       }}
-                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                       title={t("editor.toolbar.linkOpen")}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={removeLink}
-                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[#b8b8b8] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+                      className="h-7 w-7 inline-flex items-center justify-center rounded text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
                       title={t("editor.toolbar.linkRemove")}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -839,6 +851,7 @@ export const MenuBar = ({
       </div>
 
       {railDivider}
+      {railLabel(t("editor.toolbar.groups.history"))}
 
       {/* Undo / Redo */}
       <button

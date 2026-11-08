@@ -314,7 +314,7 @@ export function AiChatPanel({
                 <button
                   onClick={() => { void onSend(); }}
                   disabled={busy || !input.trim()}
-                  className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-lg bg-[var(--tp-accent)] text-white hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
                   title={busy ? t("editor.panels.aiIsResponding") : t("editor.panels.send")}
                 >
                   <Send className="w-3.5 h-3.5" />

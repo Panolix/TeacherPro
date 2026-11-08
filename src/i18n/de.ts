@@ -125,6 +125,14 @@
       fontGroupHandwriting: "Handschrift",
       fontGroupSystem: "Systemschriften",
       railLabel: "Formatierungsleiste",
+      reset: "Zurücksetzen",
+      groups: {
+        text: "Text",
+        color: "Farbe",
+        blocks: "Blöcke",
+        insert: "Einfügen",
+        history: "Verlauf",
+      },
       taskList: "Checkliste",
       alignLeft: "Linksbündig",
       alignCenter: "Zentriert",
@@ -481,6 +489,8 @@
     printSavePdf: "Drucken / PDF speichern",
     exportPdf: "PDF exportieren",
     save: "Speichern",
+    addNode: "Knoten hinzufügen",
+    renderingPdf: "PDF wird erstellt…",
   },
 
   calendar: {
@@ -504,9 +514,12 @@
       add: "Hinzufügen",
       deleting: "Lösche...",
       all: "Alle",
+      newLesson: "Neue Stunde",
     },
     placeholders: {
       freeDay: "Freier Tag",
+      emptyWeek: "Diese Woche sind keine Stunden geplant",
+      emptyWeekHint: "Erstelle die erste Stunde für diese Woche.",
     },
     tooltips: {
       dragToReschedule: "Ziehen zum Verschieben oder Sortieren",
@@ -591,6 +604,7 @@
   settings: {
     title: "Einstellungen",
     close: "Einstellungen schließen",
+    autosaveHint: "Änderungen werden automatisch gespeichert.",
     aiV3: {
       title: "KI-Modelle (lokale Engine)",
       subtitle:

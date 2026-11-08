@@ -6,7 +6,6 @@ import {
   Sparkles,
   HardDrive,
   SlidersHorizontal,
-  Save,
   Minus,
   Plus,
   HardDriveDownload,
@@ -22,6 +21,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { AI_CONTEXT_SIZES, useAppStore, type AccentColor } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
 import { SubjectDbManager } from "./SubjectDbManager";
+import { Button } from "./ui/Button";
 
 const ACCENT_OPTIONS: Array<{ value: AccentColor; label: string; labelKey: string; color: string }> = [
   { value: "blue", label: "Blue", labelKey: "settings.accentLabels.blue", color: "#2d86a5" },
@@ -601,7 +601,7 @@ export function SettingsModal({ open, onClose }: Props) {
                             const next = subjects.map((x, i) => (i === idx ? { ...x, color: e.target.value } : x));
                             setSubjects(next);
                           }}
-                          className="h-9 w-10 cursor-pointer rounded border border-[var(--tp-b-1)] bg-transparent p-0.5 shrink-0"
+                          className="h-8 w-9 cursor-pointer rounded border border-[var(--tp-b-1)] bg-transparent p-0.5 shrink-0"
                         />
                         <input
                           type="text"
@@ -615,7 +615,7 @@ export function SettingsModal({ open, onClose }: Props) {
                         />
                         <button
                           onClick={() => setSubjects(subjects.filter((_, i) => i !== idx))}
-                          className="h-9 w-9 inline-flex items-center justify-center rounded-md text-[var(--tp-t-3)] hover:text-red-400 hover:bg-[var(--tp-bg-4)]"
+                          className="h-8 w-8 inline-flex items-center justify-center rounded-md text-[var(--tp-t-3)] hover:text-red-400 hover:bg-[var(--tp-bg-4)]"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -1144,11 +1144,15 @@ export function SettingsModal({ open, onClose }: Props) {
         </div>
 
         <div className="tp-settings-footer">
-          <button onClick={onClose} className="tp-btn">{t("common.close")}</button>
-          <button onClick={onClose} className="tp-btn tp-btn-primary">
-            <Save className="w-3.5 h-3.5" />
+          <span
+            className="mr-auto text-[var(--tp-font-body-sm)]"
+            style={{ color: "var(--tp-t-4)" }}
+          >
+            {t("settings.autosaveHint")}
+          </span>
+          <Button variant="primary" size="sm" onClick={onClose}>
             {t("common.done")}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

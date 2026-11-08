@@ -275,6 +275,44 @@ body {
   --tp-statusbar-h: 1.625rem;/* 26px */
   --tp-rail-w:      4rem;    /* 64px */
 
+  /* ========== v4 UI scale (new primitives) ========== */
+  /* Type: 5 steps. 11px is reserved for uppercase micro-labels. */
+  --tp-font-caption: 11px;
+  --tp-font-body-sm: 12.5px;
+  --tp-font-body:    14px;
+  --tp-font-title:   16px;
+  --tp-font-display: 22px;
+
+  /* Spacing: 4 / 8 / 12 / 16 / 24 */
+  --tp-space-1: 4px;
+  --tp-space-2: 8px;
+  --tp-space-3: 12px;
+  --tp-space-4: 16px;
+  --tp-space-6: 24px;
+
+  /* Radius hierarchy: control / card / modal / paper */
+  --tp-radius-control: 6px;
+  --tp-radius-card:    10px;
+  --tp-radius-modal:   14px;
+
+  /* Control heights: icon / compact / control / top bar */
+  --tp-control-sm: 24px;
+  --tp-control-md: 28px;
+  --tp-control-lg: 34px;
+  --tp-control-xl: 48px;
+
+  /* One z-index ladder. Menus sit above content, dialogs above modals. */
+  --tp-z-menu:     60;
+  --tp-z-popover:  70;
+  --tp-z-modal:    80;
+  --tp-z-dialog:   90;
+  --tp-z-toast:   100;
+
+  /* Accent-aware state tints (follow the accent setting, unlike the old
+     hard-coded teal rgba values). */
+  --tp-accent-tint:      color-mix(in srgb, var(--tp-accent) 14%, transparent);
+  --tp-accent-tint-soft: color-mix(in srgb, var(--tp-accent) 8%, transparent);
+
   /* Lesson paper — canonical A4 landscape dimensions (px-locked to PDF export) */
   --tp-export-content-w: 1062px;                                /* 281mm @ 96dpi — matches PDF export clone width */
   --tp-paper-padding-x:   28px;                                 /* decorative margin between paper edge & content */
@@ -320,9 +358,17 @@ body {
    suppress the default outline for mouse/touch users. */
 button:focus-visible,
 [role="button"]:focus-visible,
-a:focus-visible {
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--tp-accent) !important;
   outline-offset: 2px;
+}
+
+/* ProseMirror owns its caret; a ring around the whole page would look wrong. */
+.ProseMirror:focus-visible {
+  outline: none !important;
 }
 
 /* Respect the OS "reduce motion" preference. */
@@ -670,12 +716,23 @@ html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror li {
   color: #111827 !important;
 }
 
+/* The meta strip is part of the document header, not a form. Keep the
+   transparent input treatment and let the underline carry the affordance. */
 html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-input,
-html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-planned-input,
-html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger button {
-  background-color: #f8fafc !important;
-  border-color: #cbd5e1 !important;
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-planned-input {
+  background-color: transparent !important;
+  border-color: transparent !important;
   color: #0f172a !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .tp-meta-input {
+  border-bottom-color: rgba(0, 0, 0, 0.12);
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger button {
+  background-color: transparent !important;
+  border-color: #d7dee8 !important;
+  color: #64748b !important;
 }
 
 html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror table {
@@ -1369,13 +1426,63 @@ button:where(:active):not(:disabled) {
   transition: all 120ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ===== Shared tree row (explorer, search, recents, materials, trash) =====
+   One visual language for every navigable row in the sidebar. The row keeps
+   its structural layout classes; this only standardises colour, type, radius
+   and the active indicator. */
+.tp-tree-row {
+  position: relative;
+  color: var(--tp-t-2);
+  font-size: var(--tp-font-body-sm);
+  border-radius: var(--tp-radius-control);
+  transition:
+    background-color 120ms var(--tp-ease),
+    color 120ms var(--tp-ease);
+}
+.tp-tree-row:hover {
+  background: var(--tp-bg-3);
+  color: var(--tp-t-1);
+}
+.tp-tree-row[data-active="true"] {
+  background: var(--tp-accent-tint);
+  color: var(--tp-t-1);
+}
+.tp-tree-row[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  bottom: 5px;
+  width: 2px;
+  border-radius: 999px;
+  background: var(--tp-accent);
+}
+.tp-tree-meta {
+  color: var(--tp-t-4);
+  font-size: var(--tp-font-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Right-rail group caption. */
+.tp-rail-label {
+  width: 100%;
+  padding: 4px 4px 2px;
+  text-align: center;
+  font-size: var(--tp-font-caption);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tp-t-4);
+  user-select: none;
+}
+
 /* ===== Craft-style v2 Context Menu ===== */
 .tp-context-menu {
   min-width: 176px;
   max-width: 280px;
-  background: #222222;
-  border: 1px solid #333333;
-  border-radius: 8px;
+  background: var(--tp-bg-2);
+  border: 1px solid var(--tp-b-2);
+  border-radius: var(--tp-radius-control);
   padding: 4px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3);
   font-family: inherit;
@@ -1401,7 +1508,7 @@ button:where(:active):not(:disabled) {
 }
 
 .tp-cm-item.active {
-  background: rgba(45, 134, 165, 0.12);
+  background: var(--tp-accent-tint);
   color: var(--tp-accent);
 }
 
@@ -1456,14 +1563,14 @@ button:where(:active):not(:disabled) {
   font-weight: 500;
   color: #9a9a9a;
   padding: 2px 6px;
-  background: #2a2a2a;
-  border-radius: 6px;
+  background: var(--tp-bg-4);
+  border-radius: var(--tp-radius-control);
   font-family: inherit;
 }
 
 .tp-cm-divider {
   height: 1px;
-  background: #2a2a2a;
+  background: var(--tp-b-1);
   margin: 6px 0;
 }
 
@@ -1598,7 +1705,7 @@ button:where(:active):not(:disabled) {
 
 .tp-settings-tab.active {
   color: #ffffff;
-  background: rgba(45, 134, 165, 0.12);
+  background: var(--tp-accent-tint);
 }
 
 .tp-settings-content {
@@ -1648,14 +1755,14 @@ button:where(:active):not(:disabled) {
 }
 
 .tp-input {
-  height: 38px;
+  height: var(--tp-control-lg);
   padding: 0 12px;
   background: #252525;
   border: 1px solid #2a2a2a;
-  border-radius: 10px;
+  border-radius: var(--tp-radius-control);
   color: #ffffff;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   outline: none;
   transition: border-color 120ms;
   width: 100%;
@@ -1736,8 +1843,8 @@ select.tp-input {
 }
 
 .tp-color-option {
-  width: 32px;
-  height: 32px;
+  width: var(--tp-control-md);
+  height: var(--tp-control-md);
   border-radius: 50%;
   cursor: pointer;
   transition: all 120ms;
@@ -1760,8 +1867,8 @@ button.tp-color-option:active {
 }
 
 .tp-color-custom {
-  width: 32px;
-  height: 32px;
+  width: var(--tp-control-md);
+  height: var(--tp-control-md);
   border-radius: 50%;
   border: 2px dashed #404040;
   background: transparent;
@@ -1770,8 +1877,8 @@ button.tp-color-option:active {
 }
 
 .tp-num-btn {
-  width: 32px;
-  height: 32px;
+  width: var(--tp-control-md);
+  height: var(--tp-control-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1791,6 +1898,7 @@ button.tp-color-option:active {
 
 .tp-num-input {
   width: 60px;
+  height: var(--tp-control-md);
   text-align: center;
   appearance: textfield;
   -moz-appearance: textfield;
@@ -1814,8 +1922,8 @@ button.tp-color-option:active {
 }
 
 .tp-btn {
-  height: 36px;
-  padding: 0 18px;
+  height: var(--tp-control-md);
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1823,10 +1931,10 @@ button.tp-color-option:active {
   border: 1px solid #333333;
   color: #b8b8b8;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--tp-font-body-sm);
   font-weight: 500;
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: var(--tp-radius-control);
   transition: all 120ms;
 }
 
