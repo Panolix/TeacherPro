@@ -11,6 +11,7 @@ use tauri_plugin_fs::FsExt;
 
 mod ai;
 mod subject_db;
+mod vault_paths;
 
 
 pub(crate) fn command_for<S: AsRef<OsStr>>(program: S) -> Command {
@@ -74,10 +75,12 @@ fn register_vault_root(path: String) -> Result<(), String> {
     if candidate.parent().is_none() {
         return Err("The filesystem root cannot be used as a vault.".to_string());
     }
-    let canonical = std::fs::canonicalize(&candidate).unwrap_or(candidate);
-    if let Ok(mut guard) = VAULT_ROOT.lock() {
-        *guard = Some(canonical);
+    let canonical = std::fs::canonicalize(&candidate)
+        .map_err(|e| format!("Cannot resolve vault root: {e}"))?;
+    if canonical.parent().is_none() {
+        return Err("The filesystem root cannot be used as a vault.".into());
     }
+    *VAULT_ROOT.lock().map_err(|_| "Vault registry is not accessible.")? = Some(canonical);
     Ok(())
 }
 
@@ -445,30 +448,12 @@ fn print_pdf_file(path: String) -> Result<(), String> {
             return Err("Failed to open the PDF in Preview.".to_string());
         }
 
-        // Print the spooled document once Preview has loaded it. Search all
-        // open documents by the fixed spool prefix so an unrelated PDF the
-        // user already had open can never be printed by mistake. The only
-        // string in the AppleScript source is that prefix, so there is
-        // nothing to inject.
-        let script = "tell application \"Preview\"\n\
-             activate\n\
-             set targetDoc to missing value\n\
-             repeat 40 times\n\
-             repeat with d in (every document)\n\
-             if (name of d) contains \"teacherpro-print-\" then\n\
-             set targetDoc to d\n\
-             exit repeat\n\
-             end if\n\
-             end repeat\n\
-             if targetDoc is not missing value then exit repeat\n\
-             delay 0.25\n\
-             end repeat\n\
-             if targetDoc is not missing value then\n\
-             print targetDoc with print dialog\n\
-             end if\n\
-             end tell";
+        // Match this exact spool document, never a previous TeacherPro print.
+        // The filename is a script argument, not interpolated source code.
+        let script = include_str!("../scripts/print-preview.applescript");
 
-        spawn_detached(command_for("osascript").arg("-e").arg(script))?;
+        let spool_name = spool_path.file_name().ok_or("Missing print spool filename.")?;
+        spawn_detached(command_for("osascript").arg("-e").arg(script).arg(spool_name))?;
     }
 
     #[cfg(target_os = "windows")]
@@ -570,8 +555,8 @@ static CLOSE_CONFIRMED: AtomicBool = AtomicBool::new(false);
 /// acts if it still owns the latest generation, so an old timer cannot close
 /// the window after the user cancelled and started another attempt.
 static CLOSE_GENERATION: AtomicU64 = AtomicU64::new(0);
-/// How long a close request waits for the webview flush before force-closing.
-/// Generous enough for the save-failure confirmation dialog to be answered.
+/// Wait for renderer acknowledgement, not disk writes or a user's dialog
+/// decision. The frontend cancels this watchdog before beginning its flush.
 const CLOSE_FLUSH_GRACE: Duration = Duration::from_secs(30);
 
 /// Called by the webview after it flushed pending document saves in response

@@ -34,8 +34,19 @@ pub fn db_path(vault_path: &str) -> std::path::PathBuf {
         .join("index.db")
 }
 
+pub fn checked_db_path(vault_path: &str) -> Result<std::path::PathBuf, String> {
+    let path =
+        crate::vault_paths::resolve_within(std::path::Path::new(vault_path), &db_path(vault_path))?;
+    // Read-only listing/query connections can also touch SQLite sidecars.
+    for suffix in ["-wal", "-shm", "-journal"] {
+        let sidecar = std::path::PathBuf::from(format!("{}{suffix}", path.display()));
+        crate::vault_paths::resolve_within(std::path::Path::new(vault_path), &sidecar)?;
+    }
+    Ok(path)
+}
+
 pub fn open(vault_path: &str) -> Result<Connection, String> {
-    let path = db_path(vault_path);
+    let path = checked_db_path(vault_path)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -48,11 +59,14 @@ pub fn open(vault_path: &str) -> Result<Connection, String> {
     // immediately with SQLITE_BUSY while another connection is writing.
     conn.busy_timeout(std::time::Duration::from_secs(5))
         .map_err(|e| format!("Failed to configure SubjectDB busy timeout: {e}"))?;
-    conn.pragma_update(None, "journal_mode", "WAL").ok();
-    conn.pragma_update(None, "synchronous", "NORMAL").ok();
+    conn.pragma_update(None, "journal_mode", "WAL")
+        .map_err(|e| e.to_string())?;
+    conn.pragma_update(None, "synchronous", "NORMAL")
+        .map_err(|e| e.to_string())?;
     // Required for the vecs ON DELETE CASCADE to fire (SQLite defaults FK off);
     // without it, replaced/deleted docs leave orphan vec blobs behind.
-    conn.pragma_update(None, "foreign_keys", "ON").ok();
+    conn.pragma_update(None, "foreign_keys", "ON")
+        .map_err(|e| e.to_string())?;
     create_schema(&conn)?;
     Ok(conn)
 }
@@ -61,6 +75,10 @@ fn create_schema(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         r#"
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS documents (
+            doc_key TEXT PRIMARY KEY,
+            fingerprint TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS chunks (
             chunk_id INTEGER PRIMARY KEY,
             doc_key TEXT NOT NULL,
@@ -101,8 +119,9 @@ pub fn replace_document(
     topic: &str,
     source_file: &str,
     rows: &[(String, i64, String, Vec<f32>)], // (text, page, lang, vec)
+    fingerprint: &str,
 ) -> Result<usize, String> {
-    let doc_key = format!("{subject}/{grade}/{topic}/{source_file}");
+    let doc_key = document_key(subject, grade, topic, source_file);
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
     // Old rows deleted; the fts_del trigger removes their FTS entries and the
     // vecs FK cascade removes their vectors.
@@ -132,8 +151,60 @@ pub fn replace_document(
         )
         .map_err(|e| e.to_string())?;
     }
+    tx.execute(
+        "INSERT INTO documents(doc_key, fingerprint) VALUES(?1, ?2)
+         ON CONFLICT(doc_key) DO UPDATE SET fingerprint = excluded.fingerprint",
+        params![doc_key, fingerprint],
+    )
+    .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
     Ok(rows.len())
+}
+
+pub fn document_key(subject: &str, grade: &str, topic: &str, filename: &str) -> String {
+    format!("{subject}/{grade}/{topic}/{filename}")
+}
+
+pub fn document_unchanged(conn: &Connection, key: &str, fingerprint: &str) -> Result<bool, String> {
+    use rusqlite::OptionalExtension;
+    let stored = conn
+        .query_row(
+            "SELECT fingerprint FROM documents WHERE doc_key=?1",
+            [key],
+            |r| r.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    Ok(stored.as_deref() == Some(fingerprint))
+}
+
+/// Reconcile only after a complete directory scan. Failed imports remain seen,
+/// so they keep their previous index instead of being mistaken for deletions.
+pub fn retain_documents(
+    conn: &Connection,
+    seen: &std::collections::HashSet<String>,
+) -> Result<(), String> {
+    let existing = {
+        let mut stmt = conn
+            .prepare("SELECT doc_key FROM documents UNION SELECT DISTINCT doc_key FROM chunks")
+            .map_err(|e| e.to_string())?;
+        let keys = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        keys
+    };
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    for key in existing {
+        if !seen.contains(&key) {
+            tx.execute("DELETE FROM chunks WHERE doc_key=?1", [&key])
+                .map_err(|e| e.to_string())?;
+            tx.execute("DELETE FROM documents WHERE doc_key=?1", [&key])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    tx.commit().map_err(|e| e.to_string())
 }
 
 /// Remove all chunks for a source file under a hierarchy prefix.
@@ -149,6 +220,13 @@ pub fn delete_document_by_source(
     source_file: &str,
 ) -> Result<(), String> {
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    // Remove fingerprints while the matching chunk metadata still exists.
+    tx.execute(
+        "DELETE FROM documents WHERE doc_key IN (SELECT doc_key FROM chunks WHERE subject=?1
+         AND (?2 IS NULL OR grade=?2) AND (?3 IS NULL OR topic=?3) AND source_file=?4)",
+        params![subject, grade, topic, source_file],
+    )
+    .map_err(|e| e.to_string())?;
     match (grade, topic) {
         (Some(g), Some(t)) => tx.execute(
             "DELETE FROM chunks WHERE subject=?1 AND grade=?2 AND topic=?3 AND source_file=?4",
@@ -176,6 +254,12 @@ pub fn delete_hierarchy(
     topic: Option<&str>,
 ) -> Result<(), String> {
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute(
+        "DELETE FROM documents WHERE doc_key IN (SELECT doc_key FROM chunks WHERE subject=?1
+         AND (?2 IS NULL OR grade=?2) AND (?3 IS NULL OR topic=?3))",
+        params![subject, grade, topic],
+    )
+    .map_err(|e| e.to_string())?;
     if let Some(g) = grade {
         if let Some(t) = topic {
             tx.execute(
@@ -383,6 +467,8 @@ pub fn reset_if_embedder_changed(conn: &Connection, embedder_id: &str) -> Result
         return Ok(false);
     }
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM documents", [])
+        .map_err(|e| e.to_string())?;
     if chunk_total(conn)? > 0 {
         tx.execute("DELETE FROM chunks", [])
             .map_err(|e| e.to_string())?;
@@ -444,4 +530,127 @@ fn blob_to_vec(blob: &[u8]) -> Vec<f32> {
 
 fn dot(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> (tempfile::TempDir, Connection) {
+        let dir = tempfile::tempdir().unwrap();
+        let conn = open(dir.path().to_str().unwrap()).unwrap();
+        (dir, conn)
+    }
+
+    fn insert(conn: &Connection, topic: &str, source: &str, text: &str, hash: &str) {
+        replace_document(
+            conn,
+            "English",
+            "9",
+            topic,
+            source,
+            &[(text.into(), 1, "en".into(), vec![1.0, 0.0])],
+            hash,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn unchanged_documents_are_skipped_and_replacements_refresh_all_indexes() {
+        let (_dir, conn) = fixture();
+        let key = document_key("English", "9", "Grammar", "lesson.pdf");
+        insert(&conn, "Grammar", "lesson.pdf", "oldvocabulary", "hash-one");
+        assert!(document_unchanged(&conn, &key, "hash-one").unwrap());
+        assert!(!document_unchanged(&conn, &key, "hash-two").unwrap());
+        insert(&conn, "Grammar", "lesson.pdf", "newvocabulary", "hash-two");
+        assert_eq!(chunk_total(&conn).unwrap(), 1);
+        assert!(
+            fts_search(&conn, "English", None, None, None, "oldvocabulary", 5)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            fts_search(&conn, "English", None, None, None, "newvocabulary", 5)
+                .unwrap()
+                .len(),
+            1
+        );
+        let vectors: i64 = conn
+            .query_row("SELECT COUNT(*) FROM vecs", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(vectors, 1);
+    }
+
+    #[test]
+    fn external_deletions_prune_chunks_vectors_fts_and_fingerprints() {
+        let (_dir, conn) = fixture();
+        insert(
+            &conn,
+            "Grammar",
+            "removed.pdf",
+            "removedvocabulary",
+            "hash-one",
+        );
+        insert(&conn, "Grammar", "kept.pdf", "keptvocabulary", "hash-two");
+        let kept = document_key("English", "9", "Grammar", "kept.pdf");
+        retain_documents(&conn, &std::collections::HashSet::from([kept.clone()])).unwrap();
+        assert_eq!(chunk_total(&conn).unwrap(), 1);
+        assert!(document_unchanged(&conn, &kept, "hash-two").unwrap());
+        assert!(!document_unchanged(
+            &conn,
+            &document_key("English", "9", "Grammar", "removed.pdf"),
+            "hash-one"
+        )
+        .unwrap());
+        assert!(
+            fts_search(&conn, "English", None, None, None, "removedvocabulary", 5)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            dense_search(&conn, "English", None, None, None, &[1.0, 0.0], 5)
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn same_named_pdfs_in_other_topics_survive_scoped_deletion() {
+        let (_dir, conn) = fixture();
+        insert(&conn, "Grammar", "lesson.pdf", "grammar", "hash-one");
+        insert(&conn, "Writing", "lesson.pdf", "writing", "hash-two");
+        delete_document_by_source(&conn, "English", Some("9"), Some("Grammar"), "lesson.pdf")
+            .unwrap();
+        assert_eq!(chunk_total(&conn).unwrap(), 1);
+        assert!(document_unchanged(
+            &conn,
+            &document_key("English", "9", "Writing", "lesson.pdf"),
+            "hash-two"
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn embedding_model_changes_clear_fingerprints_too() {
+        let (_dir, conn) = fixture();
+        reset_if_embedder_changed(&conn, "model-one").unwrap();
+        insert(&conn, "Grammar", "lesson.pdf", "grammar", "hash-one");
+        assert!(reset_if_embedder_changed(&conn, "model-two").unwrap());
+        assert_eq!(chunk_total(&conn).unwrap(), 0);
+        assert!(!document_unchanged(
+            &conn,
+            &document_key("English", "9", "Grammar", "lesson.pdf"),
+            "hash-one"
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn rejects_traversing_database_roots() {
+        let vault = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(vault.path().join("SubjectDBs")).unwrap();
+        // Parent components are forbidden independently of whether the file exists.
+        assert!(checked_db_path(vault.path().join("../other").to_str().unwrap()).is_err());
+    }
 }

@@ -1,0 +1,55 @@
+name: macOS Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Cache engine artifacts
+        uses: actions/cache@v6
+        with:
+          path: src-tauri/resources/engines
+          key: engines-${{ runner.os }}-${{ hashFiles('scripts/engine-config.json') }}
+
+      - name: Fetch bundled llama-server engine
+        run: npm run fetch:engines
+
+      - name: Compile native Preview print script
+        run: osacompile -o "$RUNNER_TEMP/teacherpro-print.scpt" src-tauri/scripts/print-preview.applescript
+
+      - name: Verify exact print document targeting
+        run: osascript src-tauri/scripts/print-preview.applescript --self-test
+
+      - name: Frontend regression tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Native macOS Rust tests
+        run: cargo test --locked
+        working-directory: src-tauri
+
+      - name: Native macOS Rust clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+        working-directory: src-tauri

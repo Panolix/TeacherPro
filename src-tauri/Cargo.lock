@@ -4,10 +4,11 @@ version = 4
 
 [[package]]
 name = "TeacherPro"
-version = "2.11.1"
+version = "2.11.2"
 dependencies = [
  "fastembed",
  "pdf-extract",
+ "reqwest 0.12.28",
  "rusqlite",
  "serde",
  "serde_json",
@@ -22,6 +23,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-store",
  "tempfile",
+ "tokio",
  "ureq",
  "uuid",
  "whatlang",

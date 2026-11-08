@@ -36,10 +36,12 @@ import { MaterialLink } from "./extensions/MaterialLink";
 import { TextStyle, FontFamily } from "@tiptap/extension-text-style";
 import { FontSize } from "./extensions/FontSize";
 import { UnderlineColor } from "./extensions/UnderlineColor";
-import { formatIsoToEuropeanDate, parseEuropeanDateToDate, parseEuropeanDateToIso } from "../utils/dates";
+import { parseEuropeanDateToDate, parseEuropeanDateToIso } from "../utils/dates";
 import { normalizeColorForPicker } from "../utils/colors";
 import { snapSelectionInsideTextblock } from "../utils/editorSelection";
 import { registerCloseFlusher } from "../utils/closeFlush";
+import { lessonDocumentKey } from "../utils/lessonIdentity";
+import { useLessonMetadata } from "./editor/useLessonMetadata";
 import { AppLink, WordStyleTextAlign } from "./editor/editorExtensions";
 import { MenuBar } from "./editor/MenuBar";
 import { LessonPdfPreviewModal } from "./editor/LessonPdfPreviewModal";
@@ -153,12 +155,10 @@ export function Editor() {
     setSubjectDatabases,
   } = useAppStore();
   const { t } = useTranslation();
-  const [subject, setSubject] = useState(activeFileContent?.metadata?.subject || "");
-  const [teacher, setTeacher] = useState(activeFileContent?.metadata?.teacher || "");
-  const [lessonNotes, setLessonNotes] = useState(activeFileContent?.notes || "");
-  const [plannedForInput, setPlannedForInput] = useState(
-    formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
-  );
+  const {
+    subject, setSubject, teacher, setTeacher, lessonNotes, setLessonNotes,
+    plannedForInput, setPlannedForInput, plannedCalendarMonth, setPlannedCalendarMonth,
+  } = useLessonMetadata(activeFileContent);
   const [isAiBusy, setIsAiBusy] = useState(false);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [customTableDialog, setCustomTableDialog] = useState<{
@@ -168,7 +168,6 @@ export function Editor() {
   } | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
-  const [plannedCalendarMonth, setPlannedCalendarMonth] = useState(new Date());
   const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [methodBankOpen, setMethodBankOpen] = useState(false);
@@ -184,7 +183,7 @@ export function Editor() {
 
   const paperScrollRef = useRef<HTMLDivElement | null>(null);
   const [fitZoom, setFitZoom] = useState(1);
-  // Last colors picked in the rail — reused for one-click re-application.
+  // Last colors picked in the rail ï¿½ reused for one-click re-application.
   const [highlightColor, setHighlightColor] = useState("#fef08a");
   const [textColor, setTextColor] = useState<string | null>(null);
   const [underlineColor, setUnderlineColor] = useState<string | null>(null);
@@ -309,8 +308,9 @@ export function Editor() {
   const [chatInput, setChatInput] = useState("");
   const [isChatBusy, setIsChatBusy] = useState(false);
   const [chatMessages, setChatMessages] = useState<AiChatMessage[]>(() => {
-    const initialDocumentId =
-      activeFileContent?.metadata?.createdAt ?? activeFilePath ?? null;
+    const initialDocumentId = activeFilePath
+      ? lessonDocumentKey(vaultPath, activeFileContent, activeFilePath)
+      : null;
     return initialDocumentId && aiPersistChats
       ? chatCacheByDocument.get(initialDocumentId) ?? []
       : [];
@@ -318,6 +318,8 @@ export function Editor() {
   const ragChunksRef = useRef<ScoredChunk[]>([]);
   const activeStreamIdRef = useRef<string | null>(null);
   const chatBusyRef = useRef(false);
+  const chatMountedRef = useRef(true);
+  const activeChatCleanupRef = useRef<(() => void) | null>(null);
 
   const stopAiStreaming = useCallback(async () => {
     const id = activeStreamIdRef.current;
@@ -328,6 +330,16 @@ export function Editor() {
       console.error("stream cancel failed:", e);
     }
   }, []);
+
+  useEffect(() => {
+    chatMountedRef.current = true;
+    return () => {
+      chatMountedRef.current = false;
+      void stopAiStreaming();
+      activeChatCleanupRef.current?.();
+      activeChatCleanupRef.current = null;
+    };
+  }, [stopAiStreaming]);
 
   const selectDb = useCallback((scope: SubjectDbScope) => {
     ragChunksRef.current = [];
@@ -356,7 +368,7 @@ export function Editor() {
   // Stable document identity. A save-driven rename changes the path but not
   // the identity, so it must not reset the dirty/revision bookkeeping.
   const autosaveDocIdRef = useRef<string | null>(
-    activeFileContent?.metadata?.createdAt ?? null,
+    activeFileContent?.id ?? null,
   );
   // Latest autosave inputs. Updated after every commit; the flush reads it
   // during effect cleanup, i.e. while it still holds the outgoing lesson's
@@ -368,6 +380,7 @@ export function Editor() {
     lessonNotes: string;
     lastKnownPlannedFor: string | null;
     baseMetadata: LessonMetadata | null;
+    documentId: string | undefined;
   }>({
     teacher,
     subject,
@@ -375,6 +388,7 @@ export function Editor() {
     lessonNotes,
     lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
     baseMetadata: activeFileContent?.metadata ?? null,
+    documentId: activeFileContent?.id,
   });
   useEffect(() => {
     autosaveInputsRef.current = {
@@ -384,13 +398,14 @@ export function Editor() {
       lessonNotes,
       lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
       baseMetadata: activeFileContent?.metadata ?? null,
+      documentId: activeFileContent?.id,
     };
   });
 
   // The metadata values as last persisted. Autosave triggers compare against
   // these so a timer that fires after merely *opening* a lesson (the metadata
   // sync effects re-arm the autosave on load) can never write to disk when
-  // nothing actually changed — regardless of any JSON normalization noise
+  // nothing actually changed ï¿½ regardless of any JSON normalization noise
   // between the store object and editor.getJSON().
   const lastSavedMetaRef = useRef({
     teacher: activeFileContent?.metadata?.teacher || "",
@@ -416,7 +431,9 @@ export function Editor() {
       candidate.plannedFor !== lastSavedMetaRef.current.plannedFor,
     [],
   );
-  const chatDocumentId = activeFileContent?.metadata?.createdAt ?? activeFilePath ?? null;
+  const chatDocumentId = activeFilePath
+    ? lessonDocumentKey(vaultPath, activeFileContent, activeFilePath)
+    : null;
 
   // Keep the session-level chat cache current. The editor is remounted when
   // the document identity changes (to reset undo history), so this cache is
@@ -487,22 +504,6 @@ export function Editor() {
   }, [language]);
 
   useEffect(() => {
-    setSubject(activeFileContent?.metadata?.subject || "");
-    setTeacher(activeFileContent?.metadata?.teacher || "");
-    setLessonNotes(activeFileContent?.notes || "");
-    setPlannedForInput(formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor));
-    const selectedDate = parseEuropeanDateToDate(
-      formatIsoToEuropeanDate(activeFileContent?.metadata?.plannedFor),
-    );
-    setPlannedCalendarMonth(selectedDate || new Date());
-  }, [
-    activeFileContent?.metadata?.subject,
-    activeFileContent?.metadata?.teacher,
-    activeFileContent?.metadata?.plannedFor,
-    activeFileContent?.notes,
-  ]);
-
-  useEffect(() => {
     const closeMenu = () => {
       setTableContextMenu(null);
       setSlashMenu(null);
@@ -557,7 +558,7 @@ export function Editor() {
   const editor = useEditor({
     extensions: [
       // TextStyle must be declared first so it renders OUTSIDE other marks
-      // (e.g. <span style="--tp-underline:…"><u>…</u></span>). The underline
+      // (e.g. <span style="--tp-underline:ï¿½"><u>ï¿½</u></span>). The underline
       // then picks up the colour via CSS variable; otherwise text-decoration
       // would always be painted with the text colour only.
       TextStyle,
@@ -748,7 +749,7 @@ export function Editor() {
     const effectivePlannedFor =
       parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
 
-    // Nothing changed since the last save — never touch the disk.
+    // Nothing changed since the last save ï¿½ never touch the disk.
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
@@ -815,7 +816,7 @@ export function Editor() {
 
   // Flush pending edits for the lesson the editor currently holds. Runs when
   // the active lesson changes, the editor unmounts, or the window is closing
-  // (via the close-flush registry) — effect cleanup executes BEFORE the
+  // (via the close-flush registry) ï¿½ effect cleanup executes BEFORE the
   // incoming lesson's content is loaded, so the editor still shows the
   // outgoing document here. Returns the write promise so the close flow can
   // await the flush before destroying the window.
@@ -832,7 +833,7 @@ export function Editor() {
     const effectivePlannedFor =
       parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
 
-    // Nothing changed since the last save — nothing to flush.
+    // Nothing changed since the last save ï¿½ nothing to flush.
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
@@ -858,6 +859,7 @@ export function Editor() {
     };
     const lessonData: LessonData = {
       version: 1,
+      id: inputs.documentId,
       metadata: {
         ...baseMetadata,
         teacher: inputs.teacher,
@@ -919,10 +921,10 @@ export function Editor() {
     }
 
     // Rebind the per-lesson autosave bookkeeping only when the lesson actually
-    // changes — a save updates activeFileContent under the same path, and
+    // changes ï¿½ a save updates activeFileContent under the same path, and
     // resetting then would drop a freshly armed autosave timer.
     if (autosavePathRef.current !== activeFilePath) {
-      const nextDocId = activeFileContent?.metadata?.createdAt ?? activeFilePath;
+      const nextDocId = activeFileContent?.id ?? activeFilePath;
       const sameDocument =
         autosaveDocIdRef.current !== null && autosaveDocIdRef.current === nextDocId;
 
@@ -942,6 +944,9 @@ export function Editor() {
       if (!sameDocument) {
         clearAutosaveTimer();
       }
+      // A rename only changes the save target. The echoed disk snapshot may
+      // already be older than the editor's text, so never reload it here.
+      if (sameDocument) return;
     }
 
     try {
@@ -998,7 +1003,7 @@ export function Editor() {
     // The editor may hold unsaved edits even though the store replaced the
     // content object (re-opening the already-active lesson re-parses the
     // file). Resetting the save baseline then would make the pending
-    // autosave believe the edits were saved — keep it until they persist.
+    // autosave believe the edits were saved ï¿½ keep it until they persist.
     if (docDirtyRef.current) {
       return;
     }
@@ -1349,14 +1354,14 @@ export function Editor() {
         mode === "rewrite"
           ? [
               "You are a writing assistant. Your task is to REWRITE the text below.",
-              "You MUST change the wording — do NOT return the same text.",
+              "You MUST change the wording ï¿½ do NOT return the same text.",
               toneInstruction[tone] ?? toneInstruction.improve,
               "Keep the same general length unless instructed to shorten.",
-              "Return ONLY the rewritten text, nothing else — no labels, no quotes, no markdown.",
+              "Return ONLY the rewritten text, nothing else ï¿½ no labels, no quotes, no markdown.",
             ].join("\n")
           : [
               `You are a translator. Translate the text below into clear, natural ${targetLang}.`,
-              "Return ONLY the translated text, nothing else — no labels, no quotes, no markdown.",
+              "Return ONLY the translated text, nothing else ï¿½ no labels, no quotes, no markdown.",
             ].join("\n");
 
       const prompt = `${instruction}\n\n${sourceText}`;
@@ -1616,7 +1621,7 @@ export function Editor() {
       if (plannedForInput) metaLines.push(`Planned for: ${plannedForInput}`);
       const metaHeader = metaLines.length > 0 ? metaLines.join("\n") + "\n" : "";
 
-      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan — no content yet)";
+      const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan ï¿½ no content yet)";
       const lessonTokens = estimateTokens(lessonBlock);
       const lessonContext = `<lesson_plan>\n${lessonBlock}\n</lesson_plan>`;
 
@@ -1741,7 +1746,7 @@ export function Editor() {
           texts: [lessonContext, ragContext, effectiveSystemPrompt, questionContent, userText, ...recentMessages.map((m) => m.text)],
         });
       } catch {
-        /* engine idle — estimates are fine for the bar */
+        /* engine idle ï¿½ estimates are fine for the bar */
       }
       const countExact = (index: number, str: string) =>
         exactCounts && exactCounts[index] !== undefined ? exactCounts[index] : estimateTokens(str);
@@ -1785,6 +1790,7 @@ export function Editor() {
       );
 
       const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      if (!chatMountedRef.current) return;
       activeStreamIdRef.current = requestId;
 
       const assistantId = `assistant-${Date.now()}`;
@@ -1819,12 +1825,17 @@ export function Editor() {
         );
       };
 
-      // AI v3: streaming relay — chunks arrive as ai-stream-{requestId} events.
+      // AI v3: streaming relay ï¿½ chunks arrive as ai-stream-{requestId} events.
       await new Promise<void>((resolve, reject) => {
         let unlistenFn: (() => void) | null = null;
         const cleanup = () => {
           unlistenFn?.();
           unlistenFn = null;
+          activeChatCleanupRef.current = null;
+        };
+        activeChatCleanupRef.current = () => {
+          cleanup();
+          reject(new Error("cancelled"));
         };
         tauriListen<{
           kind: string;
@@ -1852,6 +1863,11 @@ export function Editor() {
           }
         })
           .then((unlisten) => {
+            if (!chatMountedRef.current) {
+              unlisten();
+              reject(new Error("cancelled"));
+              return;
+            }
             unlistenFn = unlisten;
             return tauriInvoke("ai_chat", {
               requestId,
@@ -1883,6 +1899,7 @@ export function Editor() {
       );
       setAiStatusMessage(t("editor.chat.done"));
     } catch (error) {
+      if (!chatMountedRef.current) return;
       console.error("AI chat failed:", error);
       setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
       setChatMessages((previous) => [
@@ -1895,8 +1912,9 @@ export function Editor() {
         },
       ]);
     } finally {
+      activeStreamIdRef.current = null;
       chatBusyRef.current = false;
-      setIsChatBusy(false);
+      if (chatMountedRef.current) setIsChatBusy(false);
     }
   }, [aiEnabled, aiV3ChatModelId, aiV3ContextSize, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
 

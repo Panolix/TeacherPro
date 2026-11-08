@@ -1,12 +1,18 @@
 ﻿pub mod pdf;
 pub mod chunk;
 pub mod store_sqlite;
+mod scan;
 
 use crate::ai::embeddings;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::Emitter;
+use tauri_plugin_fs::FsExt;
+
+// Serialize scans and deletes so an import cannot restore rows after deletion.
+static WRITE_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+    std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 // ── Data structures ──────────────────────────────────────────
 
@@ -86,7 +92,7 @@ fn subject_db_dir(vault_path: &str) -> PathBuf {
 /// points outside the vault. All destructive SubjectDB operations go through
 /// this check before touching the filesystem.
 fn subject_db_dir_checked(vault_path: &str) -> Result<PathBuf, String> {
-    let db_dir = subject_db_dir(vault_path);
+    let db_dir = crate::vault_paths::resolve_within(Path::new(vault_path), &subject_db_dir(vault_path))?;
     std::fs::create_dir_all(&db_dir).map_err(|e| format!("Failed to create SubjectDBs: {e}"))?;
     let canonical_db =
         std::fs::canonicalize(&db_dir).map_err(|e| format!("Failed to resolve SubjectDBs: {e}"))?;
@@ -96,6 +102,10 @@ fn subject_db_dir_checked(vault_path: &str) -> Result<PathBuf, String> {
         return Err("SubjectDBs resolves outside the vault.".to_string());
     }
     Ok(canonical_db)
+}
+
+fn checked_db_target(vault_path: &str, path: &Path) -> Result<PathBuf, String> {
+    crate::vault_paths::resolve_within(&subject_db_dir_checked(vault_path)?, path)
 }
 
 /// Validate a single folder or file name coming from the frontend.
@@ -112,7 +122,7 @@ fn validate_segment(raw: &str, field: &str) -> Result<String, String> {
         return Err(format!("Invalid {field}."));
     }
     #[cfg(windows)]
-    if raw.contains('\\') || raw.contains(':') {
+    if raw.contains('\\') || raw.contains(':') || raw.ends_with([' ', '.']) {
         // A drive-relative component such as `C:` or `C:foo` has a Windows
         // path prefix: PathBuf::join replaces the vault root with it instead
         // of appending, so it must never pass as a plain folder name.
@@ -161,7 +171,9 @@ fn list_pdf_files(dir: &Path, existing_sources: &HashSet<String>) -> Result<Vec<
 }
 
 fn read_existing_sources(vault_path: &str, subject: &str, grade: &str, topic: &str) -> HashSet<String> {
-    let db_path = store_sqlite::db_path(vault_path);
+    let Ok(db_path) = store_sqlite::checked_db_path(vault_path) else {
+        return HashSet::new();
+    };
     if !db_path.exists() {
         return HashSet::new();
     }
@@ -179,6 +191,14 @@ fn read_existing_sources(vault_path: &str, subject: &str, grade: &str, topic: &s
 
 
 
+fn mark_loose_pdf_status(vault: &str, subject: &str, grade: Option<&str>, files: &mut [SubjectDbFile]) {
+    for pdf in files {
+        let stem = Path::new(&pdf.name).file_stem().and_then(|s| s.to_str()).unwrap_or(&pdf.name);
+        pdf.is_embedded = read_existing_sources(vault, subject, grade.unwrap_or(stem), stem).contains(&pdf.name);
+        pdf.chunk_count = usize::from(pdf.is_embedded);
+    }
+}
+
 // ── subject_db_list ──────────────────────────────────────────
 
 #[tauri::command]
@@ -190,7 +210,7 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
     if !db_dir.exists() { return Ok(Vec::new()); }
 
     let sqlite_counts: std::collections::HashMap<(String, String, String), i64> = {
-        let db_path = store_sqlite::db_path(&vault_path);
+        let db_path = store_sqlite::checked_db_path(&vault_path)?;
         let mut map = std::collections::HashMap::new();
         if db_path.exists() {
             if let Ok(conn) = rusqlite::Connection::open_with_flags(
@@ -221,36 +241,24 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
     let mut subjects = Vec::new();
     for s_entry in collect_dirs(&db_dir)? {
         let subject_name = s_entry.file_name().to_string_lossy().to_string();
-        let subject_path = s_entry.path();
+        let subject_path = checked_db_target(&vault_path, &s_entry.path())?;
 
-        let subject_pdfs = list_pdf_files_in_dir(&subject_path);
+        let mut subject_pdfs = list_pdf_files_in_dir(&subject_path);
+        mark_loose_pdf_status(&vault_path, &subject_name, None, &mut subject_pdfs);
 
         let mut grades = Vec::new();
         for g_entry in collect_dirs(&subject_path)? {
             let grade_name = g_entry.file_name().to_string_lossy().to_string();
-            let grade_path = g_entry.path();
+            let grade_path = checked_db_target(&vault_path, &g_entry.path())?;
 
             // Grade-pdfs live in the DB with topic = stem; check per-topic counts.
             let mut grade_pdfs = list_pdf_files_in_dir(&grade_path);
-            for pdf in &mut grade_pdfs {
-                let stem = Path::new(&pdf.name)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(&pdf.name)
-                    .to_string();
-                let embedded = sqlite_counts
-                    .keys()
-                    .any(|(s, g, t)| s == &subject_name && g == &grade_name && (t == &pdf.name || t == &stem));
-                if embedded {
-                    pdf.is_embedded = true;
-                    pdf.chunk_count = 1;
-                }
-            }
+            mark_loose_pdf_status(&vault_path, &subject_name, Some(&grade_name), &mut grade_pdfs);
 
             let mut topics = Vec::new();
             for t_entry in collect_dirs(&grade_path)? {
                 let topic_name = t_entry.file_name().to_string_lossy().to_string();
-                let topic_path = t_entry.path();
+                let topic_path = checked_db_target(&vault_path, &t_entry.path())?;
 
                 let chunk_count = sqlite_counts
                     .get(&(subject_name.clone(), grade_name.clone(), topic_name.clone()))
@@ -300,6 +308,7 @@ pub async fn subject_db_scan_import(
     app: tauri::AppHandle,
     vault_path: String,
 ) -> Result<ImportResult, String> {
+    let _write_guard = WRITE_LOCK.lock().await;
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
@@ -311,192 +320,35 @@ pub async fn subject_db_scan_import(
     let mut processed_files = 0usize;
     let mut errors: Vec<String> = Vec::new();
 
-    // Open the DB fresh per usage site; rusqlite::Connection is not Send, so it
-    // must never be held across an await point.
-    let existing_map = {
+    // Discover everything before modifying the index: incomplete directory
+    // listings must never be mistaken for deleted documents.
+    let documents = scan::collect_documents(&vault_path, &db_dir)?;
+    let seen: HashSet<String> = documents.iter().map(|doc|
+        store_sqlite::document_key(&doc.meta.subject, &doc.meta.grade, &doc.meta.topic, &doc.filename)
+    ).collect();
+    {
         let conn = store_sqlite::open(&vault_path)?;
-        // A different embedding model produces incomparable vectors — wipe the
-        // index so this scan re-embeds every file from scratch.
         store_sqlite::reset_if_embedder_changed(&conn, embeddings::EMBEDDER_ID)?;
-        let mut map: std::collections::HashMap<(String, String, String), HashSet<String>> =
-            std::collections::HashMap::new();
-        for s_entry in collect_dirs(&db_dir)? {
-            let subject = s_entry.file_name().to_string_lossy().to_string();
-            for g_entry in collect_dirs(&s_entry.path())? {
-                let grade = g_entry.file_name().to_string_lossy().to_string();
-                for t_entry in collect_dirs(&g_entry.path())? {
-                    let topic = t_entry.file_name().to_string_lossy().to_string();
-                    let sources = store_sqlite::embedded_sources(&conn, &subject, &grade, &topic)
-                        .unwrap_or_default();
-                    map.insert(
-                        (subject.clone(), grade.clone(), topic.clone()),
-                        sources.into_iter().collect(),
-                    );
-                }
-            }
-        }
-        map
-    };
-
-    let subject_dirs = collect_dirs(&db_dir)?;
-    for s_entry in &subject_dirs {
-        let subject_name = s_entry.file_name().to_string_lossy().to_string();
-        let subject_path = s_entry.path();
-
-        let _ = app.emit("subject-db-progress", serde_json::json!({
-            "phase": "subject", "subject": &subject_name,
-        }));
-
-        // 1) Process topic-level folders
-        for g_entry in collect_dirs(&subject_path)? {
-            let grade_name = g_entry.file_name().to_string_lossy().to_string();
-            let grade_path = g_entry.path();
-
-            for t_entry in collect_dirs(&grade_path)? {
-                let topic_name = t_entry.file_name().to_string_lossy().to_string();
-                let topic_path = t_entry.path();
-
-                let meta = FolderMeta {
-                    subject: subject_name.clone(),
-                    grade: grade_name.clone(),
-                    topic: topic_name.clone(),
-                };
-
-                let existing = existing_map
-                    .get(&(subject_name.clone(), grade_name.clone(), topic_name.clone()))
-                    .cloned()
-                    .unwrap_or_default();
-                let result = process_topic_folder(&topic_path, &meta, &app, existing, &vault_path).await?;
-                total_chunks += result.0;
-                processed_files += result.1;
-                errors.extend(result.2);
-            }
-
-            // 2) Process PDFs directly in the grade folder (not in a topic subfolder)
-            let existing = existing_map
-                .get(&(subject_name.clone(), grade_name.clone(), String::new()))
-                .cloned()
-                .unwrap_or_default();
-            let result =
-                process_loose_pdfs(&grade_path, &subject_name, &grade_name, &app, existing, &vault_path).await?;
-            total_chunks += result.0;
-            processed_files += result.1;
-            errors.extend(result.2);
-        }
-
-        // 3) Process PDFs directly in the subject folder
-        let result = process_loose_pdfs(&subject_path, &subject_name, "", &app, HashSet::new(), &vault_path).await?;
-        total_chunks += result.0;
-        processed_files += result.1;
-        errors.extend(result.2);
     }
-
+    for doc in documents {
+        let _ = app.emit("subject-db-progress", serde_json::json!({
+            "phase": "file", "filename": &doc.filename,
+            "subject": &doc.meta.subject, "grade": &doc.meta.grade, "topic": &doc.meta.topic,
+        }));
+        match process_and_embed_pdf(&doc.path, &doc.filename, &doc.meta, &vault_path).await {
+            Ok(Some(count)) => {
+                total_chunks += count;
+                processed_files += 1;
+            }
+            Ok(None) => {},
+            Err(e) => errors.push(format!("{}: {e}", doc.filename)),
+        }
+    }
+    {
+        let conn = store_sqlite::open(&vault_path)?;
+        store_sqlite::retain_documents(&conn, &seen)?;
+    }
     Ok(ImportResult { total_chunks, processed_files, errors })
-}
-
-/// Process a topic folder: find new PDFs, chunk, embed, save.
-async fn process_topic_folder(
-    topic_path: &Path,
-    meta: &FolderMeta,
-    app: &tauri::AppHandle,
-    existing_sources: HashSet<String>,
-    vault_path: &str,
-) -> Result<(usize, usize, Vec<String>), String> {
-    let mut pdf_files: Vec<_> = std::fs::read_dir(topic_path)
-        .map_err(|e| format!("read topic dir: {e}"))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && is_pdf_path(&e.path()))
-        .collect();
-    pdf_files.sort_by_key(|e| e.file_name());
-
-    let mut total_chunks = 0usize;
-    let mut processed = 0usize;
-    let mut errors = Vec::new();
-
-    for entry in &pdf_files {
-        let filename = entry.file_name().to_string_lossy().to_string();
-        if existing_sources.contains(&filename) { continue; }
-
-        let _ = app.emit("subject-db-progress", serde_json::json!({
-            "phase": "file", "filename": &filename,
-            "subject": &meta.subject, "grade": &meta.grade, "topic": &meta.topic,
-        }));
-
-        match process_and_embed_pdf(&entry.path(), &filename, meta, vault_path).await {
-            Ok(count) => {
-                total_chunks += count;
-                processed += 1;
-            }
-            Err(e) => errors.push(format!("{filename}: {e}")),
-        }
-    }
-
-    Ok((total_chunks, processed, errors))
-}
-
-/// Process PDFs that are loose in a folder (not inside a topic subfolder).
-/// Saves chunks to `grade/chunks.json` with topic = filename stem.
-/// When grade is empty (subject-level files), saves to `subject/{stem}/chunks.json` 
-/// with the stem used as both grade and topic.
-async fn process_loose_pdfs(
-    folder_path: &Path,
-    subject: &str,
-    grade: &str,
-    _app: &tauri::AppHandle,
-    known_sources: HashSet<String>,
-    vault_path: &str,
-) -> Result<(usize, usize, Vec<String>), String> {
-    let mut pdf_files: Vec<_> = std::fs::read_dir(folder_path)
-        .map_err(|e| format!("read dir: {e}"))?
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().is_file() && is_pdf_path(&e.path()))
-        .collect();
-    pdf_files.sort_by_key(|e| e.file_name());
-
-    let mut total_chunks = 0usize;
-    let mut processed = 0usize;
-    let mut errors = Vec::new();
-
-    for entry in &pdf_files {
-        let filename = entry.file_name().to_string_lossy().to_string();
-        let stem = entry.path().file_stem().and_then(|s| s.to_str()).unwrap_or(&filename).to_string();
-
-        let (meta, file_to_process) = if grade.is_empty() {
-            let dir = folder_path.join(&stem);
-            std::fs::create_dir_all(&dir).ok();
-            let dest = dir.join(&filename);
-            if !dest.exists() { std::fs::rename(entry.path(), &dest).ok(); }
-            (
-                FolderMeta {
-                    subject: subject.to_string(),
-                    grade: stem.clone(),
-                    topic: stem.clone(),
-                },
-                dest,
-            )
-        } else {
-            (
-                FolderMeta {
-                    subject: subject.to_string(),
-                    grade: grade.to_string(),
-                    topic: stem.clone(),
-                },
-                entry.path().to_path_buf(),
-            )
-        };
-
-        if known_sources.contains(&filename) { continue; }
-
-        match process_and_embed_pdf(&file_to_process, &filename, &meta, vault_path).await {
-            Ok(count) => {
-                total_chunks += count;
-                processed += 1;
-            }
-            Err(e) => errors.push(format!("{filename}: {e}")),
-        }
-    }
-
-    Ok((total_chunks, processed, errors))
 }
 
 /// Extract text → chunk → embed a single PDF file (fastembed in-process).
@@ -505,8 +357,17 @@ async fn process_and_embed_pdf(
     filename: &str,
     meta: &FolderMeta,
     vault_path: &str,
-) -> Result<usize, String> {
-    let pages = pdf::extract_text_from_pdf(path)?;
+) -> Result<Option<usize>, String> {
+    let path = checked_db_target(vault_path, path)?;
+    let file_for_hash = path.clone();
+    let fingerprint = crate::ai::client::run_blocking(move || scan::fingerprint(&file_for_hash)).await?;
+    {
+        let conn = store_sqlite::open(vault_path)?;
+        let key = store_sqlite::document_key(&meta.subject, &meta.grade, &meta.topic, filename);
+        if store_sqlite::document_unchanged(&conn, &key, &fingerprint)? { return Ok(None); }
+    }
+    let file_for_extract = path.clone();
+    let pages = crate::ai::client::run_blocking(move || pdf::extract_text_from_pdf(&file_for_extract)).await?;
     let total_text: usize = pages.iter().map(|p| p.text.len()).sum();
     if total_text < 10 {
         return Err("no text content (scanned PDF?)".to_string());
@@ -514,7 +375,7 @@ async fn process_and_embed_pdf(
 
     let chunks = chunk::chunk_pages(&pages, meta, filename);
     if chunks.is_empty() {
-        return Ok(0);
+        return Ok(Some(0));
     }
     let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
 
@@ -544,6 +405,10 @@ async fn process_and_embed_pdf(
         .collect();
 
     let count = rows.len();
+    let file_for_final_hash = path.clone();
+    if crate::ai::client::run_blocking(move || scan::fingerprint(&file_for_final_hash)).await? != fingerprint {
+        return Err("PDF changed during import; scan again.".into());
+    }
     // SQLite write happens here (short, non-async scope — Connection never
     // crosses an await point).
     let conn = store_sqlite::open(vault_path)?;
@@ -554,8 +419,9 @@ async fn process_and_embed_pdf(
         &meta.topic,
         filename,
         &rows,
+        &fingerprint,
     )?;
-    Ok(count)
+    Ok(Some(count))
 }
 
 static APP_HANDLE: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
@@ -568,12 +434,14 @@ pub fn init_subject_db(app: &tauri::AppHandle) {
 
 #[tauri::command]
 pub async fn subject_db_add_pdfs(
+    app: tauri::AppHandle,
     vault_path: String,
     subject: String,
     grade: Option<String>,
     topic: Option<String>,
     file_paths: Vec<String>,
 ) -> Result<(), String> {
+    let _write_guard = WRITE_LOCK.lock().await;
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
@@ -588,18 +456,27 @@ pub async fn subject_db_add_pdfs(
         (Some(g), None) => base.join(g),
         (None, _) => base,  // subject level (topic ignored if present without grade)
     };
+    let target_dir = checked_db_target(&vault_path, &target_dir)?;
+
+    // Native filesystem calls do not enforce the dialog/plugin scope for us.
+    let sources = file_paths.iter().map(|src| {
+        let path = std::fs::canonicalize(src).map_err(|e| format!("Cannot resolve PDF source: {e}"))?;
+        if !path.is_file() || !is_pdf_path(&path) || !app.fs_scope().is_allowed(&path) {
+            return Err("PDF source was not selected or is not an allowed PDF.".to_string());
+        }
+        Ok(path)
+    }).collect::<Result<Vec<_>, String>>()?;
 
     std::fs::create_dir_all(&target_dir)
         .map_err(|e| format!("Failed to create target dir: {e}"))?;
 
     let mut copied = 0usize;
-    for src in &file_paths {
-        let src_path = Path::new(src);
+    for src_path in &sources {
         let filename = src_path.file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "unknown.pdf".to_string());
         if !filename.to_lowercase().ends_with(".pdf") { continue; }
-        let dest = target_dir.join(&filename);
+        let dest = checked_db_target(&vault_path, &target_dir.join(&filename))?;
         if dest.exists() { continue; }
         match std::fs::copy(src_path, &dest) {
             Ok(_) => copied += 1,
@@ -623,6 +500,7 @@ pub async fn subject_db_delete_file(
     topic: Option<String>,
     filename: String,
 ) -> Result<(), String> {
+    let _write_guard = WRITE_LOCK.lock().await;
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
@@ -637,6 +515,7 @@ pub async fn subject_db_delete_file(
         (Some(g), None) => base.join(g).join(&filename),
         (None, _) => base.join(&filename),
     };
+    let file_path = checked_db_target(&vault_path, &file_path)?;
 
     if file_path.exists() {
         std::fs::remove_file(&file_path)
@@ -698,7 +577,7 @@ pub async fn subject_db_query(
 
     let top_k = top_k.clamp(1, 50) as usize;
 
-    let db_path = store_sqlite::db_path(&vault_path);
+    let db_path = store_sqlite::checked_db_path(&vault_path)?;
     if !db_path.exists() {
         return Ok(Vec::new());
     }
@@ -768,6 +647,7 @@ pub async fn subject_db_delete(
     grade: Option<String>,
     topic: Option<String>,
 ) -> Result<(), String> {
+    let _write_guard = WRITE_LOCK.lock().await;
     let vault_path = crate::validated_vault_path(&vault_path)?
         .to_string_lossy()
         .to_string();
@@ -776,7 +656,17 @@ pub async fn subject_db_delete(
     let topic = topic.map(|t| validate_segment(&t, "topic")).transpose()?;
 
     let db_dir = subject_db_dir_checked(&vault_path)?;
-    let target = db_dir.join(&subject);
+    let target = checked_db_target(&vault_path, &db_dir.join(&subject))?;
+    let target = match (&grade, &topic) {
+        (Some(g), Some(t)) => checked_db_target(&vault_path, &target.join(g).join(t))?,
+        (Some(g), None) => checked_db_target(&vault_path, &target.join(g))?,
+        (None, _) => target,
+    };
+
+    // Validate the full hierarchy before changing either disk or index rows.
+    if target.exists() {
+        std::fs::remove_dir_all(&target).map_err(|e| format!("delete database folder: {e}"))?;
+    }
 
     {
         let conn = store_sqlite::open(&vault_path)?;
@@ -788,29 +678,27 @@ pub async fn subject_db_delete(
         )?;
     }
 
-    if let Some(g) = &grade {
-        let grade_dir = target.join(g);
-        if let Some(t) = &topic {
-            let topic_dir = grade_dir.join(t);
-            if topic_dir.exists() {
-                std::fs::remove_dir_all(&topic_dir)
-                    .map_err(|e| format!("delete topic dir: {e}"))?;
-            }
-        } else if grade_dir.exists() {
-            std::fs::remove_dir_all(&grade_dir)
-                .map_err(|e| format!("delete grade dir: {e}"))?;
-        }
-    } else if target.exists() {
-        std::fs::remove_dir_all(&target)
-            .map_err(|e| format!("delete subject dir: {e}"))?;
-    }
     Ok(())
 }
 // ── Utility ──────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
-    use super::validate_segment;
+    use super::{mark_loose_pdf_status, store_sqlite, validate_segment, SubjectDbFile};
+
+    #[test]
+    fn loose_pdf_status_matches_its_synthetic_hierarchy() {
+        let vault = tempfile::tempdir().unwrap();
+        let path = vault.path().to_str().unwrap();
+        let conn = store_sqlite::open(path).unwrap();
+        let rows = [("fixture text".to_string(), 1, "en".to_string(), vec![1.0, 0.0])];
+        store_sqlite::replace_document(&conn, "English", "curriculum", "curriculum", "curriculum.pdf", &rows, "fingerprint").unwrap();
+        let mut files = vec![SubjectDbFile { name: "curriculum.pdf".into(), is_embedded: false, chunk_count: 0 }];
+        mark_loose_pdf_status(path, "English", None, &mut files);
+        assert!(files[0].is_embedded);
+        mark_loose_pdf_status(path, "English", Some("9"), &mut files);
+        assert!(!files[0].is_embedded);
+    }
 
     #[test]
     fn accepts_plain_folder_names() {
@@ -826,6 +714,9 @@ mod tests {
         assert!(validate_segment("C:foo", "grade").is_err());
         assert!(validate_segment("D:\\outside", "topic").is_err());
         assert!(validate_segment("file:name.pdf", "filename").is_err());
+        assert!(validate_segment(".. ", "subject").is_err());
+        assert!(validate_segment(". ", "subject").is_err());
+        assert!(validate_segment("topic.", "topic").is_err());
     }
 
     #[test]

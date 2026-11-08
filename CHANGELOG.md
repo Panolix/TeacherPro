@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.11.2] - 2026-11-08
+
+### Fixed
+- Completed saves no longer replace newer notes or lesson metadata. Renaming a
+  lesson no longer reloads an older text snapshot over in-progress edits.
+- Vault and weekly-view switches wait for pending saves; failed saves require
+  an explicit discard decision. Vault switches clear stale document/database state.
+- Duplicated lessons receive separate document identities, undo history and
+  chat sessions, and include the latest saved edits.
+- Failed atomic file replacement preserves the original document and a complete
+  temporary recovery copy instead of falling back to a truncating direct write.
+- Subject database operations validate nested paths, junctions/symlinks, PDF
+  import sources and SQLite sidecars. Filesystem-root aliases are rejected.
+- Knowledge-base rescans detect changed PDFs, remove externally deleted files
+  from the index and skip unchanged files at every folder level. Subject-level
+  PDFs remain in their original location and report their correct indexed state.
+- AI Stop can interrupt stalled response headers/body reads. Cancelled and
+  failed requests release their listeners and cancellation state.
+- The window-close watchdog no longer overrides a pending save/discard dialog.
+- Uppercase `.JSON` lessons and mindmaps now open correctly.
+- macOS printing matches the exact current spool document, not an earlier print.
+
+### Tests
+- Added 39 regression tests: 29 frontend and 51 Rust tests pass on Windows.
+- Added a macOS preflight workflow for native Rust tests, Clippy, AppleScript
+  compilation and exact-document targeting checks.
+- No visual redesign or new user-facing features.
+
+### Notes
+- Existing lesson files remain supported; stable IDs are retained on save.
+- The next knowledge-base scan computes missing fingerprints and may re-index
+  existing PDFs. Original PDF files are not rewritten.
+
 ## [2.11.1] - 2026-11-08
 
 ### Changed

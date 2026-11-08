@@ -8,9 +8,9 @@ pub mod downloader;
 pub mod embeddings;
 pub mod engine;
 pub mod hardware;
+mod stream;
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use downloader::DownloadJob;
@@ -20,7 +20,7 @@ use engine::EngineState;
 pub struct AiState {
     pub engine: Mutex<EngineState>,
     pub downloads: Mutex<HashMap<String, DownloadJob>>,
-    pub stream_cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    pub stream_cancels: Mutex<HashMap<String, Arc<stream::Cancellation>>>,
     /// User-chosen default model ("Use" in settings); session-scoped until P2 persists it.
     pub selected_model: Mutex<Option<String>>,
 }

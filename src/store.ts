@@ -1,5 +1,5 @@
 ﻿import { create } from "zustand";
-import { open } from "@tauri-apps/plugin-dialog";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import {
   readDir,
   DirEntry,
@@ -28,6 +28,7 @@ import {
 } from "./utils/trash";
 import { enqueueDocumentWrite } from "./utils/documentWriteQueue";
 import { flushOpenDocuments } from "./utils/closeFlush";
+import { duplicateLessonData, LessonIdentityRegistry } from "./utils/lessonIdentity";
 
 export interface LessonMetadata {
   teacher: string;
@@ -39,6 +40,7 @@ export interface LessonMetadata {
 
 export interface LessonData {
   version: 1;
+  id?: string;
   metadata: LessonMetadata;
   notes?: string;
   content: any; // TipTap JSON
@@ -337,7 +339,7 @@ interface AppState {
   cleanupOldTrashItems: () => Promise<void>;
   setDraggedMaterial: (material: DraggedMaterialRef | null) => void;
   setPendingMaterialDrop: (drop: PendingMaterialDropRef | null) => void;
-  setCurrentView: (view: "editor" | "calendar" | "mindmap") => void;
+  setCurrentView: (view: "editor" | "calendar" | "mindmap") => Promise<void>;
   openVault: () => Promise<void>;
   refreshVault: () => Promise<void>;
   createNewLesson: (plannedDate?: Date, subFolder?: string) => Promise<void>;
@@ -405,6 +407,7 @@ const SETTINGS_BACKUP_DIR = ".teacherpro";
 const SETTINGS_BACKUP_FILE = "ui-settings.backup.json";
 const TRASH_MANIFEST_FILE = "trash.json";
 const SIDEBAR_ORDER_FILE = "sidebar-order.json";
+const lessonIdentityRegistry = new LessonIdentityRegistry();
 
 type SidebarOrderMap = Record<string, string[]>;
 
@@ -525,7 +528,19 @@ async function registerFsPaths(paths: Array<string | null | undefined>): Promise
 }
 
 async function grantVaultScope(path: string | null): Promise<void> {
-  await registerFsPaths([path]);
+  if (path) await invoke("allow_fs_scopes", { paths: [path] });
+}
+
+function duplicateLessonText(sourceText: string): string {
+  try {
+    const lesson = JSON.parse(sourceText) as LessonData;
+    if (lesson?.metadata && typeof lesson.metadata === "object") {
+      return JSON.stringify(duplicateLessonData(lesson), null, 2);
+    }
+  } catch {
+    // Preserve legacy/non-standard files instead of damaging their content.
+  }
+  return sourceText;
 }
 
 /**
@@ -534,8 +549,8 @@ async function grantVaultScope(path: string | null): Promise<void> {
  * A crash mid-write can then only lose the temp file, never truncate the
  * document. std::fs::rename (backing the Tauri fs plugin) replaces existing
  * files on Windows, macOS and Linux. If the replace fails because the target
- * is briefly locked (antivirus scan, file open elsewhere), fall back to a
- * direct write so saving still succeeds.
+ * is briefly locked, keep the complete temp file as a recovery copy and fail
+ * the save rather than truncating the user's only document.
  */
 async function writeTextFileAtomic(path: string, contents: string): Promise<void> {
   const tmpPath = `${path}.${Date.now()}-${Math.random().toString(36).slice(2, 8)}.tmp`;
@@ -543,13 +558,7 @@ async function writeTextFileAtomic(path: string, contents: string): Promise<void
   try {
     await rename(tmpPath, path);
   } catch (error) {
-    console.warn("Atomic replace failed, writing directly", error);
-    try {
-      await remove(tmpPath);
-    } catch {
-      // Best effort — a leftover temp file is harmless.
-    }
-    await writeTextFile(path, contents);
+    throw new Error(`Atomic replace failed; recovery copy retained at ${tmpPath}: ${String(error)}`);
   }
 }
 
@@ -1348,7 +1357,12 @@ async function flushBeforeDocumentChange(): Promise<boolean> {
   if (result.ok) {
     return true;
   }
-  return window.confirm(tr("alerts.saveBeforeSwitch"));
+  return ask(tr("alerts.saveBeforeSwitch"), {
+    title: tr("statusBar.saveFailed"),
+    kind: "warning",
+    okLabel: tr("common.yes"),
+    cancelLabel: tr("common.no"),
+  });
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -1435,11 +1449,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // scope: the grant command only accepts paths inside the registered
       // vault, so registration must come first.
       if (savedVault?.path) {
-        try {
-          await invoke("register_vault_root", { path: savedVault.path });
-        } catch (error) {
-          console.warn("Could not register vault root", error);
-        }
+        await invoke("register_vault_root", { path: savedVault.path });
       }
       await grantVaultScope(savedVault?.path ?? null);
 
@@ -1646,7 +1656,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   clearDebugEvents: () => set({ debugEvents: [] }),
   setDraggedMaterial: (material) => set({ draggedMaterial: material }),
   setPendingMaterialDrop: (drop) => set({ pendingMaterialDrop: drop }),
-  setCurrentView: (view) => set({ currentView: view }),
+  setCurrentView: async (view) => {
+    if (get().currentView === view) return;
+    if (!(await flushBeforeDocumentChange())) return;
+    set({ currentView: view });
+  },
   editorActions: null,
   setEditorActions: (actions) => set({ editorActions: actions }),
 
@@ -1663,13 +1677,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
 
       if (selected && typeof selected === "string") {
+        if (!(await flushBeforeDocumentChange())) return;
+        await uiSettingsPersistChain;
+        const previousVault = get().vaultPath;
         try {
           await invoke("register_vault_root", { path: selected });
+          await grantVaultScope(selected);
         } catch (error) {
-          console.warn("Could not register vault root", error);
+          if (previousVault) {
+            await invoke("register_vault_root", { path: previousVault });
+          }
+          throw error;
         }
-        await grantVaultScope(selected);
-        set({ vaultPath: selected, activeFilePath: null, activeFileContent: null, currentView: "editor" });
+        searchIndexBuildVersion += 1;
+        set({
+          vaultPath: selected, activeFilePath: null, activeFileContent: null,
+          activeMindmapContent: null, currentView: "editor", documentSaveState: "idle",
+          lastSavedAt: null, lessonPlans: [], mindmaps: [], lessonTree: [], mindmapTree: [],
+          materials: [], trashEntries: [], lessonSearchIndex: {}, mindmapSearchIndex: {},
+          lessonSubjectIndex: {}, lessonPlannedDateIndex: {}, lessonCalendarOrderIndex: {},
+          vaultItemOrder: {}, isSearchIndexing: false, subjectDatabases: [],
+          activeChatDb: null, activeChatGrade: null, activeChatTopic: null, activeChatFile: null,
+          chatContextBudget: null, draggedMaterial: null, pendingMaterialDrop: null,
+          editorActions: null, mindmapActions: null,
+        });
+        get().clearRecents();
         
         // Save persistent store
         try {
@@ -1916,6 +1948,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       
       const initialContent: LessonData = {
         version: 1,
+        id: crypto.randomUUID(),
         metadata: {
           teacher: defaultTeacherName,
           createdAt: now.toISOString(),
@@ -1947,11 +1980,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   duplicateLesson: async (fileName: string) => {
     const { vaultPath, currentView } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
 
     try {
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
       const sourcePath = await join(lessonPlansFolder, fileName);
-      const sourceText = await readTextFile(sourcePath);
 
       const stem = fileName.replace(/\.json$/i, "");
       const duplicateBaseName = `${stem} (Copy).json`;
@@ -1959,18 +1992,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       const duplicatedFileName =
         relativePathWithin(destinationPath, lessonPlansFolder) ?? extractBaseName(destinationPath);
 
-      let nextText = sourceText;
-      try {
-        const parsed = JSON.parse(sourceText) as Partial<LessonData>;
-        if (parsed && parsed.metadata) {
-          parsed.metadata.createdAt = new Date().toISOString();
-          nextText = JSON.stringify(parsed, null, 2);
-        }
-      } catch {
-        // Keep original content for legacy/non-standard files.
-      }
-
-      await writeTextFileAtomic(destinationPath, nextText);
+      await enqueueDocumentWrite(async () => {
+        const sourceText = await readTextFile(sourcePath);
+        await writeTextFileAtomic(destinationPath, duplicateLessonText(sourceText));
+      });
       await get().refreshVault();
       // Duplicating from the weekly view should keep the user in the weekly
       // view and simply show the new copy on the same day. From the editor,
@@ -2173,6 +2198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (activeFilePath && relativePathWithin(activeFilePath, filePath) !== null) {
         set({ activeFilePath: null, activeFileContent: null });
       }
+      lessonIdentityRegistry.rebind(filePath, null);
 
       await get().refreshVault();
     } catch (error) {
@@ -2207,6 +2233,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
 
       await enqueueDocumentWrite(() => rename(oldPath, newPath));
+      lessonIdentityRegistry.rebind(oldPath, newPath);
 
       if (activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
@@ -2420,7 +2447,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const text = await readTextFile(filePath);
       get().addRecent({ type: "lesson", relativePath: fileName });
       
-      if (fileName.endsWith('.json')) {
+      if (fileName.toLowerCase().endsWith('.json')) {
         const rawContent = JSON.parse(text);
         let lessonData: LessonData;
         const { defaultTeacherName } = get();
@@ -2471,7 +2498,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
         set({
           activeFilePath: filePath,
-          activeFileContent: lessonData,
+          activeFileContent: lessonIdentityRegistry.identify(filePath, lessonData),
           currentView: "editor",
         });
       }
@@ -2691,7 +2718,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       const text = await readTextFile(filePath);
       get().addRecent({ type: "mindmap", relativePath: fileName });
       
-      if (fileName.endsWith('.json')) {
+      if (fileName.toLowerCase().endsWith('.json')) {
         const content = JSON.parse(text) as MindmapData;
         set({ activeFilePath: filePath, activeMindmapContent: content, currentView: "mindmap" });
       }
@@ -2982,6 +3009,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (activeRelative !== null) {
         set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
       }
+      if (root === "Lesson Plans") lessonIdentityRegistry.rebind(oldPath, newPath);
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename vault path:", error);
@@ -3022,6 +3050,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         : null;
 
       await enqueueDocumentWrite(() => rename(sourcePath, newPath));
+      if (root === "Lesson Plans") lessonIdentityRegistry.rebind(sourcePath, newPath);
       if (activeRelative !== null) {
         set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
       }
@@ -3064,6 +3093,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (activeFilePath && relativePathWithin(activeFilePath, sourcePath) !== null) {
         set({ activeFilePath: null, activeFileContent: null, activeMindmapContent: null });
       }
+      if (root === "Lesson Plans") lessonIdentityRegistry.rebind(sourcePath, null);
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to delete vault path:", error);
@@ -3074,6 +3104,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   duplicateVaultPath: async (root, relativePath) => {
     const { vaultPath } = get();
     if (!vaultPath) return;
+    if (!(await flushBeforeDocumentChange())) return;
     try {
       const segs = relativePath.split("/").filter(Boolean);
       if (segs.length === 0) return;
@@ -3090,9 +3121,14 @@ export const useAppStore = create<AppState>((set, get) => ({
       const candidateName = `${stem} copy${ext}`;
       const destinationPath = await ensureUniqueTargetPath(parentPath, candidateName);
 
-      // copyFile handles both text documents and binary materials
-      // (PDFs, images, …) — reading everything as text would corrupt them.
-      await copyFile(sourcePath, destinationPath);
+      await enqueueDocumentWrite(async () => {
+        if (root === "Lesson Plans" && itemName.toLowerCase().endsWith(".json")) {
+          await writeTextFileAtomic(destinationPath, duplicateLessonText(await readTextFile(sourcePath)));
+        } else {
+          // Keep binary materials byte-for-byte intact.
+          await copyFile(sourcePath, destinationPath);
+        }
+      });
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to duplicate vault path:", error);

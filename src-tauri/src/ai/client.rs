@@ -2,7 +2,6 @@
 //! (docs/AI_V3_PLAN.md §3.3): streaming chat relay, one-shot generation,
 //! reasoning_content routing, ureq v2 timeout semantics, cancellation.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -13,6 +12,7 @@ use tauri::{AppHandle, Manager};
 use super::catalog;
 use super::engine::{self, STATUS_READY};
 use super::{lock_unpoisoned, AiState};
+use super::stream::{Cancellation, StreamReader};
 
 const FLUSH_INTERVAL_MS: u128 = 50;
 #[derive(Deserialize, Serialize, Clone)]
@@ -183,15 +183,26 @@ pub async fn ai_chat(
     model_id: Option<String>,
     num_ctx: Option<u32>,
 ) -> Result<(), String> {
-    let cancel = Arc::new(AtomicBool::new(false));
+    let cancel = Arc::new(Cancellation::new());
     lock_unpoisoned(&state.stream_cancels).insert(request_id.clone(), cancel.clone());
 
-    let prepared = {
-        let app_for_ready = app.clone();
-        run_blocking(move || prepare_chat_connection(&app_for_ready, model_id.as_deref(), num_ctx))
-            .await?
+    let app_for_ready = app.clone();
+    let prepared = tokio::select! {
+        biased;
+        _ = cancel.cancelled() => Err("cancelled".to_string()),
+        result = run_blocking(move || prepare_chat_connection(&app_for_ready, model_id.as_deref(), num_ctx)) => result,
     };
-    let (model, port, key) = prepared;
+    let (model, port, key) = match prepared {
+        Ok(connection) => connection,
+        Err(error) => {
+            cleanup_stream(&app, &request_id, &cancel);
+            if error == "cancelled" {
+                emit_event(&app, &request_id, StreamEvent { kind: "done".into(), text: None, usage: None, finish: None, error: Some(error) });
+                return Ok(());
+            }
+            return Err(error);
+        }
+    };
 
     // A cancel that arrived while engine prep was running (up to the 120 s
     // readiness wait) removed the flag — the stream below must not spawn
@@ -234,8 +245,8 @@ pub async fn ai_chat(
 
     let app_handle = app.clone();
     let request_id_thread = request_id.clone();
-    std::thread::spawn(move || {
-        run_stream(app_handle, request_id_thread, port, key, body, cancel);
+    tauri::async_runtime::spawn(async move {
+        run_stream(app_handle, request_id_thread, port, key, body, cancel).await;
     });
     Ok(())
 }
@@ -244,43 +255,31 @@ pub async fn ai_chat(
 #[tauri::command]
 pub fn ai_chat_cancel(state: tauri::State<'_, AiState>, request_id: String) -> Result<(), String> {
     if let Some(cancel) = lock_unpoisoned(&state.stream_cancels).remove(&request_id) {
-        cancel.store(true, Ordering::Relaxed);
+        cancel.cancel();
     }
     Ok(())
 }
 
-fn run_stream(
+async fn run_stream(
     app: AppHandle,
     request_id: String,
     port: u16,
     key: String,
     body: String,
-    cancel: Arc<AtomicBool>,
+    cancel: Arc<Cancellation>,
 ) {
-    let url = format!("http://127.0.0.1:{port}/v1/chat/completions");
-    let agent = ureq::AgentBuilder::new()
-        .timeout_connect(Duration::from_secs(10))
-        .timeout_read(Duration::from_secs(120))
-        .build();
-
-    let result = agent
-        .post(&url)
-        .set("Authorization", &format!("Bearer {key}"))
-        .set("Content-Type", "application/json")
-        .send_string(&body);
-
-    let response = match result {
+    let mut reader = match StreamReader::connect(port, &key, body, cancel.clone()).await {
         Ok(r) => r,
         Err(e) => {
             emit_event(
                 &app,
                 &request_id,
                 StreamEvent {
-                    kind: "error".into(),
+                    kind: if e == "cancelled" { "done".into() } else { "error".into() },
                     text: None,
                     usage: None,
                     finish: None,
-                    error: Some(format!("Engine request failed: {e}")),
+                    error: Some(e),
                 },
             );
             cleanup_stream(&app, &request_id, &cancel);
@@ -289,24 +288,22 @@ fn run_stream(
     };
 
     let mut agg = StreamAggregator::new();
-    let reader = response.into_reader();
-    let mut sse_lines = std::io::BufReader::new(reader);
     let mut saw_done = false;
     let mut terminal_error: Option<String> = None;
     loop {
-        if cancel.load(Ordering::Relaxed) {
+        if cancel.is_cancelled() {
             agg.cancelled = true;
             break;
         }
-        let mut line = String::new();
-        match std::io::BufRead::read_line(&mut sse_lines, &mut line) {
-            Ok(0) => break,
-            Ok(_) => {}
+        let line = match reader.next_line().await {
+            Ok(None) => break,
+            Ok(Some(line)) => line,
             Err(error) => {
-                terminal_error = Some(format!("AI stream read failed: {error}"));
+                if error == "cancelled" { agg.cancelled = true; }
+                else { terminal_error = Some(error); }
                 break;
             }
-        }
+        };
         let line = line.trim_end();
         if !line.starts_with("data:") {
             continue;
@@ -373,8 +370,8 @@ fn run_stream(
     cleanup_stream(&app, &request_id, &cancel);
 }
 
-fn cleanup_stream(app: &AppHandle, request_id: &str, cancel: &Arc<AtomicBool>) {
-    cancel.store(true, Ordering::Relaxed);
+fn cleanup_stream(app: &AppHandle, request_id: &str, cancel: &Arc<Cancellation>) {
+    cancel.cancel();
     if let Some(ai) = app.try_state::<AiState>() {
         lock_unpoisoned(&ai.stream_cancels).remove(request_id);
     }

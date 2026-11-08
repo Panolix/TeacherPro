@@ -6,6 +6,7 @@ import { SidebarMinimal } from "./components/SidebarMinimal";
 import { MainContent } from "./components/MainContent";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { runCloseFlushers } from "./utils/closeFlush";
+import { finishDocumentClose } from "./utils/closeFlow";
 import { useAppStore } from "./store";
 import { t as translate } from "./i18n/translations";
 
@@ -149,41 +150,30 @@ function App() {
     void getCurrentWindow()
       .listen("app-close-requested", async () => {
         if (closing) {
+          // Repeated native close requests create another watchdog generation.
+          await invoke("cancel_close_window").catch(console.error);
           return;
         }
         closing = true;
-        const flushResult = await runCloseFlushers();
-        if (!flushResult.ok) {
-          const language = useAppStore.getState().language;
-          // window.confirm is blocked in the Tauri webview and always
-          // returns false; use the native dialog plugin instead.
-          const discard = await ask(
-            translate(language, "statusBar.closeSaveFailed"),
-            {
-              title: translate(language, "statusBar.saveFailed"),
-              kind: "warning",
-              okLabel: translate(language, "common.yes"),
-              cancelLabel: translate(language, "common.no"),
-            },
-          );
-          if (!discard) {
-            // Keep the window open. The dirty state is still intact, so the
-            // user can retry the save (Ctrl/Cmd+S) or close again.
-            try {
-              await invoke("cancel_close_window");
-            } catch (error) {
-              console.error("Cancel close failed:", error);
-            }
-            closing = false;
-            return;
-          }
-        }
         try {
-          await invoke("confirm_close_window");
+          await finishDocumentClose({
+            acknowledge: () => invoke("cancel_close_window"),
+            flush: runCloseFlushers,
+            askDiscard: () => {
+              const language = useAppStore.getState().language;
+              return ask(translate(language, "statusBar.closeSaveFailed"), {
+                title: translate(language, "statusBar.saveFailed"),
+                kind: "warning",
+                okLabel: translate(language, "common.yes"),
+                cancelLabel: translate(language, "common.no"),
+              });
+            },
+            confirm: () => invoke("confirm_close_window"),
+          });
         } catch (error) {
-          // Let a future close request retry the flush/confirm round-trip.
+          console.error("Close coordination failed:", error);
+        } finally {
           closing = false;
-          console.error("Confirm close failed:", error);
         }
       })
       .then((fn) => {

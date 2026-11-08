@@ -7,6 +7,7 @@ import { MindmapView } from "./MindmapView";
 import { TopBar } from "./TopBar";
 import { StatusBar } from "./StatusBar";
 import { Button } from "./ui/Button";
+import { lessonDocumentKey } from "../utils/lessonIdentity";
 
 export function MainContent() {
   const { t } = useTranslation();
@@ -22,10 +23,7 @@ export function MainContent() {
   // Remount the editor when the document identity changes. This gives each
   // lesson a fresh TipTap history, so Ctrl+Z can never restore content from
   // the previously open lesson. A save-driven rename keeps the same identity.
-  const editorDocumentKey =
-    activeFileContent?.metadata?.createdAt
-      ? `lesson:${activeFileContent.metadata.createdAt}`
-      : activeFilePath ?? "lesson";
+  const editorDocumentKey = lessonDocumentKey(vaultPath, activeFileContent, activeFilePath);
 
   return (
     <div
