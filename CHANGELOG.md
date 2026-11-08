@@ -21,6 +21,7 @@
 - The window-close watchdog no longer overrides a pending save/discard dialog.
 - Uppercase `.JSON` lessons and mindmaps now open correctly.
 - macOS printing matches the exact current spool document, not an earlier print.
+- macOS Clippy checks no longer include an unused Windows/Linux-only AMD GPU helper.
 
 ### Tests
 - Added 39 regression tests: 29 frontend and 51 Rust tests pass on Windows.

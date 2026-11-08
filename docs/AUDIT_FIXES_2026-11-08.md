@@ -34,6 +34,8 @@ These changes repair persistence, safety and lifecycle bugs without changing the
 
 ## Test scope and remaining work
 
+The first macOS preflight passed AppleScript compilation/targeting, frontend build/tests and native Rust tests. Its strict Clippy gate exposed an unused Windows/Linux GPU helper; the helper is now compiled only on the platforms that use it (and in shared tests).
+
 Verification: **29 frontend tests and 51 Rust tests pass** (39 additional tests compared with the audit baseline). Rust Clippy passes with warnings treated as errors; capability, i18n, scrollbar and typography checks pass.
 
 Regression tests use in-memory filesystem mocks, mounted React hooks, real temporary SQLite databases, temporary junctions and local fake HTTP servers. No real teaching vault was opened or modified, and no model download or inference engine was started.

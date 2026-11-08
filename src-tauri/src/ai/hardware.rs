@@ -396,6 +396,8 @@ fn is_virtual_gpu(name: &str) -> bool {
     VIRTUAL_MARKERS.iter().any(|marker| name.contains(marker))
 }
 
+// Only Windows/Linux probes use this helper; keep it available to shared tests.
+#[cfg(any(windows, target_os = "linux", test))]
 fn is_integrated_amd(name: &str, vram_mb: u64) -> bool {
     let name = name.to_ascii_lowercase();
     const INTEGRATED_MARKERS: &[&str] = &[
