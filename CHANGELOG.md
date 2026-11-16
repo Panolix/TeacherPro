@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1] - 2026-11-16
+
+### Fixed
+- The class chip on weekly calendar lesson cards now uses the app's 11px
+  minimum font size, so the typography gate passes again. No visual change
+  beyond the chip being one pixel larger.
+
 ## [2.12.0] - 2026-11-16
 
 ### Added
