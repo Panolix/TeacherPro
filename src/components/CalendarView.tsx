@@ -75,6 +75,10 @@ export function CalendarView() {
 
   const { t, language } = useTranslation();
   const dateLocale = language === "de" ? de : undefined;
+  // German puts the day first ("16. Nov."), English the month ("Nov. 16").
+  const monthDay = language === "de" ? "d. MMM" : "MMM d";
+  const monthDayYear = language === "de" ? "d. MMM yyyy" : "MMM d, yyyy";
+  const weekdayMonthDay = language === "de" ? "EEE, d. MMM" : "EEE, MMM d";
 
   const start = useMemo(
     () => startOfWeek(currentWeek, { weekStartsOn: 1 }),
@@ -537,7 +541,7 @@ export function CalendarView() {
       return;
     }
 
-    const dateLabel = format(date, "EEE, MMM d", { locale: dateLocale });
+    const dateLabel = format(date, weekdayMonthDay, { locale: dateLocale });
     const confirmed = await ask(t('calendar.confirm.moveAll', { count: lessons.length, date: dateLabel }), {
       okLabel: t('common.yes'),
       cancelLabel: t('common.no'),
@@ -631,7 +635,7 @@ export function CalendarView() {
           className="text-[14px] font-semibold tracking-[-0.01em]"
           style={{ color: "var(--tp-t-1)" }}
         >
-          {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, "MMM d", { locale: dateLocale }), end: format(addDays(start, 6), "MMM d, yyyy", { locale: dateLocale }) })}
+          {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, monthDay, { locale: dateLocale }), end: format(addDays(start, 6), monthDayYear, { locale: dateLocale }) })}
         </span>
 
         <Button
@@ -746,7 +750,7 @@ export function CalendarView() {
                     const titleEqualsSubject = !!subjectName && derivedTitle.toLowerCase() === subjectName.toLowerCase();
                     const cleanTitle = (derivedTitle && !titleEqualsSubject)
                       ? derivedTitle
-                       : t('calendar.defaultLessonTitle', { date: format(day, "MMM d", { locale: dateLocale }) });
+                       : t('calendar.defaultLessonTitle', { date: format(day, monthDay, { locale: dateLocale }) });
                     // The authored topic is the real lesson title; the filename-derived
                     // title is only a fallback. Mirror the subject-duplication guard above.
                     const topicEqualsSubject = !!topic && !!subjectName &&

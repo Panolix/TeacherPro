@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.13.1] - 2026-11-16
+
+### Fixed
+- The German UI no longer shows a half-open quote in the method bank search
+  hint, and the empty week state now reads "Für diese Woche sind keine Stunden
+  geplant".
+- German copy tightened across the sidebar, weekly planner, editor, settings and
+  knowledge-base manager ("Neue Stunde hier", "In den Papierkorb", "Es ist ein
+  Fehler aufgetreten", "z. B." spacing, German quotation marks, and others).
+- Week labels, confirmation dialogs and generated lesson titles use German date
+  order ("16. Nov. – 22. Nov. 2026") instead of English ("Nov. 16 – Nov. 22,
+  2026"). The planned-date picker writes `DD.MM.YYYY` in German to match the
+  field's placeholder.
+- The English AI draft hint no longer points at the German tab name
+  "Datenbanken".
+- AI model downloads for Qwen3.8 27B verify again: the pinned MTP draft-head
+  hash was two characters short (so it could never match), and the main GGUF
+  hash and size were stale after the upstream file was re-uploaded.
+- A malformed pinned SHA-256 now fails with a clear "pinned SHA-256 is
+  malformed" message instead of a misleading checksum mismatch.
+
 ## [2.13.0] - 2026-11-16
 
 ### Added

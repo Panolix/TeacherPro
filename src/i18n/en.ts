@@ -259,7 +259,7 @@
       focusPlaceholder: "e.g. start with a quiz, prefer group work",
       usingDb: "Knowledge base: {{name}}",
       kbLabel: "Knowledge base (optional)",
-      noKb: "No embedded knowledge bases in this vault yet — import PDFs under Datenbanken to give the draft access to your material.",
+      noKb: "No embedded knowledge bases in this vault yet — import PDFs under Databases to give the draft access to your material.",
       allGrades: "All grades",
       allTopics: "All topics",
       useMethodBank: "Use Method Bank terminology ({{count}} entries)",

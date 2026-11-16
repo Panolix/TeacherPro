@@ -263,8 +263,8 @@ pub const MODEL_CATALOG: &[ModelEntry] = &[
         origin: "cn",
         filename: "Qwen3.8-27B-UD-Q4_K_M.gguf",
         url: "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q4_K_M.gguf",
-        sha256: "322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
-        size_bytes: 16_464_440_224,
+        sha256: "1bce504dfecd84153666928a41d8a66706f0158d3a317bc5196b72819d7dc529",
+        size_bytes: 16_564_259_744,
         min_ram_gb: 24,
         min_vram_gb: 22,
         num_ctx: 65536,
@@ -273,7 +273,7 @@ pub const MODEL_CATALOG: &[ModelEntry] = &[
         recommended: false,
         mtp_file: Some("MTP/mtp-Qwen3.8-27B-Q4_0.gguf"),
         mtp_url: Some("https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/MTP/mtp-Qwen3.8-27B-Q4_0.gguf"),
-        mtp_sha256: Some("50d9ce5a6da381bbcfb31061cf73df94a90e6faf8efdee379a9cb8f1501c6e"),
+        mtp_sha256: Some("50d9ce5a6da381bbcfb31061cf73df94a90e6faf8efeddee379a9cb8f1501c6e"),
         mtp_size: Some(1_369_590_656),
         mtp_backends: &["cuda"],
         mtp_draft_max: 3,
@@ -1086,5 +1086,30 @@ mod tests {
 
         let mid = find_model("qwen3.5-9b").unwrap();
         assert_eq!(effective_ctx(mid, &hw(Some(8), 16)), 32_768);
+    }
+
+    #[test]
+    fn every_pinned_hash_is_a_full_sha256() {
+        for model in MODEL_CATALOG {
+            let hashes = [
+                ("sha256", Some(model.sha256)),
+                ("mtp_sha256", model.mtp_sha256),
+            ];
+            for (label, hash) in hashes {
+                let Some(hash) = hash else { continue };
+                assert_eq!(
+                    hash.len(),
+                    64,
+                    "{} {label} has {} hex chars, a SHA-256 digest needs 64",
+                    model.id,
+                    hash.len()
+                );
+                assert!(
+                    hash.bytes().all(|b| b.is_ascii_hexdigit()),
+                    "{} {label} contains non-hex characters",
+                    model.id
+                );
+            }
+        }
     }
 }

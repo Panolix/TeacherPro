@@ -462,6 +462,14 @@ fn parse_total_from_range(header: &str) -> Option<u64> {
 fn verify_sha256(file: &PathBuf, expected: &str) -> Result<(), String> {
     use sha2::{Digest, Sha256};
 
+    let expected = expected.trim().to_ascii_lowercase();
+    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(format!(
+            "pinned SHA-256 is malformed ({} hex chars, expected 64)",
+            expected.len()
+        ));
+    }
+
     let mut file_handle = std::fs::File::open(file).map_err(|e| e.to_string())?;
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1024 * 1024];
@@ -475,7 +483,7 @@ fn verify_sha256(file: &PathBuf, expected: &str) -> Result<(), String> {
         hasher.update(&buffer[..read]);
     }
     let actual = format!("{:x}", hasher.finalize());
-    if actual != expected.to_lowercase() {
+    if actual != expected {
         return Err(format!("expected {expected}, got {actual}"));
     }
     Ok(())

@@ -1,9 +1,10 @@
 /**
  * European date helpers used by the lesson metadata form.
- * Produces/parses "DD/MM/YYYY" while storing ISO strings.
+ * Produces "DD/MM/YYYY" by default ("DD.MM.YYYY" for German) while storing
+ * ISO strings; accepts /, . and - as input separators.
  */
 
-export function formatIsoToEuropeanDate(isoString?: string | null): string {
+export function formatIsoToEuropeanDate(isoString?: string | null, separator = "/"): string {
   if (!isoString) return "";
 
   const date = new Date(isoString);
@@ -15,7 +16,7 @@ export function formatIsoToEuropeanDate(isoString?: string | null): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = String(date.getFullYear());
 
-  return `${day}/${month}/${year}`;
+  return `${day}${separator}${month}${separator}${year}`;
 }
 
 export function parseEuropeanDateToIso(value: string): string | null | undefined {

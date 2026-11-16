@@ -163,7 +163,7 @@ export function Editor() {
     topic, setTopic,
     lessonNotes, setLessonNotes,
     plannedForInput, setPlannedForInput, plannedCalendarMonth, setPlannedCalendarMonth,
-  } = useLessonMetadata(activeFileContent);
+  } = useLessonMetadata(activeFileContent, language);
   const [isAiBusy, setIsAiBusy] = useState(false);
   const [tableContextMenu, setTableContextMenu] = useState<TableContextMenuState | null>(null);
   const [customTableDialog, setCustomTableDialog] = useState<{
@@ -3208,7 +3208,7 @@ export function Editor() {
                                 key={day.toISOString()}
                                 type="button"
                                 onClick={() => {
-                                  setPlannedForInput(formatDateFn(day, "dd/MM/yyyy"));
+                                  setPlannedForInput(formatDateFn(day, language === "de" ? "dd.MM.yyyy" : "dd/MM/yyyy"));
                                   setPlannedCalendarOpen(false);
                                 }}
                                 className={`h-7 rounded text-center transition-colors hover:brightness-110 ${
