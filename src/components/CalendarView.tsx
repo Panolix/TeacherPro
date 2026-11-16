@@ -652,7 +652,7 @@ export function CalendarView() {
                               )}
                               {className && (
                                 <span
-                                  className="shrink-0 max-w-[55%] truncate rounded-[4px] border px-1.5 py-[1px] text-[10px] font-semibold leading-[1.5] tracking-wide"
+                                  className="shrink-0 max-w-[55%] truncate rounded-[4px] border px-1.5 py-[1px] text-[11px] font-semibold leading-[1.5] tracking-wide"
                                   style={{
                                     borderColor: "var(--tp-b-2)",
                                     background: "var(--tp-bg-4)",
