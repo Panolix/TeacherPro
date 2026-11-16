@@ -1,12 +1,41 @@
 import { format, startOfWeek, addDays, isSameDay } from "date-fns";
 import { de } from "date-fns/locale";
-import { useEffect, useRef, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical, Pencil } from "lucide-react";
+import { useEffect, useRef, useMemo, useState, useCallback, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, CheckSquare, Square, GripVertical, Pencil, Clock, MapPin, Users } from "lucide-react";
 import { useTranslation } from "../i18n/useTranslation";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../store";
 import { Button } from "./ui/Button";
 import { IconButton } from "./ui/IconButton";
+
+/** Compact metadata tag used on weekly lesson cards. */
+function LessonMetaTag({
+  icon,
+  label,
+  value,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+}) {
+  return (
+    <span
+      className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-[4px] border px-1.5 py-[1px] text-[11px] font-semibold leading-[1.5] tracking-wide"
+      style={{
+        borderColor: "var(--tp-b-2)",
+        background: "var(--tp-bg-4)",
+        color: "var(--tp-t-2)",
+      }}
+      title={`${label}: ${value}`}
+      aria-label={`${label}: ${value}`}
+    >
+      <span className="shrink-0 opacity-70" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="min-w-0 truncate">{value}</span>
+    </span>
+  );
+}
 
 export function CalendarView() {
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -37,6 +66,9 @@ export function CalendarView() {
     subjects,
     lessonSubjectIndex,
     lessonClassIndex,
+    lessonPeriodIndex,
+    lessonRoomIndex,
+    lessonTopicIndex,
     lessonPlannedDateIndex,
     lessonCalendarOrderIndex,
   } = useAppStore();
@@ -44,7 +76,10 @@ export function CalendarView() {
   const { t, language } = useTranslation();
   const dateLocale = language === "de" ? de : undefined;
 
-  const start = startOfWeek(currentWeek, { weekStartsOn: 1 }); // Monday
+  const start = useMemo(
+    () => startOfWeek(currentWeek, { weekStartsOn: 1 }),
+    [currentWeek],
+  ); // Monday
   
   const nextWeek = () => setCurrentWeek(addDays(currentWeek, 7));
   const prevWeek = () => setCurrentWeek(addDays(currentWeek, -7));
@@ -122,7 +157,7 @@ export function CalendarView() {
     return entries;
   }, [lessonTree]);
 
-  const getLessonsForDate = (date: Date) => {
+  const getLessonsForDate = useCallback((date: Date) => {
     const dateStr = format(date, "yyyy-MM-dd");
     return allLessonEntries
       .filter((lesson) => {
@@ -150,7 +185,7 @@ export function CalendarView() {
           sensitivity: "base",
         });
       });
-  };
+  }, [allLessonEntries, lessonPlannedDateIndex, lessonCalendarOrderIndex]);
 
   const getLessonDateToken = (lessonRelativePath: string): string | null => {
     const plannedIso = lessonPlannedDateIndex[lessonRelativePath];
@@ -265,7 +300,12 @@ export function CalendarView() {
   /**
    * Mouse-based drag for lesson cards.
    * HTML5 dragstart on div elements does not fire reliably in WKWebView (Tauri/macOS).
-   * We use mousedown ? mousemove ? mouseup with a floating ghost chip instead.
+   * We use mousedown → mousemove → mouseup with a floating ghost chip instead.
+   *
+   * Performance: drop targets are measured once when the drag starts (and
+   * again on scroll/resize), the ghost is moved with a composited transform,
+   * and hit-testing runs at most once per animation frame. Querying and
+   * measuring the DOM inside every mousemove made the weekly view stutter.
    */
   const startMouseDrag = (e: React.MouseEvent, lessonName: string, title: string) => {
     if (!lessonName) return;
@@ -275,62 +315,157 @@ export function CalendarView() {
     const startY = e.clientY;
     let dragging = false;
     let ghost: HTMLDivElement | null = null;
+    let frame = 0;
+    let latestX = startX;
+    let latestY = startY;
+    let lastDayKey: string | null = null;
+    let lastIndicator: { dayKey: string; index: number } | null = null;
+    let dayRects: { dayKey: string; rect: DOMRect }[] = [];
+    let cardRects = new Map<string, DOMRect[]>();
+
+    const measureDropTargets = () => {
+      dayRects = [];
+      cardRects = new Map();
+      const columns = document.querySelectorAll<HTMLElement>("[data-day-key]");
+      for (const column of columns) {
+        const dayKey = column.getAttribute("data-day-key");
+        if (!dayKey) continue;
+        dayRects.push({ dayKey, rect: column.getBoundingClientRect() });
+        cardRects.set(
+          dayKey,
+          Array.from(column.querySelectorAll<HTMLElement>("[data-lesson-card]")).map(
+            (card) => card.getBoundingClientRect(),
+          ),
+        );
+      }
+    };
+
+    let measureFrame = 0;
+    const scheduleMeasure = () => {
+      if (measureFrame !== 0) return;
+      measureFrame = window.requestAnimationFrame(() => {
+        measureFrame = 0;
+        measureDropTargets();
+      });
+    };
+
+    const findDayKeyFromCache = (x: number, y: number): string | null => {
+      for (const { dayKey, rect } of dayRects) {
+        if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+          return dayKey;
+        }
+      }
+      return null;
+    };
+
+    const getInsertIndexFromCache = (dayKey: string, y: number): number => {
+      const cards = cardRects.get(dayKey) ?? [];
+      for (let index = 0; index < cards.length; index += 1) {
+        const rect = cards[index];
+        if (y < rect.top + rect.height / 2) {
+          return index;
+        }
+      }
+      return cards.length;
+    };
+
+    const placeGhost = (x: number, y: number) => {
+      if (!ghost) return;
+      ghost.style.transform = `translate3d(${x + 14}px, ${y - 12}px, 0) scale(1.03)`;
+    };
+
+    const updateDrag = (x: number, y: number) => {
+      if (!dragging || !ghost) return;
+      placeGhost(x, y);
+
+      const targetDayKey = findDayKeyFromCache(x, y);
+      if (lastDayKey !== targetDayKey) {
+        lastDayKey = targetDayKey;
+        setDragOverDayKey(targetDayKey);
+      }
+      if (targetDayKey) {
+        const index = getInsertIndexFromCache(targetDayKey, y);
+        if (!lastIndicator || lastIndicator.dayKey !== targetDayKey || lastIndicator.index !== index) {
+          lastIndicator = { dayKey: targetDayKey, index };
+          setLessonDropIndicator(lastIndicator);
+        }
+      } else if (lastIndicator !== null) {
+        lastIndicator = null;
+        setLessonDropIndicator(null);
+      }
+    };
+
+    const scheduleUpdate = () => {
+      if (frame !== 0) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        updateDrag(latestX, latestY);
+      });
+    };
 
     const onMouseMove = (ev: MouseEvent) => {
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
+      latestX = ev.clientX;
+      latestY = ev.clientY;
 
-      if (!dragging && Math.sqrt(dx * dx + dy * dy) > 5) {
+      if (!dragging) {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (Math.sqrt(dx * dx + dy * dy) <= 5) return;
+
         dragging = true;
         mouseDragActiveRef.current = true;
         draggingLessonRef.current = lessonName;
         setIsDraggingLesson(true);
         setDraggingLesson(lessonName);
 
-        ghost = document.createElement('div');
+        ghost = document.createElement("div");
         Object.assign(ghost.style, {
-          position: 'fixed',
-          pointerEvents: 'none',
-          zIndex: '9999',
-          background: 'var(--tp-bg-3, #2a2a2a)',
-          border: '2px solid var(--tp-accent, #2d86a5)',
-          borderRadius: '8px',
-          padding: '5px 10px',
-          fontSize: '13px',
-          fontWeight: '600',
-          color: 'var(--tp-t-1, #fff)',
-          whiteSpace: 'nowrap',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-          transform: 'scale(1.03)',
-          opacity: '0.95',
-          userSelect: 'none',
+          position: "fixed",
+          left: "0",
+          top: "0",
+          pointerEvents: "none",
+          zIndex: "9999",
+          background: "var(--tp-bg-3, #2a2a2a)",
+          border: "2px solid var(--tp-accent, #2d86a5)",
+          borderRadius: "8px",
+          padding: "5px 10px",
+          fontSize: "13px",
+          fontWeight: "600",
+          color: "var(--tp-t-1, #fff)",
+          whiteSpace: "nowrap",
+          maxWidth: "280px",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.6)",
+          opacity: "0.95",
+          userSelect: "none",
+          willChange: "transform",
         });
         ghost.textContent = title;
         document.body.appendChild(ghost);
+        placeGhost(ev.clientX, ev.clientY);
+
+        measureDropTargets();
+        document.addEventListener("scroll", scheduleMeasure, true);
+        window.addEventListener("resize", scheduleMeasure);
       }
 
-      if (dragging && ghost) {
-        ghost.style.left = `${ev.clientX + 14}px`;
-        ghost.style.top = `${ev.clientY - 12}px`;
-
-        const targetDayKey = findDayKeyAtPoint(ev.clientX, ev.clientY);
-        setDragOverDayKey(targetDayKey);
-        if (targetDayKey) {
-          const index = getLessonInsertIndex(targetDayKey, ev.clientY);
-          setLessonDropIndicator((previous) =>
-            previous?.dayKey === targetDayKey && previous.index === index
-              ? previous
-              : { dayKey: targetDayKey, index },
-          );
-        } else {
-          setLessonDropIndicator(null);
-        }
-      }
+      scheduleUpdate();
     };
 
     const onMouseUp = (ev: MouseEvent) => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+      document.removeEventListener("scroll", scheduleMeasure, true);
+      window.removeEventListener("resize", scheduleMeasure);
+      if (measureFrame !== 0) {
+        window.cancelAnimationFrame(measureFrame);
+        measureFrame = 0;
+      }
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+        frame = 0;
+      }
 
       if (ghost) { ghost.remove(); ghost = null; }
 
@@ -350,8 +485,8 @@ export function CalendarView() {
       }
     };
 
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
   };
 
   const toggleSelectedLesson = (lessonName: string) => {
@@ -433,7 +568,10 @@ export function CalendarView() {
 
   const today = new Date();
   // Resolve the week once; the columns below read from this list.
-  const weekLessons = weekDays.map((day) => getLessonsForDate(day));
+  const weekLessons = useMemo(
+    () => weekDays.map((day) => getLessonsForDate(day)),
+    [weekDays, getLessonsForDate],
+  );
   const weekHasLessons = weekLessons.some((lessons) => lessons.length > 0);
 
   const renderLessonDropLine = (
@@ -598,6 +736,9 @@ export function CalendarView() {
                     const subjectName = lessonName ? (lessonSubjectIndex[lessonName] || "") : "";
                     const subjectColor = subjectName ? subjects.find((s) => s.name === subjectName)?.color : undefined;
                     const className = lessonName ? (lessonClassIndex[lessonName] || "") : "";
+                    const period = lessonName ? (lessonPeriodIndex[lessonName] || "") : "";
+                    const room = lessonName ? (lessonRoomIndex[lessonName] || "") : "";
+                    const topic = lessonName ? (lessonTopicIndex[lessonName] || "").trim() : "";
 
                     // If the derived title is just the subject name, the file was auto-named
                     // from the subject (e.g. "2026-04-17-English.json"). Use a date label so
@@ -606,6 +747,11 @@ export function CalendarView() {
                     const cleanTitle = (derivedTitle && !titleEqualsSubject)
                       ? derivedTitle
                        : t('calendar.defaultLessonTitle', { date: format(day, "MMM d", { locale: dateLocale }) });
+                    // The authored topic is the real lesson title; the filename-derived
+                    // title is only a fallback. Mirror the subject-duplication guard above.
+                    const topicEqualsSubject = !!topic && !!subjectName &&
+                      topic.toLowerCase() === subjectName.toLowerCase();
+                    const cardTitle = topic && !topicEqualsSubject ? topic : cleanTitle;
                     const renameSeed = uniqueTitle || derivedTitle || rawStem;
                     return (
                       <div
@@ -633,36 +779,43 @@ export function CalendarView() {
                           className="w-full px-3 pt-2.5 pb-2 text-left hover:bg-[var(--tp-bg-4)]"
                         >
                           <div
-                            className="text-[12px] font-semibold leading-snug"
+                            className="text-[12px] font-semibold leading-snug line-clamp-2"
                             style={{ color: "var(--tp-t-1)", wordBreak: "break-word" }}
+                            title={cardTitle}
                           >
-                            {cleanTitle}
+                            {cardTitle}
                           </div>
-                          {(subjectName || className) && (
-                            <div className="mt-1 flex items-center justify-between gap-2 min-w-0">
-                              {subjectName ? (
-                                <span
-                                  className="truncate text-[11px] font-medium"
-                                  style={{ color: subjectColor || "var(--tp-accent)" }}
-                                >
-                                  {subjectName}
-                                </span>
-                              ) : (
-                                <span />
-                              )}
+                          {subjectName && (
+                            <div
+                              className="mt-1 truncate text-[11px] font-medium"
+                              style={{ color: subjectColor || "var(--tp-accent)" }}
+                              title={subjectName}
+                            >
+                              {subjectName}
+                            </div>
+                          )}
+                          {(className || period || room) && (
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 min-w-0">
                               {className && (
-                                <span
-                                  className="shrink-0 max-w-[55%] truncate rounded-[4px] border px-1.5 py-[1px] text-[11px] font-semibold leading-[1.5] tracking-wide"
-                                  style={{
-                                    borderColor: "var(--tp-b-2)",
-                                    background: "var(--tp-bg-4)",
-                                    color: "var(--tp-t-2)",
-                                  }}
-                                  title={t("editor.meta.className")}
-                                  aria-label={`${t("editor.meta.className")}: ${className}`}
-                                >
-                                  {className}
-                                </span>
+                                <LessonMetaTag
+                                  icon={<Users className="w-3 h-3" />}
+                                  label={t("editor.meta.className")}
+                                  value={className}
+                                />
+                              )}
+                              {period && (
+                                <LessonMetaTag
+                                  icon={<Clock className="w-3 h-3" />}
+                                  label={t("editor.meta.period")}
+                                  value={period}
+                                />
+                              )}
+                              {room && (
+                                <LessonMetaTag
+                                  icon={<MapPin className="w-3 h-3" />}
+                                  label={t("editor.meta.room")}
+                                  value={room}
+                                />
                               )}
                             </div>
                           )}
@@ -712,7 +865,7 @@ export function CalendarView() {
                         >
                           {/* Drag grip � onMouseDown starts mouse-based drag (reliable in WKWebView) */}
                           <div
-                            onMouseDown={(e) => startMouseDrag(e, lessonName, cleanTitle)}
+                            onMouseDown={(e) => startMouseDrag(e, lessonName, cardTitle)}
                             className="h-6 w-6 inline-flex items-center justify-center rounded cursor-grab active:cursor-grabbing select-none"
                             style={{ color: "var(--tp-t-3)" }}
                             title={t('calendar.tooltips.dragToReschedule')}

@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { Loader2, Sparkles, X } from "lucide-react";
 import type { Editor } from "@tiptap/react";
@@ -6,6 +6,7 @@ import { useTranslation } from "../../i18n/useTranslation";
 import { SubjectDbPicker } from "./SubjectDbPicker";
 import type { SubjectDbInfo } from "../../store";
 import type { MethodBankItem } from "../../utils/methodBank";
+import { resolveDraftTitle } from "../../utils/draftTitle";
 
 interface Props {
   open: boolean;
@@ -13,6 +14,8 @@ interface Props {
   editor: Editor | null;
   defaultTopic: string;
   defaultGrade: string;
+  /** Receives the title to apply to an empty lesson topic on insert. */
+  onInsertTitle?: (title: string) => void;
   aiEnabled: boolean;
   vaultPath: string | null;
   activeDb: string | null;
@@ -72,6 +75,7 @@ export function DraftGeneratorDialog({
   editor,
   defaultTopic,
   defaultGrade,
+  onInsertTitle,
   aiEnabled,
   vaultPath,
   activeDb: defaultDb,
@@ -95,6 +99,12 @@ export function DraftGeneratorDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DraftResult | null>(null);
+
+  // Re-seed the draft topic whenever the dialog opens so it mirrors the
+  // lesson's current topic (or subject fallback) instead of stale input.
+  useEffect(() => {
+    if (open) setTopic(defaultTopic);
+  }, [open, defaultTopic]);
 
   if (!open) return null;
 
@@ -246,6 +256,10 @@ export function DraftGeneratorDialog({
           })),
         })
         .run();
+    }
+    const insertedTitle = resolveDraftTitle(topic, defaultTopic, result.title);
+    if (insertedTitle) {
+      onInsertTitle?.(insertedTitle);
     }
     onClose();
   };

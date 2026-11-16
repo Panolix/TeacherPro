@@ -11,10 +11,12 @@ export function ensureLessonIdentity(lesson: LessonData): LessonData {
 }
 
 export function duplicateLessonData(lesson: LessonData): LessonData {
+  const baseTopic = (lesson.metadata.topic || "").replace(/\s*\(Copy\)$/i, "").trim();
+  const topic = baseTopic ? `${baseTopic} (Copy)` : baseTopic;
   return {
     ...lesson,
     id: crypto.randomUUID(),
-    metadata: { ...lesson.metadata, createdAt: new Date().toISOString() },
+    metadata: { ...lesson.metadata, topic, createdAt: new Date().toISOString() },
   };
 }
 

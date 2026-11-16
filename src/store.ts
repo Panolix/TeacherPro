@@ -29,6 +29,10 @@ import {
 import { enqueueDocumentWrite } from "./utils/documentWriteQueue";
 import { flushOpenDocuments } from "./utils/closeFlush";
 import { duplicateLessonData, LessonIdentityRegistry } from "./utils/lessonIdentity";
+import {
+  isPlaceholderLessonFileName,
+  sanitizeLessonFileStem,
+} from "./utils/lessonFileName";
 
 export interface LessonMetadata {
   /**
@@ -235,6 +239,9 @@ interface AppState {
   language: "en" | "de";
   lessonSubjectIndex: Record<string, string>;
   lessonClassIndex: Record<string, string>;
+  lessonPeriodIndex: Record<string, string>;
+  lessonRoomIndex: Record<string, string>;
+  lessonTopicIndex: Record<string, string>;
   lessonPlannedDateIndex: Record<string, string | null>;
   lessonCalendarOrderIndex: Record<string, number>;
   vaultItemOrder: Record<string, string[]>;
@@ -547,6 +554,40 @@ function duplicateLessonText(sourceText: string): string {
     // Preserve legacy/non-standard files instead of damaging their content.
   }
   return sourceText;
+}
+
+/**
+ * Keeps recent-entry paths valid when a lesson/mindmap file or folder moves.
+ * Folder renames remap every entry below the renamed prefix.
+ */
+function remapRecentPaths(
+  recents: RecentItem[],
+  type: RecentItem["type"],
+  oldRelativePath: string,
+  newRelativePath: string,
+): RecentItem[] {
+  const oldPrefix = `${oldRelativePath}/`;
+  return recents.map((recent) => {
+    if (recent.type !== type) return recent;
+    if (recent.relativePath === oldRelativePath) {
+      return { ...recent, relativePath: newRelativePath };
+    }
+    if (recent.relativePath.startsWith(oldPrefix)) {
+      return {
+        ...recent,
+        relativePath: `${newRelativePath}/${recent.relativePath.slice(oldPrefix.length)}`,
+      };
+    }
+    return recent;
+  });
+}
+
+function persistRecents(recents: RecentItem[]): void {
+  try {
+    localStorage.setItem("tp-recents", JSON.stringify(recents));
+  } catch {
+    // Recent entries are a convenience; storage failures are non-fatal.
+  }
 }
 
 /**
@@ -1062,12 +1103,18 @@ async function buildLessonMetadataIndex(
 ): Promise<{
   subjects: Record<string, string>;
   classNames: Record<string, string>;
+  periods: Record<string, string>;
+  rooms: Record<string, string>;
+  topics: Record<string, string>;
   plannedDates: Record<string, string | null>;
   calendarOrders: Record<string, number>;
 }> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
   const subjects: Record<string, string> = {};
   const classNames: Record<string, string> = {};
+  const periods: Record<string, string> = {};
+  const rooms: Record<string, string> = {};
+  const topics: Record<string, string> = {};
   const plannedDates: Record<string, string | null> = {};
   const calendarOrders: Record<string, number> = {};
 
@@ -1087,18 +1134,18 @@ async function buildLessonMetadataIndex(
           metadata?: {
             subject?: unknown;
             className?: unknown;
+            period?: unknown;
+            room?: unknown;
+            topic?: unknown;
             plannedFor?: unknown;
             calendarOrder?: unknown;
           };
         };
-        subjects[entry.relativePath] =
-          typeof parsed?.metadata?.subject === "string"
-            ? parsed.metadata.subject.trim()
-            : "";
-        classNames[entry.relativePath] =
-          typeof parsed?.metadata?.className === "string"
-            ? parsed.metadata.className.trim()
-            : "";
+        subjects[entry.relativePath] = metadataText(parsed?.metadata?.subject);
+        classNames[entry.relativePath] = metadataText(parsed?.metadata?.className);
+        periods[entry.relativePath] = metadataText(parsed?.metadata?.period);
+        rooms[entry.relativePath] = metadataText(parsed?.metadata?.room);
+        topics[entry.relativePath] = metadataText(parsed?.metadata?.topic);
         plannedDates[entry.relativePath] =
           typeof parsed?.metadata?.plannedFor === "string" &&
           parsed.metadata.plannedFor.trim()
@@ -1113,13 +1160,16 @@ async function buildLessonMetadataIndex(
       } catch {
         subjects[entry.relativePath] = "";
         classNames[entry.relativePath] = "";
+        periods[entry.relativePath] = "";
+        rooms[entry.relativePath] = "";
+        topics[entry.relativePath] = "";
         plannedDates[entry.relativePath] = null;
       }
     }));
   };
 
   await walk(lessonTree);
-  return { subjects, classNames, plannedDates, calendarOrders };
+  return { subjects, classNames, periods, rooms, topics, plannedDates, calendarOrders };
 }
 
 let searchIndexBuildVersion = 0;
@@ -1330,7 +1380,7 @@ function createPlannedForIso(plannedDate: Date): string {
 }
 
 function metadataText(value: unknown): string {
-  return typeof value === "string" ? value : "";
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 }
 
 /**
@@ -1372,15 +1422,29 @@ function normalizeLessonMetadata(
 /**
  * Older lessons were created with a static "Neue Stunde" / "New Lesson Plan"
  * heading. That heading is now replaced by the editable topic field, so drop
- * it when it is the first block of the document. Only the exact default text
- * is removed; user-written headings are left untouched.
+ * it when it is the first non-empty block of the document. Leading empty
+ * paragraphs are skipped because pressing Enter at the start of the old
+ * heading left them above it. Only the exact default text is removed;
+ * user-written headings are left untouched.
  */
 function stripLegacyLessonHeading(content: unknown): unknown {
   if (!content || typeof content !== "object") return content;
   const doc = content as { type?: unknown; content?: unknown };
   if (doc.type !== "doc" || !Array.isArray(doc.content)) return content;
 
-  const first = doc.content[0] as
+  let headingIndex = 0;
+  while (headingIndex < doc.content.length) {
+    const node = doc.content[headingIndex] as
+      | { type?: unknown; content?: unknown }
+      | undefined;
+    const isEmptyParagraph =
+      node?.type === "paragraph" &&
+      (!Array.isArray(node.content) || node.content.length === 0);
+    if (!isEmptyParagraph) break;
+    headingIndex += 1;
+  }
+
+  const first = doc.content[headingIndex] as
     | { type?: unknown; attrs?: { level?: unknown }; content?: unknown }
     | undefined;
   if (!first || first.type !== "heading" || first.attrs?.level !== 2) {
@@ -1401,7 +1465,10 @@ function stripLegacyLessonHeading(content: unknown): unknown {
     return content;
   }
 
-  const rest = doc.content.slice(1);
+  const rest = [
+    ...doc.content.slice(0, headingIndex),
+    ...doc.content.slice(headingIndex + 1),
+  ];
   return {
     ...doc,
     content: rest.length > 0 ? rest : [{ type: "paragraph" }],
@@ -1514,6 +1581,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   language: DEFAULT_UI_SETTINGS.language,
   lessonSubjectIndex: {},
   lessonClassIndex: {},
+  lessonPeriodIndex: {},
+  lessonRoomIndex: {},
+  lessonTopicIndex: {},
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
@@ -1788,7 +1858,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeMindmapContent: null, currentView: "editor", documentSaveState: "idle",
           lastSavedAt: null, lessonPlans: [], mindmaps: [], lessonTree: [], mindmapTree: [],
           materials: [], trashEntries: [], lessonSearchIndex: {}, mindmapSearchIndex: {},
-          lessonSubjectIndex: {}, lessonClassIndex: {}, lessonPlannedDateIndex: {}, lessonCalendarOrderIndex: {},
+          lessonSubjectIndex: {}, lessonClassIndex: {}, lessonPeriodIndex: {}, lessonRoomIndex: {}, lessonTopicIndex: {}, lessonPlannedDateIndex: {}, lessonCalendarOrderIndex: {},
           vaultItemOrder: {}, isSearchIndexing: false, subjectDatabases: [],
           activeChatDb: null, activeChatGrade: null, activeChatTopic: null, activeChatFile: null,
           chatContextBudget: null, draggedMaterial: null, pendingMaterialDrop: null,
@@ -1979,6 +2049,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             mindmapSearchIndex: nextMindmapIndex,
             lessonSubjectIndex: nextMetadataIndex.subjects,
             lessonClassIndex: nextMetadataIndex.classNames,
+            lessonPeriodIndex: nextMetadataIndex.periods,
+            lessonRoomIndex: nextMetadataIndex.rooms,
+            lessonTopicIndex: nextMetadataIndex.topics,
             lessonPlannedDateIndex: nextMetadataIndex.plannedDates,
             lessonCalendarOrderIndex: nextMetadataIndex.calendarOrders,
             isSearchIndexing: false,
@@ -2313,6 +2386,10 @@ export const useAppStore = create<AppState>((set, get) => ({
       await enqueueDocumentWrite(() => rename(oldPath, newPath));
       lessonIdentityRegistry.rebind(oldPath, newPath);
 
+      const nextRecents = remapRecentPaths(get().recents, "lesson", oldFileName, nextFileName);
+      set({ recents: nextRecents });
+      persistRecents(nextRecents);
+
       if (activeFilePath && sameVaultPath(activeFilePath, oldPath)) {
         set({ activeFilePath: newPath });
       }
@@ -2336,6 +2413,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     return enqueueDocumentWrite(async () => {
     try {
+      // A queued save can run after an earlier save renamed this lesson.
+      // Resolve the path again while the active document is still the same
+      // lesson; otherwise keep the captured path so an outgoing flush can
+      // never write into a newly opened document.
+      const liveState = get();
+      const capturedDocumentId = activeFileContent.id;
+      const baseFilePath =
+        capturedDocumentId &&
+        liveState.activeFilePath &&
+        liveState.activeFileContent?.id === capturedDocumentId
+          ? liveState.activeFilePath
+          : activeFilePath;
+
       const nextNotes =
         typeof updatedNotes === "string"
           ? updatedNotes
@@ -2353,51 +2443,36 @@ export const useAppStore = create<AppState>((set, get) => ({
         content: content
       };
 
-      let savePath = activeFilePath;
+      let savePath = baseFilePath;
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-      const currentFileName = activeFilePath.split(/[\/\\]/).pop() || "";
+      const currentFileName = baseFilePath.split(/[\/\\]/).pop() || "";
 
       // Preserve subfolder prefix (e.g. "History/") from the active file path.
       // Compare with normalized separators so this also works on Windows,
       // where join() returns backslash paths.
       const normalizedPrefix =
         lessonPlansFolder.replace(/\\/g, "/").replace(/\/+$/, "") + "/";
-      const normalizedActive = activeFilePath.replace(/\\/g, "/");
+      const normalizedActive = baseFilePath.replace(/\\/g, "/");
       const relativeActive = normalizedActive.startsWith(normalizedPrefix)
         ? normalizedActive.slice(normalizedPrefix.length)
         : currentFileName;
       const folderSlash = relativeActive.lastIndexOf("/");
       const folderPrefix = folderSlash >= 0 ? relativeActive.slice(0, folderSlash + 1) : "";
 
-      let newFileName = currentFileName;
-
-      // Only legacy untitled drafts are auto-renamed. User-chosen filenames
-      // (including the clean "Lesson"/"Stunde" defaults) stay stable.
-      if (allowRename && currentFileName.startsWith("Untitled-Lesson")) {
+      // Placeholder files ("Stunde", "Lesson-2", legacy Untitled drafts) adopt
+      // the first real topic as their filename. After that the name is no
+      // longer a placeholder, so later topic edits stay deliberate — changing
+      // the file name remains a manual action.
+      let renamedFileName: string | null = null;
+      const topicStem = sanitizeLessonFileStem(newLessonData.metadata.topic || "");
+      if (allowRename && topicStem && isPlaceholderLessonFileName(currentFileName)) {
+        renamedFileName = `${folderPrefix}${topicStem}.json`;
+      } else if (allowRename && currentFileName.startsWith("Untitled-Lesson")) {
         const dateStr = newLessonData.metadata.plannedFor
           ? newLessonData.metadata.plannedFor.split("T")[0]
           : newLessonData.metadata.createdAt.split("T")[0];
         const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-        newFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
-      }
-
-      if (allowRename && currentFileName !== newFileName) {
-        const requestedPath = await join(lessonPlansFolder, newFileName);
-        let newSavePath = requestedPath;
-
-        if (requestedPath !== activeFilePath) {
-          const requestedPathExists = await exists(requestedPath);
-          if (requestedPathExists) {
-            newSavePath = await ensureUniqueTargetPath(lessonPlansFolder, newFileName);
-          }
-
-          try {
-            await rename(activeFilePath, newSavePath);
-            savePath = newSavePath;
-          } catch (renameError) {
-            console.error("Rename failed, saving to old path", renameError);
-          }
-        }
+        renamedFileName = `${folderPrefix}Lesson-${dateStr}-${id}.json`;
       }
 
       // Never recreate a file the user deleted or moved while this save was
@@ -2411,21 +2486,56 @@ export const useAppStore = create<AppState>((set, get) => ({
       await backupDocumentBeforeWrite(vaultPath, savePath);
       await writeTextFileAtomic(savePath, JSON.stringify(newLessonData, null, 2));
 
+      // Rename only after the write succeeded, so a failed rename can never
+      // leave the document at a path the store does not know about.
+      if (renamedFileName) {
+        const requestedPath = await join(lessonPlansFolder, renamedFileName);
+        if (!sameVaultPath(requestedPath, savePath)) {
+          const targetPath = (await exists(requestedPath))
+            ? await ensureUniqueTargetPath(lessonPlansFolder, renamedFileName)
+            : requestedPath;
+          try {
+            const previousPath = savePath;
+            await rename(previousPath, targetPath);
+            savePath = targetPath;
+            lessonIdentityRegistry.rebind(previousPath, targetPath);
+          } catch (renameError) {
+            console.error("Rename failed, keeping the saved filename", renameError);
+          }
+        }
+      }
+
       // Only touch the active-document state if the user is still on this
       // lesson — an in-flight autosave must never clobber a newly opened file.
       const currentActivePath = get().activeFilePath;
       const stillOnLesson = !!currentActivePath && (
-        sameVaultPath(currentActivePath, activeFilePath) ||
+        sameVaultPath(currentActivePath, baseFilePath) ||
         sameVaultPath(currentActivePath, savePath)
       );
       if (stillOnLesson) {
         set({ activeFileContent: newLessonData, activeFilePath: savePath });
       }
 
+      const renamed = !sameVaultPath(savePath, baseFilePath);
+      if (renamed) {
+        const previousRelativePath = folderPrefix + currentFileName;
+        const nextRelativePath = folderPrefix + (extractBaseName(savePath) || "");
+        if (nextRelativePath !== previousRelativePath) {
+          const nextRecents = remapRecentPaths(
+            get().recents,
+            "lesson",
+            previousRelativePath,
+            nextRelativePath,
+          );
+          set({ recents: nextRecents });
+          persistRecents(nextRecents);
+        }
+      }
+
       // Same-path saves only change one file's content: patch the search
       // indexes directly instead of rescanning the whole vault. Renames
       // change the tree, so they still get a full refresh.
-      if (sameVaultPath(savePath, activeFilePath)) {
+      if (!renamed) {
         const relativeKey = folderPrefix + (extractBaseName(savePath) || "");
         set((state) => ({
           lessonSearchIndex: relativeKey
@@ -2439,6 +2549,18 @@ export const useAppStore = create<AppState>((set, get) => ({
             relativeKey && state.lessonClassIndex[relativeKey] !== undefined
               ? { ...state.lessonClassIndex, [relativeKey]: newLessonData.metadata.className || "" }
               : state.lessonClassIndex,
+          lessonPeriodIndex:
+            relativeKey && state.lessonPeriodIndex[relativeKey] !== undefined
+              ? { ...state.lessonPeriodIndex, [relativeKey]: newLessonData.metadata.period || "" }
+              : state.lessonPeriodIndex,
+          lessonRoomIndex:
+            relativeKey && state.lessonRoomIndex[relativeKey] !== undefined
+              ? { ...state.lessonRoomIndex, [relativeKey]: newLessonData.metadata.room || "" }
+              : state.lessonRoomIndex,
+          lessonTopicIndex:
+            relativeKey && state.lessonTopicIndex[relativeKey] !== undefined
+              ? { ...state.lessonTopicIndex, [relativeKey]: newLessonData.metadata.topic || "" }
+              : state.lessonTopicIndex,
           lessonPlannedDateIndex: relativeKey
             ? {
                 ...state.lessonPlannedDateIndex,
@@ -2495,6 +2617,15 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonClassIndex: state.lessonClassIndex[relativeKey] !== undefined
             ? { ...state.lessonClassIndex, [relativeKey]: lessonData.metadata?.className || "" }
             : state.lessonClassIndex,
+          lessonPeriodIndex: state.lessonPeriodIndex[relativeKey] !== undefined
+            ? { ...state.lessonPeriodIndex, [relativeKey]: lessonData.metadata?.period || "" }
+            : state.lessonPeriodIndex,
+          lessonRoomIndex: state.lessonRoomIndex[relativeKey] !== undefined
+            ? { ...state.lessonRoomIndex, [relativeKey]: lessonData.metadata?.room || "" }
+            : state.lessonRoomIndex,
+          lessonTopicIndex: state.lessonTopicIndex[relativeKey] !== undefined
+            ? { ...state.lessonTopicIndex, [relativeKey]: lessonData.metadata?.topic || "" }
+            : state.lessonTopicIndex,
           lessonPlannedDateIndex: {
             ...state.lessonPlannedDateIndex,
             [relativeKey]: lessonData.metadata?.plannedFor || null,
@@ -3077,6 +3208,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
       }
       if (root === "Lesson Plans") lessonIdentityRegistry.rebind(oldPath, newPath);
+
+      const newRelativePath = [...parentSegs, finalName].join("/");
+      const nextRecents = remapRecentPaths(
+        get().recents,
+        root === "Lesson Plans" ? "lesson" : "mindmap",
+        relativePath,
+        newRelativePath,
+      );
+      set({ recents: nextRecents });
+      persistRecents(nextRecents);
+
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to rename vault path:", error);
@@ -3121,6 +3263,17 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (activeRelative !== null) {
         set({ activeFilePath: appendRelativePath(newPath, activeRelative) });
       }
+
+      const newRelativePath = [...targetSegs, itemName].join("/");
+      const nextRecents = remapRecentPaths(
+        get().recents,
+        root === "Lesson Plans" ? "lesson" : "mindmap",
+        sourceRelative,
+        newRelativePath,
+      );
+      set({ recents: nextRecents });
+      persistRecents(nextRecents);
+
       await get().refreshVault();
     } catch (error) {
       console.error("Failed to move vault path:", error);

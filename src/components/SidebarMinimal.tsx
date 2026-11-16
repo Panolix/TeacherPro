@@ -160,6 +160,7 @@ export function SidebarMinimal() {
     setPendingMaterialDrop,
     currentView,
     lessonSearchIndex,
+    lessonTopicIndex,
     mindmapSearchIndex,
     vaultItemOrder,
     setVaultItemOrder,
@@ -1011,6 +1012,11 @@ export function SidebarMinimal() {
     const root: VaultRoot = node.fileType === "mindmap" ? "Mindmaps" : "Lesson Plans";
     const fileFolderPath = getVaultFolderPath(node.relativePath);
     const fileKey = vaultItemOrderKey(root, node.relativePath);
+    const fileStem = node.name.replace(/\.json$/i, "");
+    const fileLabel =
+      node.fileType === "lesson"
+        ? (lessonTopicIndex[node.relativePath] || "").trim() || fileStem
+        : fileStem;
     const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? "";
     const rootSegment = node.fileType === "mindmap" ? "/Mindmaps/" : "/Lesson Plans/";
     const isActive =
@@ -1035,7 +1041,7 @@ export function SidebarMinimal() {
         >
           {/* Drag handle � onMouseDown starts mouse-based drag (reliable in WKWebView) */}
           <div
-            onMouseDown={(e) => startSidebarMouseDrag(e, root, node.relativePath, node.name.replace(/\.json$/i, ""))}
+            onMouseDown={(e) => startSidebarMouseDrag(e, root, node.relativePath, fileLabel)}
             className="shrink-0 flex items-center justify-center w-4 h-4 cursor-grab active:cursor-grabbing text-gray-600 hover:text-gray-400 transition-colors select-none"
             title={t('sidebar.tooltips.dragToFolder')}
           >
@@ -1066,7 +1072,12 @@ export function SidebarMinimal() {
             className="flex-1 flex items-center gap-1.5 min-w-0 cursor-pointer"
           >
             {node.fileType === "lesson" ? <LessonIcon /> : <MindmapIcon />}
-            <span className="truncate">{node.name.replace(/\.json$/i, "")}</span>
+            <span
+              className="truncate"
+              title={fileLabel !== fileStem ? fileStem : undefined}
+            >
+              {fileLabel}
+            </span>
           </div>
         </div>
         {node.isLastFile &&
@@ -1843,8 +1854,13 @@ export function SidebarMinimal() {
               ) : (
                 <ul className="space-y-0.5 px-2 mt-2">
                   {searchResults.map((item) => {
-                    const displayName = (
+                    const rawDisplayName = (
                       "displayName" in item ? item.displayName : item.name
+                    );
+                    const displayName = (
+                      item.kind === "lesson"
+                        ? (lessonTopicIndex[item.relativePath] || "").trim() || rawDisplayName
+                        : rawDisplayName
                     ).replace(/\.json$/i, "");
                     let subtitle = "";
                     let key = `${item.kind}-${item.relativePath}`;
@@ -1954,7 +1970,11 @@ export function SidebarMinimal() {
                 <ul className="space-y-0.5 px-2">
                   {recents.map((r) => {
                     const segs = r.relativePath.split("/");
-                    const name = (segs[segs.length - 1] || "").replace(/\.json$/i, "");
+                    const fileStem = (segs[segs.length - 1] || "").replace(/\.json$/i, "");
+                    const name =
+                      r.type === "lesson"
+                        ? (lessonTopicIndex[r.relativePath] || "").trim() || fileStem
+                        : fileStem;
                     const folderPath = segs.slice(0, -1).join(" / ");
                     const root = r.type === "lesson" ? t('sidebar.sections.lessonPlans') : t('sidebar.sections.mindmaps');
                     const breadcrumb = folderPath ? `${root} / ${folderPath}` : root;

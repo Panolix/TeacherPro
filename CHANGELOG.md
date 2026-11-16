@@ -1,5 +1,41 @@
 # Changelog
 
+## [2.13.0] - 2026-11-16
+
+### Added
+- Lesson topics now name the lesson throughout the app: the top bar, sidebar,
+  recent list and search results show the topic, with the filename as fallback.
+- Placeholder lesson files (`Stunde`, `Lesson-2`, legacy untitled drafts) adopt
+  their first real topic as the filename. The rename happens once; later topic
+  edits leave the file name alone, and manual rename stays available.
+- AI lesson drafts now also set the lesson topic. The model's draft title is
+  applied when the lesson is still untitled, or the topic typed in the draft
+  dialog if you changed it. A topic the lesson already had is never overwritten.
+- Duplicated lessons receive a `(Copy)` topic suffix so the weekly planner can
+  tell the copies apart. PDF exports now use the lesson topic in the filename.
+- Weekly planner cards show class, period and room as compact tags with
+  matching icons in a wrapping row under the subject, so longer values stay
+  readable.
+
+### Fixed
+- Weekly calendar lesson cards now use the lesson topic as the card title
+  (falling back to the filename-derived title), so a named lesson no longer
+  shows "Stunde 2". Long topics are clamped to two lines with the full text
+  available on hover and to screen readers.
+- The calendar class tag tooltip now shows the class itself instead of the
+  field label.
+- Class, period, room and topic values are trimmed and whitespace-normalized
+  when read and saved, so the incremental index and a full vault refresh agree.
+- The legacy default lesson heading is also removed when an older lesson has
+  empty paragraphs before it.
+- The lesson topic, class, period and room inputs now cap input length
+  (120/40 characters), and printed topics wrap instead of overflowing the page.
+- Recent entries follow lesson renames, placeholder auto-renames and lesson
+  folder renames instead of pointing at the old path.
+- Weekly planner drag-and-drop no longer measures the whole board on every
+  mouse move. Drop targets are measured once per drag and the indicator updates
+  at most once per animation frame, removing the stutter when moving lessons.
+
 ## [2.12.1] - 2026-11-16
 
 ### Fixed

@@ -46,6 +46,12 @@ describe("lesson editing state and identity", () => {
     expect(copied.id).not.toBe(lesson.id);
   });
 
+  it("gives a duplicate a distinct copy title", () => {
+    const copied = duplicateLessonData(lesson);
+    expect(copied.metadata.topic).toBe("Unit 3 (Copy)");
+    expect(duplicateLessonData(copied).metadata.topic).toBe("Unit 3 (Copy)");
+  });
+
   it("keeps identity through renames but separates vaults and legacy copies", () => {
     const first = lessonDocumentKey("/vault", lesson, "A.json");
     expect(lessonDocumentKey("/vault", lesson, "Renamed.json")).toBe(first);

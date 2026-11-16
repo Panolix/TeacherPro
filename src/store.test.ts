@@ -157,6 +157,148 @@ describe("lesson metadata", () => {
     const opened = useAppStore.getState().activeFileContent!;
     expect(opened.content.content[0].content[0].text).toBe("My own title");
   });
+
+  it("drops the legacy default heading after leading empty paragraphs", async () => {
+    const leadingPath = "/vaultA/Lesson Plans/leading-empty.json";
+    mocks.files.set(leadingPath, JSON.stringify({
+      version: 1,
+      metadata: { subject: "", createdAt: "2026-01-01T12:00:00Z", plannedFor: null },
+      content: {
+        type: "doc",
+        content: [
+          { type: "paragraph" },
+          { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "New Lesson Plan" }] },
+          { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+        ],
+      },
+    }));
+
+    await useAppStore.getState().openLesson("leading-empty.json");
+    const opened = useAppStore.getState().activeFileContent!;
+    expect(opened.content.content).toEqual([
+      { type: "paragraph" },
+      { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+    ]);
+  });
+
+  it("normalizes whitespace in the extended metadata fields", async () => {
+    const spacedPath = "/vaultA/Lesson Plans/spaced.json";
+    mocks.files.set(spacedPath, JSON.stringify({
+      version: 1,
+      metadata: {
+        subject: "English",
+        createdAt: "2026-01-01T12:00:00Z",
+        plannedFor: null,
+        className: "  9a ",
+        period: " 3  Stunde ",
+        room: "\t204 ",
+        topic: "  Bruch   rechnung ",
+      },
+      content: { type: "doc", content: [{ type: "paragraph" }] },
+    }));
+
+    await useAppStore.getState().openLesson("spaced.json");
+    const opened = useAppStore.getState().activeFileContent!;
+    expect(opened.metadata.className).toBe("9a");
+    expect(opened.metadata.period).toBe("3 Stunde");
+    expect(opened.metadata.room).toBe("204");
+    expect(opened.metadata.topic).toBe("Bruch rechnung");
+  });
+
+  it("indexes class, period, room and topic for the calendar after a save", async () => {
+    useAppStore.setState({
+      lessonClassIndex: { "A.json": "" },
+      lessonPeriodIndex: { "A.json": "" },
+      lessonRoomIndex: { "A.json": "" },
+      lessonTopicIndex: { "A.json": "" },
+    });
+    await useAppStore.getState().openLesson("A.json");
+
+    const saved = await useAppStore.getState().saveActiveLesson(
+      lesson.content,
+      {
+        subject: "English",
+        className: "9a",
+        period: "3",
+        room: "204",
+        topic: "Bruchrechnung",
+      },
+    );
+
+    expect(saved).toBe(true);
+    const state = useAppStore.getState();
+    expect(state.lessonClassIndex["A.json"]).toBe("9a");
+    expect(state.lessonPeriodIndex["A.json"]).toBe("3");
+    expect(state.lessonRoomIndex["A.json"]).toBe("204");
+    expect(state.lessonTopicIndex["A.json"]).toBe("Bruchrechnung");
+    expect(state.lessonSearchIndex["A.json"]).toContain("bruchrechnung");
+    expect(JSON.parse(mocks.files.get(pathA)!).metadata.topic).toBe("Bruchrechnung");
+  });
+});
+
+describe("lesson file naming", () => {
+  it("renames a placeholder lesson once its first topic is saved", async () => {
+    const placeholderPath = "/vaultA/Lesson Plans/Stunde-2.json";
+    mocks.files.set(placeholderPath, JSON.stringify({
+      version: 1,
+      id: "placeholder",
+      metadata: { subject: "English", createdAt: "2026-01-01T12:00:00Z", plannedFor: null, topic: "" },
+      notes: "",
+      content: { type: "doc", content: [{ type: "paragraph" }] },
+    }));
+
+    await useAppStore.getState().openLesson("Stunde-2.json");
+    const saved = await useAppStore.getState().saveActiveLesson(
+      { type: "doc", content: [{ type: "paragraph" }] },
+      { subject: "English", topic: "Bruchrechnung: Einstieg" },
+    );
+
+    expect(saved).toBe(true);
+    const renamedPath = "/vaultA/Lesson Plans/Bruchrechnung Einstieg.json";
+    expect(mocks.files.has(renamedPath)).toBe(true);
+    expect(mocks.files.has(placeholderPath)).toBe(false);
+    expect(useAppStore.getState().activeFilePath).toBe(renamedPath);
+    expect(useAppStore.getState().activeFileContent?.metadata.topic).toBe("Bruchrechnung: Einstieg");
+    expect(useAppStore.getState().recents[0]?.relativePath).toBe("Bruchrechnung Einstieg.json");
+  });
+
+  it("does not rename a user-chosen filename when the topic changes", async () => {
+    await useAppStore.getState().openLesson("A.json");
+    const saved = await useAppStore.getState().saveActiveLesson(
+      lesson.content,
+      { subject: "English", topic: "Bruchrechnung" },
+    );
+
+    expect(saved).toBe(true);
+    expect(mocks.files.has(pathA)).toBe(true);
+    expect(useAppStore.getState().activeFilePath).toBe(pathA);
+  });
+
+  it("keeps queued saves on the renamed path", async () => {
+    const placeholderPath = "/vaultA/Lesson Plans/Lesson.json";
+    mocks.files.set(placeholderPath, JSON.stringify({
+      version: 1,
+      id: "placeholder-queued",
+      metadata: { subject: "English", createdAt: "2026-01-01T12:00:00Z", plannedFor: null, topic: "" },
+      notes: "",
+      content: { type: "doc", content: [{ type: "paragraph" }] },
+    }));
+
+    await useAppStore.getState().openLesson("Lesson.json");
+    const content = { type: "doc", content: [{ type: "paragraph" }] };
+    const first = useAppStore.getState().saveActiveLesson(content, { subject: "English", topic: "Bruchrechnung" });
+    const second = useAppStore.getState().saveActiveLesson(content, { subject: "English", topic: "Bruchrechnung" });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(mocks.files.has("/vaultA/Lesson Plans/Bruchrechnung.json")).toBe(true);
+    expect(mocks.files.has(placeholderPath)).toBe(false);
+  });
+
+  it("updates recents when a lesson is renamed manually", async () => {
+    await useAppStore.getState().openLesson("A.json");
+    await useAppStore.getState().renameLesson("A.json", "Renamed");
+    expect(useAppStore.getState().recents[0]?.relativePath).toBe("Renamed.json");
+  });
 });
 
 describe("document persistence", () => {

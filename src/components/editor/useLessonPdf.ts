@@ -12,6 +12,7 @@ import {
   revokePdfBlobUrl,
   savePdfToVault,
 } from "../../utils/pdfExport";
+import { sanitizeLessonFileStem } from "../../utils/lessonFileName";
 
 interface UseLessonPdfOptions {
   vaultPath: string | null;
@@ -147,10 +148,12 @@ export function useLessonPdf({
         requestAnimationFrame(() => resolve());
       });
 
-      const normalizedSubject =
-        subject.trim().replace(/[^a-zA-Z0-9\-\s_]/g, "").replace(/\s+/g, "-") || "lesson-plan";
+      const titleStem =
+        sanitizeLessonFileStem(topic) ||
+        sanitizeLessonFileStem(subject) ||
+        "lesson-plan";
       const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `${normalizedSubject}-${stamp}.pdf`;
+      const fileName = `${titleStem}-${stamp}.pdf`;
 
       const pdfBytes = await renderElementToPdfBytes(clonedElement, {
         orientation: "landscape",

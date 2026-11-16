@@ -3109,6 +3109,7 @@ export function Editor() {
                     onChange={(e) => setClassName(e.target.value)}
                     placeholder={t("editor.meta.egClass")}
                     aria-label={t("editor.meta.className")}
+                    maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
                   <span className="hidden lesson-export-value lesson-export-class-text">{className.trim() || t("editor.meta.notSet")}</span>
@@ -3121,6 +3122,7 @@ export function Editor() {
                     onChange={(e) => setPeriod(e.target.value)}
                     placeholder={t("editor.meta.egPeriod")}
                     aria-label={t("editor.meta.period")}
+                    maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
                   <span className="hidden lesson-export-value lesson-export-period-text">{period.trim() || t("editor.meta.notSet")}</span>
@@ -3133,6 +3135,7 @@ export function Editor() {
                     onChange={(e) => setRoom(e.target.value)}
                     placeholder={t("editor.meta.egRoom")}
                     aria-label={t("editor.meta.room")}
+                    maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
                   <span className="hidden lesson-export-value lesson-export-room-text">{room.trim() || t("editor.meta.notSet")}</span>
@@ -3281,9 +3284,10 @@ export function Editor() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               aria-label={t("editor.meta.topic")}
+              maxLength={120}
               className="tp-topic-input lesson-export-input flex-1 min-w-0"
             />
-            <span className="hidden lesson-export-value lesson-export-topic-text">
+            <span className="hidden lesson-export-value lesson-export-topic-text min-w-0 break-words">
               {topic.trim() || t("editor.meta.notSet")}
             </span>
           </div>
@@ -3336,8 +3340,13 @@ export function Editor() {
         open={draftDialogOpen}
         onClose={() => setDraftDialogOpen(false)}
         editor={editor}
-        defaultTopic={subject ?? ""}
+        defaultTopic={topic.trim() || subject}
         defaultGrade=""
+        onInsertTitle={(title) => {
+          // Keep a topic the lesson already had; the draft title is a
+          // convenience for lessons that are still untitled.
+          if (!topic.trim()) setTopic(title);
+        }}
         aiEnabled={aiEnabled}
         vaultPath={vaultPath}
         activeDb={activeChatDb}

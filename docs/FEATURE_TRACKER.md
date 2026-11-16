@@ -51,6 +51,9 @@ Primary implementation:
 - Explanatory helper copy was removed from Notes and Method Bank side panels to keep the side UI denser and less visually noisy.
 - Lesson notes are stored per lesson, included in local search indexing, and excluded from print/PDF output by default.
 - Metadata row: Class, Period, Room, Planned For, Subject, plus an editable Topic line that replaces the old static "New Lesson Plan" heading.
+- Lesson display names come from `metadata.topic` in the top bar, sidebar tree, recent list and search results; the filename is the fallback when no topic is set.
+- Placeholder lesson files (`Stunde`, `Lesson-N`, legacy untitled drafts) are renamed once from their first topic. Later topic edits do not rename the file; manual rename remains the explicit override.
+- AI lesson drafts apply the model's draft title to an empty lesson topic (or the topic typed in the draft dialog); an existing lesson topic is preserved.
 - Subject dropdown/input width is now constrained to a compact control size instead of stretching across the full metadata row.
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
 - Material double-click insertion into editor content is constrained to lesson-table body rows and inserts into the row's final media/material cell.
@@ -98,6 +101,7 @@ Primary implementation:
 - Material import: add files and add folders.
 - Context menu actions for lessons, mindmaps, and materials.
 - Lesson context menu includes duplicate action.
+- Duplicated lessons receive a `(Copy)` topic suffix so copies remain distinguishable in the weekly planner.
 - Trash section in sidebar supports search, restore, reveal, and permanent delete actions. Preview is not currently available.
 - Trash restore currently returns files to their section root; the original folder path is not preserved.
 - Material preview modal supports PDF, image, and text.
@@ -158,7 +162,9 @@ Primary implementation:
 - One-click "Today" jump to the current week.
 - Day cards with lesson listing by date.
 - Lesson cards show a colored left-border reflecting the subject color configured in settings (via `lessonSubjectIndex`).
-- A compact class chip appears in the card's meta row when `metadata.className` is set (via `lessonClassIndex`); lessons without a class look exactly as before.
+- Class, period and room render as compact tags with icons in a wrapping row below the subject (via `lessonClassIndex`, `lessonPeriodIndex`, `lessonRoomIndex`). Tags truncate with a full-value tooltip instead of squeezing the subject.
+- Lesson drag keeps the ghost on a composited transform, caches day/card hit-test boxes once per drag (refreshed on scroll/resize) and updates drag state only when the target day or insert index changes, avoiding per-mousemove layout thrash.
+- Lesson cards use `metadata.topic` as the title (via `lessonTopicIndex`), falling back to the filename-derived title. Long topics are clamped to two lines and exposed in full via the card title attribute.
 - Lesson cards are draggable between days in the current week.
 - Dropping a lesson on another day updates both `metadata.plannedFor` and the lesson filename date token so it appears under the new day immediately.
 - Create lesson directly for a selected day.
@@ -334,6 +340,7 @@ Primary implementation:
 - Main content scroll area reserves stable scrollbar gutter to prevent width shifts while scrolling.
 - Editor empty-state main content now uses a centered welcome screen with direct shortcut references and no inline create CTA.
 - PDF export mode uses temporary body class (`tp-exporting`) to hide interactive controls.
+- PDF export filenames use the lesson topic (falling back to subject) plus a timestamp.
 
 ## Backend and Permissions Notes
 

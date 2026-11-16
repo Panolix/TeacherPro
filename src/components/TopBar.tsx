@@ -27,6 +27,7 @@ export function TopBar() {
   const {
     vaultPath,
     activeFilePath,
+    activeFileContent,
     currentView,
     sidebarOpen,
     setSidebarOpen,
@@ -39,6 +40,8 @@ export function TopBar() {
   const lessonName = activeFilePath
     ? (activeFilePath.split(/[\/\\]/).pop() || "").replace(/\.json$/i, "")
     : null;
+  // The topic is the lesson's authored title; the filename is only a fallback.
+  const lessonTitle = activeFileContent?.metadata?.topic?.trim() || lessonName;
 
   const previousViewRef = useRef<typeof currentView>("editor");
 
@@ -112,7 +115,7 @@ export function TopBar() {
               className="truncate font-medium"
               style={{ color: "var(--tp-t-1)" }}
             >
-              {lessonName}
+              {lessonTitle}
             </span>
           </>
         )}
