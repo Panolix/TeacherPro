@@ -36,6 +36,7 @@ export function CalendarView() {
     renameVaultPath,
     subjects,
     lessonSubjectIndex,
+    lessonClassIndex,
     lessonPlannedDateIndex,
     lessonCalendarOrderIndex,
   } = useAppStore();
@@ -596,6 +597,7 @@ export function CalendarView() {
                     const isSelected = lessonName ? selectedLessons.has(lessonName) : false;
                     const subjectName = lessonName ? (lessonSubjectIndex[lessonName] || "") : "";
                     const subjectColor = subjectName ? subjects.find((s) => s.name === subjectName)?.color : undefined;
+                    const className = lessonName ? (lessonClassIndex[lessonName] || "") : "";
 
                     // If the derived title is just the subject name, the file was auto-named
                     // from the subject (e.g. "2026-04-17-English.json"). Use a date label so
@@ -636,12 +638,32 @@ export function CalendarView() {
                           >
                             {cleanTitle}
                           </div>
-                          {subjectName && (
-                            <div
-                              className="text-[11px] mt-0.5 font-medium"
-                              style={{ color: subjectColor || "var(--tp-accent)" }}
-                            >
-                              {subjectName}
+                          {(subjectName || className) && (
+                            <div className="mt-1 flex items-center justify-between gap-2 min-w-0">
+                              {subjectName ? (
+                                <span
+                                  className="truncate text-[11px] font-medium"
+                                  style={{ color: subjectColor || "var(--tp-accent)" }}
+                                >
+                                  {subjectName}
+                                </span>
+                              ) : (
+                                <span />
+                              )}
+                              {className && (
+                                <span
+                                  className="shrink-0 max-w-[55%] truncate rounded-[4px] border px-1.5 py-[1px] text-[10px] font-semibold leading-[1.5] tracking-wide"
+                                  style={{
+                                    borderColor: "var(--tp-b-2)",
+                                    background: "var(--tp-bg-4)",
+                                    color: "var(--tp-t-2)",
+                                  }}
+                                  title={t("editor.meta.className")}
+                                  aria-label={`${t("editor.meta.className")}: ${className}`}
+                                >
+                                  {className}
+                                </span>
+                              )}
                             </div>
                           )}
                         </button>

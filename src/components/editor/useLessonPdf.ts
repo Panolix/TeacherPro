@@ -16,7 +16,10 @@ import {
 interface UseLessonPdfOptions {
   vaultPath: string | null;
   subject: string;
-  teacher: string;
+  className: string;
+  period: string;
+  room: string;
+  topic: string;
   plannedForInput: string;
   selectedSubjectColor: string | null;
   /** Closes transient UI (context menus, popovers) before printing. */
@@ -30,7 +33,10 @@ interface UseLessonPdfOptions {
 export function useLessonPdf({
   vaultPath,
   subject,
-  teacher,
+  className,
+  period,
+  room,
+  topic,
   plannedForInput,
   selectedSubjectColor,
   closeTransientUi,
@@ -114,10 +120,17 @@ export function useLessonPdf({
       }
     }
 
-    const teacherText = clonedElement.querySelector<HTMLElement>(".lesson-export-teacher-text");
-    if (teacherText) {
-      teacherText.textContent = teacher.trim() || t("editor.meta.notSet");
-      teacherText.style.display = "inline";
+    for (const [selector, value] of [
+      [".lesson-export-class-text", className],
+      [".lesson-export-period-text", period],
+      [".lesson-export-room-text", room],
+      [".lesson-export-topic-text", topic],
+    ] as const) {
+      const node = clonedElement.querySelector<HTMLElement>(selector);
+      if (node) {
+        node.textContent = value.trim() || t("editor.meta.notSet");
+        node.style.display = "inline";
+      }
     }
 
     const plannedText = clonedElement.querySelector<HTMLElement>(".lesson-export-planned-text");

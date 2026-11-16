@@ -31,10 +31,18 @@ import { flushOpenDocuments } from "./utils/closeFlush";
 import { duplicateLessonData, LessonIdentityRegistry } from "./utils/lessonIdentity";
 
 export interface LessonMetadata {
-  teacher: string;
+  /**
+   * Deprecated. Kept optional so older lesson files still parse; the field is
+   * no longer shown or edited and is not carried into normalized metadata.
+   */
+  teacher?: string;
   createdAt: string;
   plannedFor: string | null;
   subject: string;
+  className?: string;
+  period?: string;
+  room?: string;
+  topic?: string;
   calendarOrder?: number;
 }
 
@@ -169,7 +177,6 @@ interface UISettings {
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
-  defaultTeacherName: string;
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
   aiEnabled: boolean;
@@ -212,7 +219,6 @@ interface AppState {
   calendarCollapsed: boolean;
   sectionCollapsed: Record<SidebarSectionKey, boolean>;
   debugMode: boolean;
-  defaultTeacherName: string;
   showActionButtonLabels: boolean;
   subjects: SubjectConfig[];
   aiEnabled: boolean;
@@ -228,6 +234,7 @@ interface AppState {
   trashAutoClearDays: number | null;
   language: "en" | "de";
   lessonSubjectIndex: Record<string, string>;
+  lessonClassIndex: Record<string, string>;
   lessonPlannedDateIndex: Record<string, string | null>;
   lessonCalendarOrderIndex: Record<string, number>;
   vaultItemOrder: Record<string, string[]>;
@@ -319,7 +326,6 @@ interface AppState {
   setCalendarCollapsed: (collapsed: boolean) => void;
   toggleSectionCollapsed: (section: SidebarSectionKey) => void;
   setDebugMode: (enabled: boolean) => void;
-  setDefaultTeacherName: (name: string) => void;
   setShowActionButtonLabels: (enabled: boolean) => void;
   setSubjects: (subjects: SubjectConfig[]) => void;
   setAiEnabled: (enabled: boolean) => void;
@@ -706,7 +712,6 @@ const DEFAULT_UI_SETTINGS: UISettings = {
     trash: false,
   },
   debugMode: false,
-  defaultTeacherName: "",
   showActionButtonLabels: false,
   subjects: [],
   aiEnabled: false,
@@ -809,7 +814,6 @@ function applyUiSettingsToState(settings: UISettings): Partial<AppState> {
     calendarCollapsed: settings.calendarCollapsed,
     sectionCollapsed: settings.sectionCollapsed,
     debugMode: settings.debugMode,
-    defaultTeacherName: settings.defaultTeacherName,
     showActionButtonLabels: settings.showActionButtonLabels,
     subjects: settings.subjects,
     aiEnabled: settings.aiEnabled,
@@ -895,9 +899,12 @@ function buildLessonSearchText(rawLesson: unknown): string {
   if (rawLesson && typeof rawLesson === "object") {
     const lesson = rawLesson as {
       metadata?: {
-        teacher?: unknown;
         subject?: unknown;
         plannedFor?: unknown;
+        className?: unknown;
+        period?: unknown;
+        room?: unknown;
+        topic?: unknown;
       };
       notes?: unknown;
       content?: unknown;
@@ -905,14 +912,17 @@ function buildLessonSearchText(rawLesson: unknown): string {
 
     const metadata = lesson.metadata;
     if (metadata) {
-      if (typeof metadata.teacher === "string" && metadata.teacher.trim()) {
-        chunks.push(metadata.teacher.trim());
-      }
-      if (typeof metadata.subject === "string" && metadata.subject.trim()) {
-        chunks.push(metadata.subject.trim());
-      }
-      if (typeof metadata.plannedFor === "string" && metadata.plannedFor.trim()) {
-        chunks.push(metadata.plannedFor.trim());
+      for (const value of [
+        metadata.topic,
+        metadata.className,
+        metadata.period,
+        metadata.room,
+        metadata.subject,
+        metadata.plannedFor,
+      ]) {
+        if (typeof value === "string" && value.trim()) {
+          chunks.push(value.trim());
+        }
       }
     }
 
@@ -1051,11 +1061,13 @@ async function buildLessonMetadataIndex(
   lessonTree: MaterialEntry[],
 ): Promise<{
   subjects: Record<string, string>;
+  classNames: Record<string, string>;
   plannedDates: Record<string, string | null>;
   calendarOrders: Record<string, number>;
 }> {
   const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
   const subjects: Record<string, string> = {};
+  const classNames: Record<string, string> = {};
   const plannedDates: Record<string, string | null> = {};
   const calendarOrders: Record<string, number> = {};
 
@@ -1074,6 +1086,7 @@ async function buildLessonMetadataIndex(
         const parsed = JSON.parse(text) as {
           metadata?: {
             subject?: unknown;
+            className?: unknown;
             plannedFor?: unknown;
             calendarOrder?: unknown;
           };
@@ -1081,6 +1094,10 @@ async function buildLessonMetadataIndex(
         subjects[entry.relativePath] =
           typeof parsed?.metadata?.subject === "string"
             ? parsed.metadata.subject.trim()
+            : "";
+        classNames[entry.relativePath] =
+          typeof parsed?.metadata?.className === "string"
+            ? parsed.metadata.className.trim()
             : "";
         plannedDates[entry.relativePath] =
           typeof parsed?.metadata?.plannedFor === "string" &&
@@ -1095,13 +1112,14 @@ async function buildLessonMetadataIndex(
         }
       } catch {
         subjects[entry.relativePath] = "";
+        classNames[entry.relativePath] = "";
         plannedDates[entry.relativePath] = null;
       }
     }));
   };
 
   await walk(lessonTree);
-  return { subjects, plannedDates, calendarOrders };
+  return { subjects, classNames, plannedDates, calendarOrders };
 }
 
 let searchIndexBuildVersion = 0;
@@ -1311,6 +1329,85 @@ function createPlannedForIso(plannedDate: Date): string {
   return localNoon.toISOString();
 }
 
+function metadataText(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * Normalizes lesson metadata on load. Missing fields fall back to empty
+ * strings so the editor header always has a stable, editable value.
+ */
+function normalizeLessonMetadata(
+  rawMetadata: Partial<LessonMetadata> | undefined,
+  options: {
+    subjectFallback?: string;
+    plannedForFallback?: string | null;
+  } = {},
+): LessonMetadata {
+  return {
+    createdAt:
+      typeof rawMetadata?.createdAt === "string" && rawMetadata.createdAt.trim()
+        ? rawMetadata.createdAt
+        : new Date().toISOString(),
+    plannedFor:
+      typeof rawMetadata?.plannedFor === "string" && rawMetadata.plannedFor.trim()
+        ? rawMetadata.plannedFor
+        : options.plannedForFallback ?? null,
+    subject:
+      typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
+        ? rawMetadata.subject
+        : options.subjectFallback ?? "",
+    className: metadataText(rawMetadata?.className),
+    period: metadataText(rawMetadata?.period),
+    room: metadataText(rawMetadata?.room),
+    topic: metadataText(rawMetadata?.topic),
+    calendarOrder:
+      typeof rawMetadata?.calendarOrder === "number" &&
+      Number.isFinite(rawMetadata.calendarOrder)
+        ? rawMetadata.calendarOrder
+        : undefined,
+  };
+}
+
+/**
+ * Older lessons were created with a static "Neue Stunde" / "New Lesson Plan"
+ * heading. That heading is now replaced by the editable topic field, so drop
+ * it when it is the first block of the document. Only the exact default text
+ * is removed; user-written headings are left untouched.
+ */
+function stripLegacyLessonHeading(content: unknown): unknown {
+  if (!content || typeof content !== "object") return content;
+  const doc = content as { type?: unknown; content?: unknown };
+  if (doc.type !== "doc" || !Array.isArray(doc.content)) return content;
+
+  const first = doc.content[0] as
+    | { type?: unknown; attrs?: { level?: unknown }; content?: unknown }
+    | undefined;
+  if (!first || first.type !== "heading" || first.attrs?.level !== 2) {
+    return content;
+  }
+
+  const text = Array.isArray(first.content)
+    ? first.content
+        .map((node) => {
+          const candidate = node as { text?: unknown };
+          return typeof candidate?.text === "string" ? candidate.text : "";
+        })
+        .join("")
+        .trim()
+    : "";
+
+  if (text !== "Neue Stunde" && text !== "New Lesson Plan") {
+    return content;
+  }
+
+  const rest = doc.content.slice(1);
+  return {
+    ...doc,
+    content: rest.length > 0 ? rest : [{ type: "paragraph" }],
+  };
+}
+
 function subjectToLessonFileToken(subject: string): string {
   return subject.trim().replace(/[^a-zA-Z0-9\-_ ]/g, "").replace(/\s+/g, "-");
 }
@@ -1401,7 +1498,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   calendarCollapsed: DEFAULT_UI_SETTINGS.calendarCollapsed,
   sectionCollapsed: DEFAULT_UI_SETTINGS.sectionCollapsed,
   debugMode: DEFAULT_UI_SETTINGS.debugMode,
-  defaultTeacherName: DEFAULT_UI_SETTINGS.defaultTeacherName,
   showActionButtonLabels: DEFAULT_UI_SETTINGS.showActionButtonLabels,
   subjects: DEFAULT_UI_SETTINGS.subjects,
   aiEnabled: DEFAULT_UI_SETTINGS.aiEnabled,
@@ -1417,6 +1513,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   trashAutoClearDays: DEFAULT_UI_SETTINGS.trashAutoClearDays,
   language: DEFAULT_UI_SETTINGS.language,
   lessonSubjectIndex: {},
+  lessonClassIndex: {},
   debugEvents: [],
   draggedMaterial: null,
   pendingMaterialDrop: null,
@@ -1549,10 +1646,6 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDebugMode: (enabled) => {
     set({ debugMode: enabled });
     void persistUiSettings({ debugMode: enabled });
-  },
-  setDefaultTeacherName: (name) => {
-    set({ defaultTeacherName: name });
-    void persistUiSettings({ defaultTeacherName: name });
   },
   setShowActionButtonLabels: (enabled) => {
     set({ showActionButtonLabels: enabled });
@@ -1695,7 +1788,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeMindmapContent: null, currentView: "editor", documentSaveState: "idle",
           lastSavedAt: null, lessonPlans: [], mindmaps: [], lessonTree: [], mindmapTree: [],
           materials: [], trashEntries: [], lessonSearchIndex: {}, mindmapSearchIndex: {},
-          lessonSubjectIndex: {}, lessonPlannedDateIndex: {}, lessonCalendarOrderIndex: {},
+          lessonSubjectIndex: {}, lessonClassIndex: {}, lessonPlannedDateIndex: {}, lessonCalendarOrderIndex: {},
           vaultItemOrder: {}, isSearchIndexing: false, subjectDatabases: [],
           activeChatDb: null, activeChatGrade: null, activeChatTopic: null, activeChatFile: null,
           chatContextBudget: null, draggedMaterial: null, pendingMaterialDrop: null,
@@ -1885,6 +1978,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             lessonSearchIndex: nextLessonIndex,
             mindmapSearchIndex: nextMindmapIndex,
             lessonSubjectIndex: nextMetadataIndex.subjects,
+            lessonClassIndex: nextMetadataIndex.classNames,
             lessonPlannedDateIndex: nextMetadataIndex.plannedDates,
             lessonCalendarOrderIndex: nextMetadataIndex.calendarOrders,
             isSearchIndexing: false,
@@ -1933,7 +2027,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!(await flushBeforeDocumentChange())) return;
 
     try {
-      const { defaultTeacherName, language } = get();
+      const { language } = get();
       const now = new Date();
       const dateToUse = plannedDate || now;
       const candidateName = language === "de" ? "Stunde.json" : "Lesson.json";
@@ -1950,17 +2044,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         version: 1,
         id: crypto.randomUUID(),
         metadata: {
-          teacher: defaultTeacherName,
           createdAt: now.toISOString(),
           plannedFor: dateToUse.toISOString(),
-          subject: ""
+          subject: "",
+          className: "",
+          period: "",
+          room: "",
+          topic: "",
         },
         notes: "",
         content: {
           type: "doc",
-          content: [
-            { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: get().language === "de" ? "Neue Stunde" : "New Lesson Plan" }] }
-          ]
+          content: [{ type: "paragraph" }],
         }
       };
       
@@ -2010,7 +2105,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   rescheduleLesson: async (fileName: string, plannedDate: Date) => {
-    const { vaultPath, defaultTeacherName, lessonSubjectIndex, subjects } = get();
+    const { vaultPath, lessonSubjectIndex, subjects } = get();
     if (!vaultPath) return null;
     if (!(await flushBeforeDocumentChange())) return null;
 
@@ -2030,10 +2125,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonData = {
             version: 1,
             metadata: {
-              teacher: defaultTeacherName,
               createdAt: new Date().toISOString(),
               plannedFor: null,
               subject: fallbackSubject,
+              className: "",
+              period: "",
+              room: "",
+              topic: "",
             },
             notes: "",
             content: rawContent,
@@ -2049,29 +2147,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
 
         const rawMetadata = lessonData.metadata as Partial<LessonMetadata> | undefined;
-        const normalizedMetadata: LessonMetadata = {
-          teacher:
-            typeof rawMetadata?.teacher === "string"
-              ? rawMetadata.teacher
-              : defaultTeacherName,
-          createdAt:
-            typeof rawMetadata?.createdAt === "string" && rawMetadata.createdAt.trim()
-              ? rawMetadata.createdAt
-              : new Date().toISOString(),
-          plannedFor:
-            typeof rawMetadata?.plannedFor === "string" && rawMetadata.plannedFor.trim()
-              ? rawMetadata.plannedFor
-              : null,
-          subject:
-            typeof rawMetadata?.subject === "string" && rawMetadata.subject.trim()
-              ? rawMetadata.subject
-              : fallbackSubject,
-          calendarOrder:
-            typeof rawMetadata?.calendarOrder === "number" &&
-            Number.isFinite(rawMetadata.calendarOrder)
-              ? rawMetadata.calendarOrder
-              : undefined,
-        };
+        const normalizedMetadata = normalizeLessonMetadata(rawMetadata, {
+          subjectFallback: fallbackSubject,
+        });
 
         const updatedLessonData: LessonData = {
           ...lessonData,
@@ -2357,6 +2435,10 @@ export const useAppStore = create<AppState>((set, get) => ({
             relativeKey && state.lessonSubjectIndex[relativeKey] !== undefined
               ? { ...state.lessonSubjectIndex, [relativeKey]: newLessonData.metadata.subject || "" }
               : state.lessonSubjectIndex,
+          lessonClassIndex:
+            relativeKey && state.lessonClassIndex[relativeKey] !== undefined
+              ? { ...state.lessonClassIndex, [relativeKey]: newLessonData.metadata.className || "" }
+              : state.lessonClassIndex,
           lessonPlannedDateIndex: relativeKey
             ? {
                 ...state.lessonPlannedDateIndex,
@@ -2410,6 +2492,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonSubjectIndex: state.lessonSubjectIndex[relativeKey] !== undefined
             ? { ...state.lessonSubjectIndex, [relativeKey]: lessonData.metadata?.subject || "" }
             : state.lessonSubjectIndex,
+          lessonClassIndex: state.lessonClassIndex[relativeKey] !== undefined
+            ? { ...state.lessonClassIndex, [relativeKey]: lessonData.metadata?.className || "" }
+            : state.lessonClassIndex,
           lessonPlannedDateIndex: {
             ...state.lessonPlannedDateIndex,
             [relativeKey]: lessonData.metadata?.plannedFor || null,
@@ -2450,16 +2535,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (fileName.toLowerCase().endsWith('.json')) {
         const rawContent = JSON.parse(text);
         let lessonData: LessonData;
-        const { defaultTeacherName } = get();
         
         if (rawContent.type === "doc" && !rawContent.version) {
           lessonData = {
             version: 1,
             metadata: {
-              teacher: defaultTeacherName,
               createdAt: new Date().toISOString(),
               plannedFor: null,
-              subject: ""
+              subject: "",
+              className: "",
+              period: "",
+              room: "",
+              topic: "",
             },
             notes: "",
             content: rawContent
@@ -2470,29 +2557,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           lessonData = {
             ...(rawLesson as LessonData),
             version: 1,
-            metadata: {
-              teacher:
-                typeof rawMetadata.teacher === "string"
-                  ? rawMetadata.teacher
-                  : defaultTeacherName,
-              createdAt:
-                typeof rawMetadata.createdAt === "string" && rawMetadata.createdAt.trim()
-                  ? rawMetadata.createdAt
-                  : new Date().toISOString(),
-              plannedFor:
-                typeof rawMetadata.plannedFor === "string" && rawMetadata.plannedFor.trim()
-                  ? rawMetadata.plannedFor
-                  : null,
-              subject:
-                typeof rawMetadata.subject === "string" ? rawMetadata.subject : "",
-              calendarOrder:
-                typeof rawMetadata.calendarOrder === "number" &&
-                Number.isFinite(rawMetadata.calendarOrder)
-                  ? rawMetadata.calendarOrder
-                  : undefined,
-            },
+            metadata: normalizeLessonMetadata(rawMetadata),
             notes: typeof rawLesson.notes === "string" ? rawLesson.notes : "",
-            content: rawLesson.content ?? { type: "doc", content: [] },
+            content: stripLegacyLessonHeading(rawLesson.content ?? { type: "doc", content: [] }),
           };
         }
 

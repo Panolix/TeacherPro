@@ -146,8 +146,6 @@ export function SettingsModal({ open, onClose }: Props) {
   const {
     accentColor,
     setAccentColor,
-    defaultTeacherName,
-    setDefaultTeacherName,
     subjects,
     setSubjects,
     defaultLessonTableBodyRows,
@@ -566,15 +564,6 @@ export function SettingsModal({ open, onClose }: Props) {
             {tab === "lessons" && (
               <>
                 <Section title={t("settings.lessons.defaultLessonSettings")}>
-                  <FormRow label={t("settings.lessons.defaultTeacherName")} hint={t("settings.lessons.defaultTeacherNameHint")}>
-                    <input
-                      type="text"
-                      className="tp-input"
-                      placeholder={t("editor.meta.yourName")}
-                      value={defaultTeacherName}
-                      onChange={(e) => setDefaultTeacherName(e.target.value)}
-                    />
-                  </FormRow>
                   <FormRow label={t("settings.lessons.defaultTableRows")}>
                     <NumberInput
                       value={defaultLessonTableBodyRows}

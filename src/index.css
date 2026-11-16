@@ -1073,6 +1073,32 @@ html[data-tp-lesson-paper="light"] .ProseMirror blockquote,
   border-bottom-color: var(--tp-accent);
 }
 
+/* Lesson topic: a plain heading-like line that replaces the old static
+   "New Lesson Plan" heading. No box, no placeholder, no extra chrome. */
+.tp-topic-input {
+  background: transparent;
+  border: none;
+  color: var(--tp-paper-ink);
+  font-size: 13pt;
+  font-weight: 700;
+  line-height: 1.35;
+  padding: 0;
+  outline: none;
+  width: 100%;
+}
+.tp-topic-input::placeholder {
+  color: var(--tp-paper-ink-3);
+  opacity: 0.75;
+}
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-topic-input,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-topic-label {
+  color: #f3f4f6 !important;
+}
+html[data-tp-lesson-paper="light"] .tp-editor-surface .tp-topic-input,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .tp-topic-label {
+  color: #0f172a !important;
+}
+
 /* Dark paper: restore readable text for transparent meta inputs */
 html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-meta-input {
   color: #f3f4f6 !important;
@@ -1133,9 +1159,32 @@ body.tp-exporting #lesson-plan-export-content .lesson-export-calendar-popover,
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-subject-text,
 .tp-export-light-clone .lesson-export-subject-text,
-body.tp-exporting #lesson-plan-export-content .lesson-export-teacher-text,
-.tp-export-light-clone .lesson-export-teacher-text {
+body.tp-exporting #lesson-plan-export-content .lesson-export-class-text,
+.tp-export-light-clone .lesson-export-class-text,
+body.tp-exporting #lesson-plan-export-content .lesson-export-period-text,
+.tp-export-light-clone .lesson-export-period-text,
+body.tp-exporting #lesson-plan-export-content .lesson-export-room-text,
+.tp-export-light-clone .lesson-export-room-text {
   display: inline !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-topic-text,
+.tp-export-light-clone .lesson-export-topic-text {
+  display: inline !important;
+  font-size: 14pt !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .tp-topic-label,
+.tp-export-light-clone .tp-topic-label {
+  color: #111827 !important;
+}
+
+body.tp-exporting #lesson-plan-export-content .lesson-export-topic.is-empty,
+.tp-export-light-clone .lesson-export-topic.is-empty {
+  display: none !important;
 }
 
 body.tp-exporting #lesson-plan-export-content .lesson-export-subject-picker,

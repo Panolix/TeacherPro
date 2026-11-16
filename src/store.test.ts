@@ -113,6 +113,52 @@ describe("vault switching", () => {
   });
 });
 
+describe("lesson metadata", () => {
+  it("drops the legacy default heading and fills the extended fields", async () => {
+    const legacyPath = "/vaultA/Lesson Plans/legacy.json";
+    mocks.files.set(legacyPath, JSON.stringify({
+      version: 1,
+      metadata: { teacher: "Old", subject: "English", createdAt: "2026-01-01T12:00:00Z", plannedFor: null },
+      notes: "",
+      content: {
+        type: "doc",
+        content: [
+          { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "Neue Stunde" }] },
+          { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+        ],
+      },
+    }));
+
+    await useAppStore.getState().openLesson("legacy.json");
+    const opened = useAppStore.getState().activeFileContent!;
+    expect(opened.content.content).toEqual([
+      { type: "paragraph", content: [{ type: "text", text: "Body" }] },
+    ]);
+    expect(opened.metadata.className).toBe("");
+    expect(opened.metadata.period).toBe("");
+    expect(opened.metadata.room).toBe("");
+    expect(opened.metadata.topic).toBe("");
+  });
+
+  it("keeps a user-written heading", async () => {
+    const customPath = "/vaultA/Lesson Plans/custom.json";
+    mocks.files.set(customPath, JSON.stringify({
+      version: 1,
+      metadata: { subject: "", createdAt: "2026-01-01T12:00:00Z", plannedFor: null },
+      content: {
+        type: "doc",
+        content: [
+          { type: "heading", attrs: { level: 2 }, content: [{ type: "text", text: "My own title" }] },
+        ],
+      },
+    }));
+
+    await useAppStore.getState().openLesson("custom.json");
+    const opened = useAppStore.getState().activeFileContent!;
+    expect(opened.content.content[0].content[0].text).toBe("My own title");
+  });
+});
+
 describe("document persistence", () => {
   it("waits for the outgoing save before unmounting into the weekly view", async () => {
     let release!: () => void;

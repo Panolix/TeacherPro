@@ -8,7 +8,7 @@ import { duplicateLessonData, ensureLessonIdentity, lessonDocumentKey, LessonIde
 
 const lesson: LessonData = {
   version: 1, id: "original", notes: "saved notes",
-  metadata: { teacher: "Teacher", subject: "English", plannedFor: null, createdAt: "2026-01-01T12:00:00Z" },
+  metadata: { subject: "English", className: "9a", period: "3", room: "204", topic: "Unit 3", plannedFor: null, createdAt: "2026-01-01T12:00:00Z" },
   content: { type: "doc", content: [] },
 };
 let metadata: ReturnType<typeof useLessonMetadata>;
@@ -28,12 +28,12 @@ describe("lesson editing state and identity", () => {
     const key = lessonDocumentKey("/vault", lesson, "/vault/Lesson Plans/A.json");
     await act(async () => { root.render(<Harness key={key} data={lesson} />); });
     await act(async () => {
-      metadata.setLessonNotes("typed while saving"); metadata.setTeacher("New teacher");
+      metadata.setLessonNotes("typed while saving"); metadata.setClassName("9b");
       metadata.setSubject("Math"); metadata.setPlannedForInput("12/11/2026");
     });
     await act(async () => { root.render(<Harness key={key} data={{ ...lesson, notes: "older save snapshot" }} />); });
     expect(metadata.lessonNotes).toBe("typed while saving");
-    expect(metadata.teacher).toBe("New teacher"); expect(metadata.subject).toBe("Math");
+    expect(metadata.className).toBe("9b"); expect(metadata.subject).toBe("Math");
     expect(metadata.plannedForInput).toBe("12/11/2026");
   });
 

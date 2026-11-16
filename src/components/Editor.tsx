@@ -156,7 +156,12 @@ export function Editor() {
   } = useAppStore();
   const { t } = useTranslation();
   const {
-    subject, setSubject, teacher, setTeacher, lessonNotes, setLessonNotes,
+    subject, setSubject,
+    className, setClassName,
+    period, setPeriod,
+    room, setRoom,
+    topic, setTopic,
+    lessonNotes, setLessonNotes,
     plannedForInput, setPlannedForInput, plannedCalendarMonth, setPlannedCalendarMonth,
   } = useLessonMetadata(activeFileContent);
   const [isAiBusy, setIsAiBusy] = useState(false);
@@ -374,16 +379,22 @@ export function Editor() {
   // during effect cleanup, i.e. while it still holds the outgoing lesson's
   // values (the sync effects for the incoming lesson have not run yet).
   const autosaveInputsRef = useRef<{
-    teacher: string;
     subject: string;
+    className: string;
+    period: string;
+    room: string;
+    topic: string;
     plannedForInput: string;
     lessonNotes: string;
     lastKnownPlannedFor: string | null;
     baseMetadata: LessonMetadata | null;
     documentId: string | undefined;
   }>({
-    teacher,
     subject,
+    className,
+    period,
+    room,
+    topic,
     plannedForInput,
     lessonNotes,
     lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
@@ -392,8 +403,11 @@ export function Editor() {
   });
   useEffect(() => {
     autosaveInputsRef.current = {
-      teacher,
       subject,
+      className,
+      period,
+      room,
+      topic,
       plannedForInput,
       lessonNotes,
       lastKnownPlannedFor: activeFileContent?.metadata?.plannedFor ?? null,
@@ -408,8 +422,11 @@ export function Editor() {
   // nothing actually changed � regardless of any JSON normalization noise
   // between the store object and editor.getJSON().
   const lastSavedMetaRef = useRef({
-    teacher: activeFileContent?.metadata?.teacher || "",
     subject: activeFileContent?.metadata?.subject || "",
+    className: activeFileContent?.metadata?.className || "",
+    period: activeFileContent?.metadata?.period || "",
+    room: activeFileContent?.metadata?.room || "",
+    topic: activeFileContent?.metadata?.topic || "",
     plannedFor: activeFileContent?.metadata?.plannedFor || null,
     notes: activeFileContent?.notes || "",
   });
@@ -420,13 +437,19 @@ export function Editor() {
 
   const metaIsDirty = useCallback(
     (candidate: {
-      teacher: string;
       subject: string;
+      className: string;
+      period: string;
+      room: string;
+      topic: string;
       notes: string;
       plannedFor: string | null;
     }) =>
-      candidate.teacher !== lastSavedMetaRef.current.teacher ||
       candidate.subject !== lastSavedMetaRef.current.subject ||
+      candidate.className !== lastSavedMetaRef.current.className ||
+      candidate.period !== lastSavedMetaRef.current.period ||
+      candidate.room !== lastSavedMetaRef.current.room ||
+      candidate.topic !== lastSavedMetaRef.current.topic ||
       candidate.notes !== lastSavedMetaRef.current.notes ||
       candidate.plannedFor !== lastSavedMetaRef.current.plannedFor,
     [],
@@ -609,7 +632,7 @@ export function Editor() {
       Subscript,
       Superscript,
     ],
-    content: activeFileContent?.content || `<h2>${language === "de" ? "Neue Stunde" : "New Lesson Plan"}</h2>`,
+    content: activeFileContent?.content || { type: "doc", content: [{ type: "paragraph" }] },
     editorProps: {
       // Mod+Shift+V inserts the clipboard as plain text (paragraphs),
       // stripping any formatting when pasting from Word/websites.
@@ -706,14 +729,20 @@ export function Editor() {
       parsedPlannedFor !== undefined ? parsedPlannedFor : inputs.lastKnownPlannedFor;
     const snapshot = JSON.stringify({
       content: json,
-      teacher: inputs.teacher,
       subject: inputs.subject,
+      className: inputs.className,
+      period: inputs.period,
+      room: inputs.room,
+      topic: inputs.topic,
       plannedFor: effectivePlannedFor ?? null,
       notes: inputs.lessonNotes,
     });
     const metadataPatch: Partial<LessonMetadata> = {
-      teacher: inputs.teacher,
       subject: inputs.subject,
+      className: inputs.className,
+      period: inputs.period,
+      room: inputs.room,
+      topic: inputs.topic,
     };
     if (parsedPlannedFor !== undefined) {
       metadataPatch.plannedFor = parsedPlannedFor;
@@ -753,8 +782,11 @@ export function Editor() {
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
-        teacher: inputs.teacher,
         subject: inputs.subject,
+        className: inputs.className,
+        period: inputs.period,
+        room: inputs.room,
+        topic: inputs.topic,
         notes: inputs.lessonNotes,
         plannedFor: effectivePlannedFor ?? null,
       })
@@ -775,8 +807,11 @@ export function Editor() {
     if (ok) {
       lastSavedSnapshotRef.current = payload.snapshot;
       lastSavedMetaRef.current = {
-        teacher: inputs.teacher,
         subject: inputs.subject,
+        className: inputs.className,
+        period: inputs.period,
+        room: inputs.room,
+        topic: inputs.topic,
         notes: inputs.lessonNotes,
         plannedFor: effectivePlannedFor ?? null,
       };
@@ -837,8 +872,11 @@ export function Editor() {
     if (
       !docDirtyRef.current &&
       !metaIsDirty({
-        teacher: inputs.teacher,
         subject: inputs.subject,
+        className: inputs.className,
+        period: inputs.period,
+        room: inputs.room,
+        topic: inputs.topic,
         notes: inputs.lessonNotes,
         plannedFor: effectivePlannedFor ?? null,
       })
@@ -852,7 +890,6 @@ export function Editor() {
     }
 
     const baseMetadata = inputs.baseMetadata ?? {
-      teacher: "",
       subject: "",
       createdAt: new Date().toISOString(),
       plannedFor: null,
@@ -862,8 +899,11 @@ export function Editor() {
       id: inputs.documentId,
       metadata: {
         ...baseMetadata,
-        teacher: inputs.teacher,
         subject: inputs.subject,
+        className: inputs.className,
+        period: inputs.period,
+        room: inputs.room,
+        topic: inputs.topic,
         ...(payload.metadataPatch.plannedFor !== undefined
           ? { plannedFor: payload.metadataPatch.plannedFor }
           : {}),
@@ -1010,14 +1050,20 @@ export function Editor() {
 
     lastSavedSnapshotRef.current = JSON.stringify({
       content: activeFileContent.content,
-      teacher: activeFileContent.metadata.teacher || "",
       subject: activeFileContent.metadata.subject || "",
+      className: activeFileContent.metadata.className || "",
+      period: activeFileContent.metadata.period || "",
+      room: activeFileContent.metadata.room || "",
+      topic: activeFileContent.metadata.topic || "",
       plannedFor: activeFileContent.metadata.plannedFor || null,
       notes: activeFileContent.notes || "",
     });
     lastSavedMetaRef.current = {
-      teacher: activeFileContent.metadata.teacher || "",
       subject: activeFileContent.metadata.subject || "",
+      className: activeFileContent.metadata.className || "",
+      period: activeFileContent.metadata.period || "",
+      room: activeFileContent.metadata.room || "",
+      topic: activeFileContent.metadata.topic || "",
       plannedFor: activeFileContent.metadata.plannedFor || null,
       notes: activeFileContent.notes || "",
     };
@@ -1025,7 +1071,7 @@ export function Editor() {
     setDocumentSaveState("saved");
   }, [editor, activeFilePath, activeFileContent, setDocumentSaveState]);
 
-  // Metadata edits (teacher/subject/date/notes fields) also arm the autosave.
+  // Metadata edits (class/period/room/topic/subject/date/notes fields) also arm the autosave.
   useEffect(() => {
     if (!editor || !activeFilePath) {
       return;
@@ -1038,8 +1084,11 @@ export function Editor() {
         : (autosaveInputsRef.current.lastKnownPlannedFor ?? null);
     if (
       metaIsDirty({
-        teacher,
         subject,
+        className,
+        period,
+        room,
+        topic,
         notes: lessonNotes,
         plannedFor: effectivePlannedFor,
       })
@@ -1053,7 +1102,10 @@ export function Editor() {
   }, [
     editor,
     activeFilePath,
-    teacher,
+    className,
+    period,
+    room,
+    topic,
     subject,
     plannedForInput,
     lessonNotes,
@@ -1188,22 +1240,32 @@ export function Editor() {
     const json = editor.getJSON();
     const revisionAtStart = docRevisionRef.current;
     setDocumentSaveState("saving");
-    const ok = await saveActiveLesson(json, {
-      teacher,
+    const metadataPatch = {
       subject,
+      className,
+      period,
+      room,
+      topic,
       plannedFor: parsedPlannedFor,
-    }, lessonNotes);
+    };
+    const ok = await saveActiveLesson(json, metadataPatch, lessonNotes);
     if (ok) {
       lastSavedSnapshotRef.current = JSON.stringify({
         content: json,
-        teacher,
         subject,
+        className,
+        period,
+        room,
+        topic,
         plannedFor: parsedPlannedFor,
         notes: lessonNotes,
       });
       lastSavedMetaRef.current = {
-        teacher,
         subject,
+        className,
+        period,
+        room,
+        topic,
         plannedFor: parsedPlannedFor,
         notes: lessonNotes,
       };
@@ -1220,7 +1282,10 @@ export function Editor() {
     editor,
     plannedForInput,
     saveActiveLesson,
-    teacher,
+    className,
+    period,
+    room,
+    topic,
     subject,
     lessonNotes,
     setDocumentSaveState,
@@ -1616,9 +1681,12 @@ export function Editor() {
 
       // Build metadata header
       const metaLines: string[] = [];
-      if (teacher)         metaLines.push(`Teacher: ${teacher}`);
-      if (subject)         metaLines.push(`Subject: ${subject}`);
-      if (plannedForInput) metaLines.push(`Planned for: ${plannedForInput}`);
+      if (topic)          metaLines.push(`${t("editor.meta.topic")}: ${topic}`);
+      if (className)      metaLines.push(`${t("editor.meta.className")}: ${className}`);
+      if (period)         metaLines.push(`${t("editor.meta.period")}: ${period}`);
+      if (room)           metaLines.push(`${t("editor.meta.room")}: ${room}`);
+      if (subject)        metaLines.push(`${t("editor.meta.subject")}: ${subject}`);
+      if (plannedForInput) metaLines.push(`${t("editor.meta.plannedFor")}: ${plannedForInput}`);
       const metaHeader = metaLines.length > 0 ? metaLines.join("\n") + "\n" : "";
 
       const lessonBlock = `${metaHeader}${contextText}`.trim() || "(empty lesson plan � no content yet)";
@@ -1916,7 +1984,7 @@ export function Editor() {
       chatBusyRef.current = false;
       if (chatMountedRef.current) setIsChatBusy(false);
     }
-  }, [aiEnabled, aiV3ChatModelId, aiV3ContextSize, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, teacher, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
+  }, [aiEnabled, aiV3ChatModelId, aiV3ContextSize, aiChatHistoryLimit, aiTemperature, aiSystemPrompt, aiThinkingEnabled, modelSupportsThinking, buildLessonContextText, chatInput, chatMessages, topic, className, period, room, subject, plannedForInput, logDebug, estimateTokens, activeChatDb, activeChatGrade, activeChatTopic, activeChatFile, vaultPath, setChatContextBudget, t]);
 
   // Fetch subject DB list when chat or the draft dialog opens (so dropdown is populated)
   useEffect(() => {
@@ -2913,7 +2981,10 @@ export function Editor() {
   } = useLessonPdf({
     vaultPath,
     subject,
-    teacher,
+    className,
+    period,
+    room,
+    topic,
     plannedForInput,
     selectedSubjectColor,
     closeTransientUi: () => {
@@ -2921,12 +2992,6 @@ export function Editor() {
       setPlannedCalendarOpen(false);
     },
   });
-  const formatDate = (isoString?: string | null) => {
-    if (!isoString) return t("editor.meta.notSet");
-    return new Date(isoString).toLocaleDateString("en-GB", {
-      weekday: "short", year: "numeric", month: "short", day: "numeric"
-    });
-  };
 
   // Bridge: expose Editor actions + panel toggles to TopBar.
   // Keep callable handlers in refs so TopBar actions always execute latest logic
@@ -3034,22 +3099,43 @@ export function Editor() {
         }}
       >
         <div id="lesson-plan-export-content" className="flex-1 lesson-export-surface">
-          <div className="px-6 pt-4 pb-5 lesson-export-meta" style={{ borderBottom: "1px solid var(--tp-paper-line)", marginBottom: "24px" }}>
-              <div className="flex justify-around gap-x-4 gap-y-4 items-start [&_input]:text-center [&_select]:text-center [&>div]:flex [&>div]:flex-col [&>div]:items-center [&>div]:text-center [&>div]:w-[200px] [&>div]:max-w-[200px]">
+          <div className="px-6 pt-4 pb-4 lesson-export-meta" style={{ borderBottom: "1px solid var(--tp-paper-line)", marginBottom: "20px" }}>
+              <div className="flex flex-wrap justify-around gap-x-4 gap-y-4 items-start [&_input]:text-center [&_select]:text-center [&>div]:flex [&>div]:flex-col [&>div]:items-center [&>div]:text-center [&>div]:flex-1 [&>div]:min-w-0 [&>div]:max-w-[200px]">
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.teacher")}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.className")}</span>
                   <input
                     type="text"
-                    value={teacher}
-                    onChange={(e) => setTeacher(e.target.value)}
-                    placeholder={t("editor.meta.yourName")}
+                    value={className}
+                    onChange={(e) => setClassName(e.target.value)}
+                    placeholder={t("editor.meta.egClass")}
+                    aria-label={t("editor.meta.className")}
                     className="tp-meta-input lesson-export-input w-full"
                   />
-                  <span className="hidden lesson-export-value lesson-export-teacher-text text-black">{teacher.trim() || t("editor.meta.notSet")}</span>
+                  <span className="hidden lesson-export-value lesson-export-class-text">{className.trim() || t("editor.meta.notSet")}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.created")}</span>
-                  <span className="text-[13px] lesson-export-value" style={{ color: "var(--tp-paper-ink)" }}>{formatDate(activeFileContent?.metadata?.createdAt)}</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.period")}</span>
+                  <input
+                    type="text"
+                    value={period}
+                    onChange={(e) => setPeriod(e.target.value)}
+                    placeholder={t("editor.meta.egPeriod")}
+                    aria-label={t("editor.meta.period")}
+                    className="tp-meta-input lesson-export-input w-full"
+                  />
+                  <span className="hidden lesson-export-value lesson-export-period-text">{period.trim() || t("editor.meta.notSet")}</span>
+                </div>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.room")}</span>
+                  <input
+                    type="text"
+                    value={room}
+                    onChange={(e) => setRoom(e.target.value)}
+                    placeholder={t("editor.meta.egRoom")}
+                    aria-label={t("editor.meta.room")}
+                    className="tp-meta-input lesson-export-input w-full"
+                  />
+                  <span className="hidden lesson-export-value lesson-export-room-text">{room.trim() || t("editor.meta.notSet")}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.plannedFor")}</span>
@@ -3060,6 +3146,7 @@ export function Editor() {
                     value={plannedForInput}
                     onChange={(event) => setPlannedForInput(event.target.value)}
                     placeholder={t("editor.meta.dateFormat")}
+                    aria-label={t("editor.meta.plannedFor")}
                     className="tp-meta-input lesson-export-input lesson-export-planned-input flex-1 min-w-0 text-center"
                   />
                   <div className="relative lesson-export-calendar-trigger print:hidden" ref={plannedCalendarRef}>
@@ -3154,6 +3241,7 @@ export function Editor() {
                       <select
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
+                        aria-label={t("editor.meta.subject")}
                         className="tp-meta-input lesson-export-input flex-1 min-w-0"
                       >
                         <option value="">{t("editor.meta.none")}</option>
@@ -3168,6 +3256,7 @@ export function Editor() {
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder={t("editor.meta.egMathematics")}
+                      aria-label={t("editor.meta.subject")}
                       className="tp-meta-input lesson-export-input w-full"
                     />
                   )}
@@ -3178,6 +3267,26 @@ export function Editor() {
                 </div>
               </div>
             </div>
+
+          <div className={`lesson-export-topic px-6 flex items-baseline gap-1.5 ${topic.trim() ? "" : "is-empty"}`} style={{ marginBottom: "6px" }}>
+            <span
+              className="shrink-0 text-[13pt] font-bold tp-topic-label"
+              style={{ color: "var(--tp-paper-ink)" }}
+            >
+              {t("editor.meta.topic")}:
+            </span>
+            <input
+              id="lesson-topic-input"
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              aria-label={t("editor.meta.topic")}
+              className="tp-topic-input lesson-export-input flex-1 min-w-0"
+            />
+            <span className="hidden lesson-export-value lesson-export-topic-text">
+              {topic.trim() || t("editor.meta.notSet")}
+            </span>
+          </div>
 
           <div
             ref={editorSurfaceRef}

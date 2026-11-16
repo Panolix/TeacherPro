@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { X, FileText, Network, Calendar, User, BookOpen } from "lucide-react";
+import { X, FileText, Network, Calendar, Users, Clock, MapPin, BookOpen } from "lucide-react";
 import { join } from "@tauri-apps/api/path";
 import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore, type LessonData, type MindmapData } from "../store";
@@ -273,12 +273,32 @@ export function VaultItemPreviewModal({
                 className="rounded-lg p-4 mb-6"
                 style={{ background: "var(--tp-bg-2, #1e1e1e)", border: "1px solid var(--tp-b-1, #2d2d2d)" }}
               >
+                {lessonData.metadata?.topic && (
+                  <div className="mb-4 pb-3" style={{ borderBottom: "1px solid var(--tp-b-1, #2d2d2d)" }}>
+                    <div className="text-[12.5px] text-gray-500">{t("vaultPreview.topic")}</div>
+                    <div className="text-base text-gray-200">{lessonData.metadata.topic}</div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-500" />
+                    <Users className="w-4 h-4 text-gray-500" />
                     <div>
-                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.teacher")}</div>
-                      <div className="text-sm text-gray-200">{lessonData.metadata?.teacher || t("vaultPreview.notSet")}</div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.className")}</div>
+                      <div className="text-sm text-gray-200">{lessonData.metadata?.className || t("vaultPreview.notSet")}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.period")}</div>
+                      <div className="text-sm text-gray-200">{lessonData.metadata?.period || t("vaultPreview.notSet")}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-gray-500" />
+                    <div>
+                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.room")}</div>
+                      <div className="text-sm text-gray-200">{lessonData.metadata?.room || t("vaultPreview.notSet")}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -286,13 +306,6 @@ export function VaultItemPreviewModal({
                     <div>
                       <div className="text-[12.5px] text-gray-500">{t("vaultPreview.subject")}</div>
                       <div className="text-sm text-gray-200">{lessonData.metadata?.subject || t("vaultPreview.notSet")}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-gray-500" />
-                    <div>
-                      <div className="text-[12.5px] text-gray-500">{t("vaultPreview.created")}</div>
-                      <div className="text-sm text-gray-200">{formatDate(lessonData.metadata?.createdAt)}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

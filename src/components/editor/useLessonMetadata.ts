@@ -5,7 +5,10 @@ import { formatIsoToEuropeanDate, parseEuropeanDateToDate } from "../../utils/da
 /** The editor is keyed by document identity. Save echoes must never reset live inputs. */
 export function useLessonMetadata(lesson: LessonData | null) {
   const [subject, setSubject] = useState(lesson?.metadata.subject || "");
-  const [teacher, setTeacher] = useState(lesson?.metadata.teacher || "");
+  const [className, setClassName] = useState(lesson?.metadata.className || "");
+  const [period, setPeriod] = useState(lesson?.metadata.period || "");
+  const [room, setRoom] = useState(lesson?.metadata.room || "");
+  const [topic, setTopic] = useState(lesson?.metadata.topic || "");
   const [lessonNotes, setLessonNotes] = useState(lesson?.notes || "");
   const [plannedForInput, setPlannedForInput] = useState(
     formatIsoToEuropeanDate(lesson?.metadata.plannedFor),
@@ -14,7 +17,13 @@ export function useLessonMetadata(lesson: LessonData | null) {
     parseEuropeanDateToDate(formatIsoToEuropeanDate(lesson?.metadata.plannedFor)) || new Date(),
   );
   return {
-    subject, setSubject, teacher, setTeacher, lessonNotes, setLessonNotes,
-    plannedForInput, setPlannedForInput, plannedCalendarMonth, setPlannedCalendarMonth,
+    subject, setSubject,
+    className, setClassName,
+    period, setPeriod,
+    room, setRoom,
+    topic, setTopic,
+    lessonNotes, setLessonNotes,
+    plannedForInput, setPlannedForInput,
+    plannedCalendarMonth, setPlannedCalendarMonth,
   };
 }

@@ -50,7 +50,7 @@ Primary implementation:
 - Outer workspace padding was reduced across editor/calendar/mindmap views to reclaim horizontal space without shrinking the interactive lesson or mindmap surfaces.
 - Explanatory helper copy was removed from Notes and Method Bank side panels to keep the side UI denser and less visually noisy.
 - Lesson notes are stored per lesson, included in local search indexing, and excluded from print/PDF output by default.
-- Metadata row: Teacher, Created, Planned For, Subject.
+- Metadata row: Class, Period, Room, Planned For, Subject, plus an editable Topic line that replaces the old static "New Lesson Plan" heading.
 - Subject dropdown/input width is now constrained to a compact control size instead of stretching across the full metadata row.
 - Planned date input supports DD/MM/YYYY with custom calendar popover.
 - Material double-click insertion into editor content is constrained to lesson-table body rows and inserts into the row's final media/material cell.
@@ -136,7 +136,7 @@ Primary implementation:
   - Hybrid systems with integrated AMD + dedicated NVIDIA follow CUDA/NVIDIA when backend is CUDA.
 - For TeacherPro-managed Ollama runtime, backend alignment now auto-recovers CPU-only fallbacks: if a selected model is detected on CPU while GPU backend is preferred, runtime is restarted with preferred backend before inference.
 - AI Settings now auto-detect already-installed models when opening the AI tab and after install/remove operations.
-- Lesson AI Chat is a conversational assistant that reads the full lesson (body + teacher/subject/date metadata) and can summarize, discuss themes, identify learning objectives, and suggest improvements.
+- Lesson AI Chat is a conversational assistant that reads the full lesson (body + class/period/room/topic/subject/date metadata) and can summarize, discuss themes, identify learning objectives, and suggest improvements.
 - Chat quick-action chips (Summarize, Key themes, Check learning objectives, Suggest improvements, Activity ideas) appear when chat is empty for one-click prompts.
 - Chat clear button (trash icon) in header resets history and restores quick-action chips.
 - `AiMarkdown` component renders headings, bullet lists, numbered lists, bold, italic, and inline code from AI responses.
@@ -158,6 +158,7 @@ Primary implementation:
 - One-click "Today" jump to the current week.
 - Day cards with lesson listing by date.
 - Lesson cards show a colored left-border reflecting the subject color configured in settings (via `lessonSubjectIndex`).
+- A compact class chip appears in the card's meta row when `metadata.className` is set (via `lessonClassIndex`); lessons without a class look exactly as before.
 - Lesson cards are draggable between days in the current week.
 - Dropping a lesson on another day updates both `metadata.plannedFor` and the lesson filename date token so it appears under the new day immediately.
 - Create lesson directly for a selected day.
@@ -314,7 +315,7 @@ Primary implementation:
 - Accent color system with four choices (blue, emerald, rose, amber).
 - Accent settings now include a custom color picker in addition to preset swatches.
 - Lesson paper tone (white/dark) and mindmap paper tone (white/dark) are configurable independently from the app shell theme.
-- Default teacher and default paper tones are grouped under a dedicated Defaults section in Settings.
+- Default lesson table rows and default paper tones are grouped under a dedicated Defaults section in Settings.
 - Action toolbar text labels are optional; icon-only mode is the default for denser layouts.
 - Mindmap node styling uses a hybrid color UX: instant presets for speed and a custom picker for precision.
 - Sidebar sections are collapsible and preserve state.
@@ -386,6 +387,7 @@ When adding or changing behavior:
 - Fixed PDF export table sizing bug where `min-width: max-content` forced columns to stretch to untruncated filename widths. Enforced `table-layout: fixed !important` and `width: 100% !important` for consistent spacing between app and PDF.
 - Set default window dimensions to 1100x800, enforce minimum 800x600 size, and default to `maximized: true` so the app always opens maximizing screen space.
 - Re-added the `Teacher: ` UI into the PDF export modal as an editable text input instead of purely removing it, allowing manual personalization.
+- Lesson header metadata now shows Class, Period, Room, Planned For, and Subject, with an editable Topic line replacing the static "New Lesson Plan" heading. Teacher and Created were removed from the header, Settings, vault preview, and PDF export.
 
 ### Window Management & OS Integration
 - Startup defaults to natively maximized and centered window using Tauri `tauri.conf.json`. 

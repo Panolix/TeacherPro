@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.12.0] - 2026-11-16
+
+### Added
+- Lesson metadata now includes class, period, room and topic. They are
+  persisted in the lesson file, included in search, shown in the vault
+  preview, passed to the AI lesson context, and rendered in PDF preview,
+  print and export.
+- The lesson topic is edited as a plain `Thema:` / `Topic:` line where the
+  static "New Lesson Plan" / "Neue Stunde" heading used to be. Existing
+  default headings are dropped on open; an empty topic is omitted from print
+  and PDF.
+- Weekly calendar lesson cards show a compact class chip next to the subject
+  when a class is set; lessons without a class keep the previous look.
+
+### Changed
+- Lesson header metadata row now shows class, period, room, planned date and
+  subject. The teacher and created fields were removed from the header,
+  Settings, vault preview and PDF export.
+
+### Compatibility
+- Older lesson files still open unchanged. The `teacher` field is accepted on
+  read but no longer shown or edited.
+
 ## [2.11.2] - 2026-11-08
 
 ### Fixed
