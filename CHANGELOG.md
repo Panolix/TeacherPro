@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.13.2] - 2026-11-18
+
+### Changed
+- The weekly planner now shows a Monday–Friday school week instead of all seven
+  days. Every remaining column is about 40% wider, so lesson cards no longer
+  get squished on smaller displays. The minimum grid width drops from 812px to
+  596px, which delays horizontal scrolling considerably.
+- The week label ends on Friday (e.g. "W47 · Nov 16 – Nov 20, 2026").
+- "New lesson" now anchors to Friday when clicked on a Saturday or Sunday, so a
+  newly created lesson always lands in a visible column.
+
+### Notes
+- Lessons already planned for a weekend still exist in the vault and in the
+  Explorer, but the weekly grid no longer renders Saturday and Sunday columns.
+
 ## [2.13.1] - 2026-11-16
 
 ### Fixed

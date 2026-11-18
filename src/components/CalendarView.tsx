@@ -8,6 +8,12 @@ import { useAppStore } from "../store";
 import { Button } from "./ui/Button";
 import { IconButton } from "./ui/IconButton";
 
+/**
+ * The weekly view is a school-week view (Monday–Friday). Dropping the weekend
+ * gives every remaining column noticeably more width on narrow windows.
+ */
+const SCHOOL_WEEK_DAYS = 5;
+
 /** Compact metadata tag used on weekly lesson cards. */
 function LessonMetaTag({
   icon,
@@ -89,6 +95,17 @@ export function CalendarView() {
   const prevWeek = () => setCurrentWeek(addDays(currentWeek, -7));
   const goToToday = () => setCurrentWeek(new Date());
 
+  /**
+   * Weekend dates have no column in the school-week grid. Anchor them to the
+   * Friday of the same week so a lesson created on a weekend stays visible.
+   */
+  const clampToSchoolDay = (date: Date) => {
+    const day = date.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day === 6) return addDays(date, -1);
+    if (day === 0) return addDays(date, -2);
+    return date;
+  };
+
   const beginRenameLesson = (
     event: React.MouseEvent,
     relativePath: string,
@@ -123,8 +140,11 @@ export function CalendarView() {
     setSelectedLessons(new Set());
   };
 
-  // Generate the 7 days of the week
-  const weekDays = useMemo(() => Array.from({ length: 7 }).map((_, i) => addDays(start, i)), [start]);
+  // Generate the school days of the week (Monday–Friday).
+  const weekDays = useMemo(
+    () => Array.from({ length: SCHOOL_WEEK_DAYS }).map((_, i) => addDays(start, i)),
+    [start],
+  );
 
   useEffect(() => {
     // Reset selection when changing week to avoid accidental cross-week deletes.
@@ -635,14 +655,14 @@ export function CalendarView() {
           className="text-[14px] font-semibold tracking-[-0.01em]"
           style={{ color: "var(--tp-t-1)" }}
         >
-          {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, monthDay, { locale: dateLocale }), end: format(addDays(start, 6), monthDayYear, { locale: dateLocale }) })}
+          {t('calendar.weekLabel', { week: format(start, "I"), start: format(start, monthDay, { locale: dateLocale }), end: format(addDays(start, SCHOOL_WEEK_DAYS - 1), monthDayYear, { locale: dateLocale }) })}
         </span>
 
         <Button
           variant="primary"
           size="sm"
           leadingIcon={<Plus className="h-3.5 w-3.5" />}
-          onClick={() => void createNewLesson(new Date())}
+          onClick={() => void createNewLesson(clampToSchoolDay(new Date()))}
         >
           {t('calendar.actions.newLesson')}
         </Button>
@@ -665,7 +685,7 @@ export function CalendarView() {
 
       {/* Day columns */}
       <div className="relative min-h-0 flex-1 overflow-x-auto pb-1">
-        <div className="grid h-full min-w-[812px] grid-cols-[repeat(7,minmax(108px,1fr))] gap-3.5">
+        <div className="grid h-full min-w-[596px] grid-cols-[repeat(5,minmax(108px,1fr))] gap-3.5">
         {weekDays.map((day, idx) => {
           const lessons = weekLessons[idx];
           const dayKey = format(day, "yyyy-MM-dd");
