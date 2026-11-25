@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.13.3] - 2026-11-25
+
+### Changed
+- The right-rail color tools are now independent toggles: left-click A/U/H
+  applies or removes that color, while right-click still opens the palette.
+- Underline color no longer enables underline as a side effect. Picking an
+  underline color only stores the color; underline itself stays a separate
+  formatting toggle. An underline without a chosen color uses the text color.
+- The A/U/H chips keep the last chosen color as their fill even when the color
+  is not applied. An accent ring marks the active state, and each tool activates
+  independently, including while its palette is open.
+- The color palette is more compact (128px wide, 18px swatches, 12px Reset
+  row), sits clear of the rail chips, and no longer covers the A/U/H buttons.
+- Font-size/font-family rail buttons and dropdown rows now match the rest of
+  the rail; rail group labels use a lighter weight.
+
+### Fixed
+- Right-clicking a toolbar button no longer selects its label and paints the
+  native blue text-selection highlight.
+- The mindmap node color palette now marks the active node color.
+
+### Notes
+- The palette's Reset row is an action again; it no longer shows an active
+  state or checkmark. The checkmark only appears on the applied color swatch.
+
 ## [2.13.2] - 2026-11-18
 
 ### Changed

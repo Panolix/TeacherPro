@@ -20,7 +20,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useAppStore } from "../store";
-import { Plus, X, FolderOpen, ExternalLink } from "lucide-react";
+import { Plus, X, FolderOpen, ExternalLink, Check } from "lucide-react";
 import { Button } from "./ui/Button";
 import { useTranslation } from "../i18n/useTranslation";
 import { join } from "@tauri-apps/api/path";
@@ -1794,15 +1794,36 @@ export function MindmapView() {
                   <div className="px-2 py-2">
                     <div className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">{t("mindmap.contextMenu.nodeColor")}</div>
                     <div className="grid grid-cols-4 gap-2">
-                      {NODE_COLOR_PRESETS.map((preset) => (
-                        <button
-                          key={preset.id}
-                          title={t("mindmap.nodeColors." + preset.id)}
-                          onClick={() => handleApplyNodeColor(preset)}
-                          className="h-6 rounded border border-[#444] hover:scale-[1.06] transition-transform"
-                          style={{ backgroundColor: preset.style.background }}
-                        />
-                      ))}
+                      {NODE_COLOR_PRESETS.map((preset) => {
+                        const isActive =
+                          String(contextNode?.style?.background ?? "").toLowerCase() ===
+                          preset.style.background.toLowerCase();
+                        return (
+                          <button
+                            key={preset.id}
+                            title={t("mindmap.nodeColors." + preset.id)}
+                            aria-pressed={isActive}
+                            onClick={() => handleApplyNodeColor(preset)}
+                            className={`inline-flex h-6 items-center justify-center rounded border transition-transform hover:scale-[1.06] ${
+                              isActive
+                                ? "border-white ring-2 ring-white ring-offset-1 ring-offset-[var(--tp-bg-2)]"
+                                : "border-[#444]"
+                            }`}
+                            style={{ backgroundColor: preset.style.background }}
+                          >
+                            {isActive && (
+                              <Check
+                                className="pointer-events-none h-3 w-3"
+                                strokeWidth={3}
+                                style={{
+                                  color: getReadableTextColor(preset.style.background),
+                                  filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.45))",
+                                }}
+                              />
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
 
                     <div className="mt-3 flex items-center gap-2">

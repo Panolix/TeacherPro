@@ -354,6 +354,15 @@ body {
 
 /* ===== Accessibility ===== */
 
+/* Buttons are chrome, not document text. Without this, a right-click on a
+   toolbar button can select its label and paint the native blue selection
+   highlight (visible on the rail's A/U/H color chips). */
+button,
+[role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Visible focus ring for keyboard users, including buttons that
    suppress the default outline for mouse/touch users. */
 button:focus-visible,
@@ -1518,8 +1527,8 @@ button:where(:active):not(:disabled) {
   padding: 4px 4px 2px;
   text-align: center;
   font-size: var(--tp-font-caption);
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--tp-t-4);
   user-select: none;

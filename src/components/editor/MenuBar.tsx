@@ -5,6 +5,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Check,
   ChevronDown,
   Eraser,
   ExternalLink,
@@ -37,6 +38,11 @@ const COLOR_PRESETS = [
   "#ea580c", "#f59e0b", "#fef08a", "#16a34a", "#0d9488",
   "#2563eb", "#4f46e5", "#9333ea", "#db2777", "#64748b",
 ];
+
+// 5 columns of 18px swatches + 6px gaps + 6px padding + 1px border.
+const COLOR_PALETTE_WIDTH = 128;
+const COLOR_PALETTE_HEIGHT = 108;
+const COLOR_PALETTE_GAP = 8;
 
 export const MenuBar = ({
   editor,
@@ -241,7 +247,7 @@ export const MenuBar = ({
   const defaultTextColor = isLightTheme ? "#111827" : "#f8f8f8";
   const currentTextColor = normalizeColorForPicker(
     editor.getAttributes("textStyle").color,
-    defaultTextColor,
+    lastTextColor ?? defaultTextColor,
   );
   const currentUnderlineColor = normalizeColorForPicker(
     editor.getAttributes("textStyle").underlineColor,
@@ -251,9 +257,39 @@ export const MenuBar = ({
     editor.getAttributes("highlight").color,
     lastHighlightColor,
   );
+  // The palette marks the swatch that matches the colour actually applied to
+  // the selection. With no explicit colour, no swatch is checked; the rail
+  // chip still shows the last-used colour.
+  const paletteExplicitColor =
+    palette?.kind === "text"
+      ? editor.getAttributes("textStyle").color
+      : palette?.kind === "underline"
+        ? editor.getAttributes("textStyle").underlineColor
+        : palette?.kind === "highlight"
+          ? editor.getAttributes("highlight").color
+          : null;
+  const paletteActiveColor = paletteExplicitColor
+    ? normalizeColorForPicker(
+        paletteExplicitColor,
+        palette?.kind === "underline"
+          ? currentUnderlineColor
+          : palette?.kind === "highlight"
+            ? currentHighlightColor
+            : currentTextColor,
+      )
+    : null;
+  // Each color tool shows its own active state: the feature is applied to the
+  // selection, or its palette is currently open.
+  const textColorToolActive =
+    palette?.kind === "text" || Boolean(editor.getAttributes("textStyle").color);
+  const underlineColorToolActive =
+    palette?.kind === "underline" ||
+    Boolean(editor.getAttributes("textStyle").underlineColor);
+  const highlightToolActive =
+    palette?.kind === "highlight" || editor.isActive("highlight");
 
-  // Clicking a color button applies the last-used color; right-click opens
-  // the picker. The selection's own color always wins for the swatch.
+  // Clicking a color button toggles that colour attribute on the selection;
+  // right-click opens the picker. The chip fill keeps the last-used colour.
   const appliedTextColor = lastTextColor ?? defaultTextColor;
   const appliedUnderlineColor = lastUnderlineColor ?? defaultTextColor;
 
@@ -270,10 +306,27 @@ export const MenuBar = ({
   };
 
   const applyUnderlineColor = (color: string) => {
-    if (!editor.isActive("underline")) {
-      editor.chain().focus().toggleUnderline().run();
-    }
+    // Store the colour on the textStyle mark only. Underline is a separate
+    // formatting toggle and must not be enabled as a side effect.
     applyTextStyleAttrs({ underlineColor: color });
+  };
+
+  const toggleTextColor = () => {
+    if (editor.getAttributes("textStyle").color) {
+      clearTextStyleAttr("color");
+    } else {
+      onTextColorChange(appliedTextColor);
+      applyTextStyleAttrs({ color: appliedTextColor });
+    }
+  };
+
+  const toggleUnderlineColor = () => {
+    if (editor.getAttributes("textStyle").underlineColor) {
+      clearTextStyleAttr("underlineColor");
+    } else {
+      onUnderlineColorChange(appliedUnderlineColor);
+      applyUnderlineColor(appliedUnderlineColor);
+    }
   };
 
   const readableInk = (hex: string) => {
@@ -295,8 +348,11 @@ export const MenuBar = ({
     const rect = event.currentTarget.getBoundingClientRect();
     setPalette({
       kind,
-      top: Math.min(Math.max(8, rect.top - 8), window.innerHeight - 140),
-      left: Math.max(8, rect.left - 138),
+      top: Math.min(
+        Math.max(8, rect.top - 8),
+        window.innerHeight - COLOR_PALETTE_HEIGHT - 8,
+      ),
+      left: Math.max(8, rect.left - COLOR_PALETTE_WIDTH - COLOR_PALETTE_GAP),
     });
   };
 
@@ -354,7 +410,7 @@ export const MenuBar = ({
         <button
           type="button"
           onClick={() => setFontSizeOpen((v) => !v)}
-          className="relative h-8 w-10 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          className="relative h-7 w-9 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontSize")}
           aria-haspopup="listbox"
           aria-expanded={fontSizeOpen}
@@ -391,7 +447,7 @@ export const MenuBar = ({
                       applyTextStyleAttrs({ fontSize: size });
                       setFontSizeOpen(false);
                     }}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
+                    className={`w-full flex items-center justify-between px-3 py-1 text-[12px] text-left ${
                       isSelected
                         ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
                         : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
@@ -413,7 +469,7 @@ export const MenuBar = ({
         <button
           type="button"
           onClick={() => setFontFamilyOpen((v) => !v)}
-          className="relative h-8 w-10 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+          className="relative h-7 w-9 inline-flex items-center justify-center rounded text-[12px] font-medium cursor-pointer outline-none bg-[var(--tp-bg-2)] border border-[var(--tp-b-2)] text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
           title={t("editor.toolbar.fontFamily")}
           aria-haspopup="listbox"
           aria-expanded={fontFamilyOpen}
@@ -448,7 +504,7 @@ export const MenuBar = ({
                 return (
                   <Fragment key={option.label}>
                     {showGroup && (
-                      <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[var(--tp-t-4)]">
+                      <div className="px-3 pt-1.5 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--tp-t-4)]">
                         {option.group}
                       </div>
                     )}
@@ -461,7 +517,7 @@ export const MenuBar = ({
                         }
                         setFontFamilyOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-1.5 text-[12.5px] text-left ${
+                      className={`w-full flex items-center justify-between px-3 py-1 text-[12px] text-left ${
                         isSelected
                           ? "bg-[var(--tp-accent-tint)] text-[var(--tp-accent)]"
                           : "text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
@@ -520,20 +576,25 @@ export const MenuBar = ({
       {railDivider}
       {railLabel(t("editor.toolbar.groups.color"))}
 
-      {/* Colors A / U / H — left click applies, right click opens the palette.
-          Reset lives inside the palette so the rail stays readable. */}
+      {/* Colors A / U / H — left click toggles the colour, right click opens
+          the palette. Reset lives inside the palette so the rail stays
+          readable. */}
       <div className="flex flex-col gap-0.5">
         <div className="relative">
           <button
             type="button"
-            onClick={() => applyTextStyleAttrs({ color: appliedTextColor })}
+            onClick={toggleTextColor}
             onContextMenu={(event) => openPalette("text", event)}
-            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold"
+            aria-pressed={textColorToolActive}
+            className={`tp-rail-color-btn inline-flex h-7 w-9 items-center justify-center rounded border text-[var(--tp-font-caption)] font-normal ${
+              textColorToolActive
+                ? "border-[var(--tp-accent)] ring-1 ring-[var(--tp-accent)]"
+                : "border-[var(--tp-b-3)]"
+            }`}
             title={t("editor.toolbar.textColorToggle")}
             style={{
               background: currentTextColor,
               color: readableInk(currentTextColor),
-              border: "1px solid var(--tp-b-3)",
             }}
           >
             A
@@ -543,14 +604,18 @@ export const MenuBar = ({
         <div className="relative">
           <button
             type="button"
-            onClick={() => applyUnderlineColor(appliedUnderlineColor)}
+            onClick={toggleUnderlineColor}
             onContextMenu={(event) => openPalette("underline", event)}
-            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold"
+            aria-pressed={underlineColorToolActive}
+            className={`tp-rail-color-btn inline-flex h-7 w-9 items-center justify-center rounded border text-[var(--tp-font-caption)] font-normal ${
+              underlineColorToolActive
+                ? "border-[var(--tp-accent)] ring-1 ring-[var(--tp-accent)]"
+                : "border-[var(--tp-b-3)]"
+            }`}
             title={t("editor.toolbar.underlineColorToggle")}
             style={{
               background: currentUnderlineColor,
               color: readableInk(currentUnderlineColor),
-              border: "1px solid var(--tp-b-3)",
             }}
           >
             U
@@ -568,12 +633,16 @@ export const MenuBar = ({
               }
             }}
             onContextMenu={(event) => openPalette("highlight", event)}
-            className="tp-rail-color-btn inline-flex h-6 w-8 items-center justify-center rounded text-[var(--tp-font-caption)] font-bold hover:brightness-125"
+            aria-pressed={highlightToolActive}
+            className={`tp-rail-color-btn inline-flex h-7 w-9 items-center justify-center rounded border text-[var(--tp-font-caption)] font-normal hover:brightness-125 ${
+              highlightToolActive
+                ? "border-[var(--tp-accent)] ring-1 ring-[var(--tp-accent)]"
+                : "border-[var(--tp-b-3)]"
+            }`}
             title={t("editor.toolbar.highlightToggle")}
             style={{
               background: currentHighlightColor,
               color: readableInk(currentHighlightColor),
-              border: "1px solid var(--tp-b-3)",
             }}
           >
             H
@@ -585,26 +654,45 @@ export const MenuBar = ({
       {palette && (
         <div
           id="tp-rail-color-palette"
-          className="fixed z-[var(--tp-z-dialog)] p-1.5 rounded-lg shadow-2xl"
+          className="fixed z-[var(--tp-z-dialog)] p-1.5 rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.38)]"
           style={{
             top: palette.top,
             left: palette.left,
             background: "var(--tp-bg-2)",
             border: "1px solid var(--tp-b-2)",
-            width: "146px",
+            width: `${COLOR_PALETTE_WIDTH}px`,
           }}
         >
-          <div className="grid grid-cols-5 gap-1">
-            {COLOR_PRESETS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                title={color}
-                onClick={() => applyPaletteColor(color)}
-                className="h-[22px] w-[22px] rounded border border-[var(--tp-b-3)] transition-transform hover:scale-110"
-                style={{ background: color }}
-              />
-            ))}
+          <div className="grid grid-cols-5 gap-1.5">
+            {COLOR_PRESETS.map((color) => {
+              const isActive = color.toLowerCase() === paletteActiveColor?.toLowerCase();
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  title={color}
+                  aria-pressed={isActive}
+                  onClick={() => applyPaletteColor(color)}
+                  className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded border transition-transform hover:scale-110 ${
+                    isActive
+                      ? "border-white ring-2 ring-white ring-offset-1 ring-offset-[var(--tp-bg-2)]"
+                      : "border-[var(--tp-b-3)]"
+                  }`}
+                  style={{ background: color }}
+                >
+                  {isActive && (
+                    <Check
+                      className="pointer-events-none h-3 w-3"
+                      strokeWidth={3}
+                      style={{
+                        color: readableInk(color),
+                        filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.45))",
+                      }}
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
           <button
             type="button"
@@ -618,7 +706,7 @@ export const MenuBar = ({
               }
               setPalette(null);
             }}
-            className="mt-1.5 w-full rounded px-2 py-1 text-left text-[var(--tp-font-body-sm)] text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
+            className="mt-1 w-full rounded px-2 py-0.5 text-left text-[12px] font-medium text-[var(--tp-t-2)] hover:bg-[var(--tp-bg-4)] hover:text-[var(--tp-t-1)]"
           >
             {t("editor.toolbar.reset")}
           </button>
