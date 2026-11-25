@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.13.4] - 2026-11-25
+
+### Fixed
+- The Windows release build now extracts the bundled llama-server engine with
+  the bsdtar shipped with Windows instead of PowerShell's `Expand-Archive`.
+  This fixes the missing `llama-server.exe` that stopped the v2.13.3 Windows
+  installer build.
+
 ## [2.13.3] - 2026-11-25
 
 ### Changed

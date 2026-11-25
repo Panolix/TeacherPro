@@ -45,9 +45,13 @@ function download(url, dest) {
 function unpack(assetPath, destDir, entry) {
   mkdirSync(destDir, { recursive: true });
   if (assetPath.endsWith(".zip")) {
-    const res = spawnSync("powershell", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${
-      assetPath.replace(/'/g, "''")
-    }' -DestinationPath '${destDir.replace(/'/g, "''")}' -Force`], { stdio: "inherit" });
+    // Windows ships bsdtar (tar.exe), which extracts zip archives. Avoid
+    // Windows PowerShell's Expand-Archive: on the CI runner, PowerShell 5.1
+    // loads the PowerShell 7 Archive module and fails on .NET Framework.
+    let res = spawnSync("tar", ["-xf", assetPath, "-C", destDir], { stdio: "inherit" });
+    if (res.status !== 0) {
+      res = spawnSync("unzip", ["-oq", assetPath, "-d", destDir], { stdio: "inherit" });
+    }
     if (res.status !== 0) throw new Error(`unzip failed: ${assetPath}`);
   } else {
     // tar.gz — built-in on macOS/Linux; bsdtar ships with Windows 10+ too.
