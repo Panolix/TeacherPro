@@ -375,9 +375,36 @@ fn perform_download(
             request
         };
 
-        let response = request
-            .call()
-            .map_err(|e| format!("Download request failed: {e}"))?;
+        let response = match request.call() {
+            Ok(response) => response,
+            Err(ureq::Error::Status(416, _)) if existing > 0 => {
+                // Server rejected `bytes={existing}-`; either the part file is already
+                // complete (let SHA-256 verification decide) or it overshot size_hint.
+                if size_hint > 0 && existing > size_hint {
+                    let _ = std::fs::remove_file(part);
+                    if attempt >= MAX_ATTEMPTS {
+                        return Err("Download failed with HTTP 416 (oversized partial file)".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(400 * u64::from(attempt.min(4))));
+                    continue;
+                }
+                return Ok(());
+            }
+            Err(ureq::Error::Status(code, _)) => {
+                if (code == 408 || code == 429 || code >= 500) && attempt < MAX_ATTEMPTS {
+                    std::thread::sleep(Duration::from_millis(400 * u64::from(attempt.min(4))));
+                    continue;
+                }
+                return Err(format!("Unexpected HTTP status: {code}"));
+            }
+            Err(ureq::Error::Transport(e)) => {
+                if attempt < MAX_ATTEMPTS {
+                    std::thread::sleep(Duration::from_millis(400 * u64::from(attempt.min(4))));
+                    continue;
+                }
+                return Err(format!("Download request failed after {attempt} attempts: {e}"));
+            }
+        };
 
         let resumed = response.status() == 206;
         if response.status() == 200 {
@@ -421,33 +448,42 @@ fn perform_download(
         let mut reader = response.into_reader();
         let mut buffer = vec![0u8; CHUNK_SIZE];
         let mut received = received;
+        let mut read_error: Option<std::io::Error> = None;
         loop {
             if job.cancel.load(Ordering::Relaxed) {
                 drop(file);
                 return Err("cancelled".into());
             }
-            let read = reader
-                .read(&mut buffer)
-                .map_err(|e| format!("Read failed (will retry with resume): {e}"))?;
-            if read == 0 {
-                break;
+            match reader.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => {
+                    file.write_all(&buffer[..read])
+                        .map_err(|e| format!("Write failed: {e}"))?;
+                    received += read as u64;
+                    lock_unpoisoned(&job.progress).received = base + received;
+                }
+                Err(e) => {
+                    read_error = Some(e);
+                    break;
+                }
             }
-            file.write_all(&buffer[..read])
-                .map_err(|e| format!("Write failed: {e}"))?;
-            received += read as u64;
-            lock_unpoisoned(&job.progress).received = base + received;
         }
         drop(reader);
         drop(file);
 
         let current = std::fs::metadata(part).map_err(|e| e.to_string())?.len();
-        if total > 0 && current >= total {
+        if read_error.is_none() && total > 0 && current >= total {
             return Ok(());
         }
         if attempt >= MAX_ATTEMPTS {
-            return Err(format!(
-                "Download incomplete after {attempt} attempts ({current}/{total} bytes)"
-            ));
+            return match read_error {
+                Some(e) => Err(format!(
+                    "Download read failed after {attempt} attempts: {e}"
+                )),
+                None => Err(format!(
+                    "Download incomplete after {attempt} attempts ({current}/{total} bytes)"
+                )),
+            };
         }
         std::thread::sleep(Duration::from_millis(400 * u64::from(attempt.min(4))));
     }
@@ -594,7 +630,17 @@ pub fn ai_engine_pack_cancel(
 }
 
 #[tauri::command]
-pub fn ai_engine_pack_remove(app: AppHandle) -> Result<(), String> {
+pub fn ai_engine_pack_remove(
+    app: AppHandle,
+    state: tauri::State<'_, AiState>,
+) -> Result<(), String> {
+    {
+        let mut guard = lock_unpoisoned(&state.downloads);
+        if let Some(job) = guard.remove(ENGINE_PACK_KEY) {
+            job.cancel.store(true, Ordering::Relaxed);
+        }
+    }
+    engine::shutdown(&app);
     let dir = catalog::engine_pack_dir(&app)?;
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("Failed to remove pack: {e}"))?;
@@ -744,4 +790,114 @@ fn extract_zip_flat(zip_path: &Path, dest: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sha2::{Digest, Sha256};
+    use std::io::BufRead;
+    use std::net::TcpListener;
+
+    #[test]
+    fn perform_download_retries_after_500_and_truncated_stream() {
+        let payload = b"hello world partial resume payload";
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let port = listener.local_addr().unwrap().port();
+        let url = format!("http://127.0.0.1:{port}/model.gguf");
+
+        let server = std::thread::spawn(move || {
+            // Request 1: transient 500
+            let (mut s1, _) = listener.accept().unwrap();
+            let mut r1 = std::io::BufReader::new(&s1);
+            let mut line = String::new();
+            while r1.read_line(&mut line).unwrap() > 0 && line != "\r\n" {
+                line.clear();
+            }
+            s1.write_all(b"HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .unwrap();
+            drop(s1);
+
+            // Request 2: 200 OK with first 11 bytes, then abrupt close before Content-Length
+            let (mut s2, _) = listener.accept().unwrap();
+            let mut r2 = std::io::BufReader::new(&s2);
+            line.clear();
+            while r2.read_line(&mut line).unwrap() > 0 && line != "\r\n" {
+                line.clear();
+            }
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                payload.len()
+            );
+            s2.write_all(head.as_bytes()).unwrap();
+            s2.write_all(&payload[..11]).unwrap();
+            drop(s2);
+
+            // Request 3: 206 Partial Content with Range header for remainder
+            let (mut s3, _) = listener.accept().unwrap();
+            let mut r3 = std::io::BufReader::new(&s3);
+            let mut req_headers = String::new();
+            loop {
+                line.clear();
+                if r3.read_line(&mut line).unwrap() == 0 || line == "\r\n" {
+                    break;
+                }
+                req_headers.push_str(&line);
+            }
+            assert!(
+                req_headers.to_ascii_lowercase().contains("range: bytes=11-"),
+                "expected Range resume header, got: {req_headers}"
+            );
+            let rest = &payload[11..];
+            let head3 = format!(
+                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 11-{}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                payload.len() - 1,
+                payload.len(),
+                rest.len()
+            );
+            s3.write_all(head3.as_bytes()).unwrap();
+            s3.write_all(rest).unwrap();
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let part = dir.path().join("test.part");
+        let job = DownloadJob::new("test".into(), payload.len() as u64);
+        perform_download(&url, payload.len() as u64, &part, &job, 0).expect("resumed download");
+        assert_eq!(std::fs::read(&part).unwrap(), payload);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn download_verified_accepts_416_when_part_matches_sha256() {
+        let payload = b"already complete part content";
+        let expected_sha = format!("{:x}", Sha256::digest(payload));
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let port = listener.local_addr().unwrap().port();
+        let url = format!("http://127.0.0.1:{port}/model.gguf");
+
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut r = std::io::BufReader::new(&s);
+            let mut line = String::new();
+            while r.read_line(&mut line).unwrap() > 0 && line != "\r\n" {
+                line.clear();
+            }
+            s.write_all(
+                b"HTTP/1.1 416 Range Not Satisfiable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        });
+
+        let dir = tempfile::tempdir().unwrap();
+        let part = dir.path().join("model.gguf.part");
+        let dest = dir.path().join("model.gguf");
+        std::fs::write(&part, payload).unwrap();
+        let job = DownloadJob::new("test".into(), payload.len() as u64);
+
+        download_verified(&url, payload.len() as u64, &part, &dest, &expected_sha, &job, 0)
+            .expect("416 with valid part file verifies and finalizes");
+        assert_eq!(std::fs::read(&dest).unwrap(), payload);
+        assert!(!part.exists());
+        server.join().unwrap();
+    }
 }

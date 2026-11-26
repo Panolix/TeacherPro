@@ -31,6 +31,7 @@ import { flushOpenDocuments } from "./utils/closeFlush";
 import { duplicateLessonData, LessonIdentityRegistry } from "./utils/lessonIdentity";
 import {
   isPlaceholderLessonFileName,
+  isValidVaultEntryName,
   sanitizeLessonFileStem,
 } from "./utils/lessonFileName";
 
@@ -1610,20 +1611,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   initVault: async () => {
     try {
       const store = await load(STORE_KEY, { autoSave: true, defaults: {} });
-      const savedVault = await store.get<{ path: string }>("vault");
+      const [savedVault, savedSettings] = await Promise.all([
+        store.get<{ path: string }>("vault"),
+        store.get<Partial<UISettings>>("uiSettings"),
+      ]);
 
-      // Tell the Rust side which vault is active BEFORE granting the fs
-      // scope: the grant command only accepts paths inside the registered
-      // vault, so registration must come first.
+      let vaultScopeGranted = false;
       if (savedVault?.path) {
-        await invoke("register_vault_root", { path: savedVault.path });
+        try {
+          // Tell the Rust side which vault is active BEFORE granting the fs
+          // scope: the grant command only accepts paths inside the registered
+          // vault, so registration must come first.
+          await invoke("register_vault_root", { path: savedVault.path });
+          await grantVaultScope(savedVault.path);
+          vaultScopeGranted = true;
+        } catch (vaultError) {
+          console.warn("Saved vault is unavailable:", vaultError);
+          await grantVaultScope(null);
+        }
+      } else {
+        await grantVaultScope(null);
       }
-      await grantVaultScope(savedVault?.path ?? null);
 
-      const savedSettings = await store.get<Partial<UISettings>>("uiSettings");
       let loadedSettings = savedSettings || null;
 
-      if (!loadedSettings && savedVault?.path) {
+      if (!loadedSettings && vaultScopeGranted && savedVault?.path) {
         loadedSettings = await readUiSettingsBackup(savedVault.path);
       }
 
@@ -1635,7 +1647,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         await store.save();
       }
       
-      if (savedVault && savedVault.path) {
+      if (vaultScopeGranted && savedVault?.path) {
         try {
           await writeUiSettingsBackup(savedVault.path, normalizedSettings);
         } catch (error) {
@@ -1911,6 +1923,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     } catch (error) {
       console.error("Failed to open vault:", error);
+      alertT("alerts.openVault", { error: String(error) });
     }
   },
 
@@ -2074,7 +2087,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!vaultPath) return;
     try {
       const trimmed = folderName.trim();
-      if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
+      if (!isValidVaultEntryName(trimmed)) {
         alertT("alerts.invalidFolderName");
         return;
       }
@@ -2366,17 +2379,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const rawName = newName.trim();
       if (!rawName) return;
-      if (rawName.includes("/") || rawName.includes("\\")) {
+      if (!isValidVaultEntryName(rawName)) {
         alertT("alerts.namePathSeparators");
         return;
       }
 
-      const nextFileName = rawName.endsWith(".json") ? rawName : `${rawName}.json`;
+      const oldSegments = oldFileName.split("/").filter(Boolean);
+      const oldBaseName = oldSegments.pop();
+      if (!oldBaseName) return;
+      const nextBaseName = rawName.toLowerCase().endsWith(".json") ? rawName : `${rawName}.json`;
+      const nextFileName = [...oldSegments, nextBaseName].join("/");
       if (nextFileName === oldFileName) return;
 
       const lessonPlansFolder = await join(vaultPath, "Lesson Plans");
-      const oldPath = await join(lessonPlansFolder, oldFileName);
-      const newPath = await join(lessonPlansFolder, nextFileName);
+      const oldPath = await join(lessonPlansFolder, ...oldSegments, oldBaseName);
+      const newPath = await join(lessonPlansFolder, ...oldSegments, nextBaseName);
 
       if (await exists(newPath)) {
         alertT("alerts.lessonNameExists");
@@ -2775,17 +2792,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const rawName = newName.trim();
       if (!rawName) return;
-      if (rawName.includes("/") || rawName.includes("\\")) {
+      if (!isValidVaultEntryName(rawName)) {
         alertT("alerts.namePathSeparators");
         return;
       }
 
-      const nextFileName = rawName.endsWith(".json") ? rawName : `${rawName}.json`;
+      const oldSegments = oldFileName.split("/").filter(Boolean);
+      const oldBaseName = oldSegments.pop();
+      if (!oldBaseName) return;
+      const nextBaseName = rawName.toLowerCase().endsWith(".json") ? rawName : `${rawName}.json`;
+      const nextFileName = [...oldSegments, nextBaseName].join("/");
       if (nextFileName === oldFileName) return;
 
       const mindmapsFolder = await join(vaultPath, "Mindmaps");
-      const oldPath = await join(mindmapsFolder, oldFileName);
-      const newPath = await join(mindmapsFolder, nextFileName);
+      const oldPath = await join(mindmapsFolder, ...oldSegments, oldBaseName);
+      const newPath = await join(mindmapsFolder, ...oldSegments, nextBaseName);
 
       if (await exists(newPath)) {
         alertT("alerts.mindmapNameExists");
@@ -3041,7 +3062,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const trimmed = newName.trim();
       if (!trimmed) return;
-      if (trimmed.includes("/") || trimmed.includes("\\")) {
+      if (!isValidVaultEntryName(trimmed)) {
         alertT("alerts.namePathSeparators");
         return;
       }
@@ -3177,7 +3198,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!(await flushBeforeDocumentChange())) return;
     try {
       const trimmed = newName.trim();
-      if (!trimmed || trimmed.includes("/") || trimmed.includes("\\")) {
+      if (!isValidVaultEntryName(trimmed)) {
         alertT("alerts.nameEmptyOrSeparators");
         return;
       }

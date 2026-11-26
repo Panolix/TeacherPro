@@ -170,31 +170,30 @@ fn list_pdf_files(dir: &Path, existing_sources: &HashSet<String>) -> Result<Vec<
     Ok(files)
 }
 
-fn read_existing_sources(vault_path: &str, subject: &str, grade: &str, topic: &str) -> HashSet<String> {
-    let Ok(db_path) = store_sqlite::checked_db_path(vault_path) else {
+fn read_existing_sources_with_conn(
+    conn: Option<&rusqlite::Connection>,
+    subject: &str,
+    grade: &str,
+    topic: &str,
+) -> HashSet<String> {
+    let Some(conn) = conn else {
         return HashSet::new();
     };
-    if !db_path.exists() {
-        return HashSet::new();
-    }
-    match rusqlite::Connection::open_with_flags(
-        &db_path,
-        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-    ) {
-        Ok(conn) => store_sqlite::embedded_sources(&conn, subject, grade, topic)
-            .unwrap_or_default()
-            .into_iter()
-            .collect(),
-        Err(_) => HashSet::new(),
-    }
+    store_sqlite::embedded_sources(conn, subject, grade, topic)
+        .unwrap_or_default()
+        .into_iter()
+        .collect()
 }
 
-
-
-fn mark_loose_pdf_status(vault: &str, subject: &str, grade: Option<&str>, files: &mut [SubjectDbFile]) {
+fn mark_loose_pdf_status(
+    conn: Option<&rusqlite::Connection>,
+    subject: &str,
+    grade: Option<&str>,
+    files: &mut [SubjectDbFile],
+) {
     for pdf in files {
         let stem = Path::new(&pdf.name).file_stem().and_then(|s| s.to_str()).unwrap_or(&pdf.name);
-        pdf.is_embedded = read_existing_sources(vault, subject, grade.unwrap_or(stem), stem).contains(&pdf.name);
+        pdf.is_embedded = read_existing_sources_with_conn(conn, subject, grade.unwrap_or(stem), stem).contains(&pdf.name);
         pdf.chunk_count = usize::from(pdf.is_embedded);
     }
 }
@@ -209,28 +208,35 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
     let db_dir = subject_db_dir_checked(&vault_path)?;
     if !db_dir.exists() { return Ok(Vec::new()); }
 
-    let sqlite_counts: std::collections::HashMap<(String, String, String), i64> = {
+    let sqlite_conn = {
         let db_path = store_sqlite::checked_db_path(&vault_path)?;
-        let mut map = std::collections::HashMap::new();
         if db_path.exists() {
-            if let Ok(conn) = rusqlite::Connection::open_with_flags(
+            rusqlite::Connection::open_with_flags(
                 &db_path,
                 rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+            )
+            .ok()
+        } else {
+            None
+        }
+    };
+
+    let sqlite_counts: std::collections::HashMap<(String, String, String), i64> = {
+        let mut map = std::collections::HashMap::new();
+        if let Some(conn) = &sqlite_conn {
+            if let Ok(mut stmt) = conn.prepare(
+                "SELECT subject, grade, topic, COUNT(*) FROM chunks GROUP BY subject, grade, topic",
             ) {
-                if let Ok(mut stmt) = conn.prepare(
-                    "SELECT subject, grade, topic, COUNT(*) FROM chunks GROUP BY subject, grade, topic",
-                ) {
-                    if let Ok(rows) = stmt.query_map([], |r| {
-                        Ok((
-                            r.get::<_, String>(0)?,
-                            r.get::<_, String>(1)?,
-                            r.get::<_, String>(2)?,
-                            r.get::<_, i64>(3)?,
-                        ))
-                    }) {
-                        for row in rows.flatten() {
-                            map.insert((row.0.clone(), row.1.clone(), row.2.clone()), row.3);
-                        }
+                if let Ok(rows) = stmt.query_map([], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, i64>(3)?,
+                    ))
+                }) {
+                    for row in rows.flatten() {
+                        map.insert((row.0.clone(), row.1.clone(), row.2.clone()), row.3);
                     }
                 }
             }
@@ -244,7 +250,7 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
         let subject_path = checked_db_target(&vault_path, &s_entry.path())?;
 
         let mut subject_pdfs = list_pdf_files_in_dir(&subject_path);
-        mark_loose_pdf_status(&vault_path, &subject_name, None, &mut subject_pdfs);
+        mark_loose_pdf_status(sqlite_conn.as_ref(), &subject_name, None, &mut subject_pdfs);
 
         let mut grades = Vec::new();
         for g_entry in collect_dirs(&subject_path)? {
@@ -253,7 +259,7 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
 
             // Grade-pdfs live in the DB with topic = stem; check per-topic counts.
             let mut grade_pdfs = list_pdf_files_in_dir(&grade_path);
-            mark_loose_pdf_status(&vault_path, &subject_name, Some(&grade_name), &mut grade_pdfs);
+            mark_loose_pdf_status(sqlite_conn.as_ref(), &subject_name, Some(&grade_name), &mut grade_pdfs);
 
             let mut topics = Vec::new();
             for t_entry in collect_dirs(&grade_path)? {
@@ -264,7 +270,7 @@ pub async fn subject_db_list(vault_path: String) -> Result<Vec<SubjectDbInfo>, S
                     .get(&(subject_name.clone(), grade_name.clone(), topic_name.clone()))
                     .copied()
                     .unwrap_or(0);
-                let existing = read_existing_sources(&vault_path, &subject_name, &grade_name, &topic_name);
+                let existing = read_existing_sources_with_conn(sqlite_conn.as_ref(), &subject_name, &grade_name, &topic_name);
 
                 let files = list_pdf_files(&topic_path, &existing)?;
                 let pending_pdfs = files.iter().filter(|f| !f.is_embedded).count();
@@ -694,9 +700,9 @@ mod tests {
         let rows = [("fixture text".to_string(), 1, "en".to_string(), vec![1.0, 0.0])];
         store_sqlite::replace_document(&conn, "English", "curriculum", "curriculum", "curriculum.pdf", &rows, "fingerprint").unwrap();
         let mut files = vec![SubjectDbFile { name: "curriculum.pdf".into(), is_embedded: false, chunk_count: 0 }];
-        mark_loose_pdf_status(path, "English", None, &mut files);
+        mark_loose_pdf_status(Some(&conn), "English", None, &mut files);
         assert!(files[0].is_embedded);
-        mark_loose_pdf_status(path, "English", Some("9"), &mut files);
+        mark_loose_pdf_status(Some(&conn), "English", Some("9"), &mut files);
         assert!(!files[0].is_embedded);
     }
 

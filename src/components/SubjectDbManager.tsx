@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useAppStore, type SubjectDbInfo, type SubjectDbFile } from "../store";
 import { useTranslation } from "../i18n/useTranslation";
+import { isValidVaultEntryName } from "../utils/lessonFileName";
 
 interface ImportResult {
   total_chunks: number;
@@ -182,6 +183,10 @@ export function SubjectDbManager() {
     if (!vaultPath || !adding || !inputValue.trim()) return;
     try {
       const name = inputValue.trim();
+      if (!isValidVaultEntryName(name)) {
+        setError(t("alerts.invalidFolderName"));
+        return;
+      }
       if (adding.type === "subject") {
         await mkdir(await join(vaultPath, "SubjectDBs", name), { recursive: true });
         setExpandedSubjects((prev) => ({ ...prev, [name]: true }));

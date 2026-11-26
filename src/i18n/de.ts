@@ -76,6 +76,7 @@
     moveError: "Fehler beim Verschieben: {{error}}",
     deleteError: "Fehler beim Löschen: {{error}}",
     duplicateError: "Fehler beim Duplizieren: {{error}}",
+    openVault: "Fehler beim Öffnen des Vaults: {{error}}",
   },
 
   // Titel nativer Datei-/Ordnerauswahldialoge.

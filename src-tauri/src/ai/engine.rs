@@ -215,6 +215,7 @@ pub fn start_engine(
     num_ctx: Option<u32>,
 ) -> Result<EngineStatus, String> {
     let ai = app.state::<AiState>();
+    let _start_guard = lock_unpoisoned(&ai.start_lock);
 
     let model: &'static ModelEntry = match model_id {
         Some(id) => catalog::find_model(id).ok_or_else(|| format!("Unknown model: {id}"))?,
@@ -253,7 +254,7 @@ pub fn start_engine(
         && current_status != STATUS_STOPPED
         && current_status != STATUS_FAILED
     {
-        shutdown(app);
+        shutdown_inner(app);
     }
 
     let attempts = engine_attempts(app);
@@ -513,79 +514,89 @@ fn poll_until_ready(app: AppHandle, model_id: &str) {
 /// (CUDA pack → bundled Vulkan/Metal/CPU). Exhausted → Failed.
 fn attempt_retry(app: &AppHandle, model_id: &str) {
     let ai = app.state::<AiState>();
-    let (idx, used_mtp) = with_state(&ai, |e| (e.attempt_index, e.used_mtp));
+    let _start_guard = lock_unpoisoned(&ai.start_lock);
     let Some(model) = catalog::find_model(model_id) else {
         return;
     };
     let attempts = engine_attempts(app);
-    let (next_idx, retry_same_without_mtp) = if used_mtp {
-        (idx, true)
-    } else {
-        (idx + 1, false)
-    };
-    if next_idx >= attempts.len() {
-        with_state(&ai, |e| {
-            kill_child(e);
-            e.status = STATUS_FAILED.to_string();
-            e.used_mtp = false;
-            if e.error.is_none() {
-                e.error = Some("Engine failed to start (all backends tried).".into());
-            }
-        });
-        return;
-    }
-    let attempt = &attempts[next_idx];
-    let use_mtp = if retry_same_without_mtp {
-        false
-    } else {
-        mtp_usable(app, model, attempt)
-    };
 
-    let model_path = match catalog::model_file_path(app, model) {
-        Ok(path) => path,
-        Err(e) => {
-            with_state(&ai, |s| {
-                s.status = STATUS_FAILED.to_string();
-                s.used_mtp = false;
-                s.error = Some(e);
+    loop {
+        let (idx, used_mtp, still_owns, ctx_opt) = with_state(&ai, |e| {
+            let owns = e.model_id.as_deref() == Some(model_id)
+                && !matches!(e.status.as_str(), STATUS_IDLE | STATUS_STOPPED);
+            (e.attempt_index, e.used_mtp, owns, e.ctx)
+        });
+        if !still_owns {
+            return;
+        }
+        let (next_idx, retry_same_without_mtp) = if used_mtp {
+            (idx, true)
+        } else {
+            (idx + 1, false)
+        };
+        if next_idx >= attempts.len() {
+            with_state(&ai, |e| {
+                kill_child(e);
+                e.status = STATUS_FAILED.to_string();
+                e.used_mtp = false;
+                if e.error.is_none() {
+                    e.error = Some("Engine failed to start (all backends tried).".into());
+                }
             });
             return;
         }
-    };
-    let ctx = with_state(&ai, |e| e.ctx.unwrap_or_else(|| resolve_ctx(model, None)));
-    with_state(&ai, kill_child);
+        let attempt = &attempts[next_idx];
+        let use_mtp = if retry_same_without_mtp {
+            false
+        } else {
+            mtp_usable(app, model, attempt)
+        };
 
-    let startup_started = Instant::now();
-    match spawn_engine(app, model, &model_path, ctx, attempt, use_mtp) {
-        Ok(spawned) => {
-            with_state(&ai, |e| {
-                e.status = STATUS_STARTING.to_string();
-                e.error = None;
-                e.port = Some(spawned.port);
-                e.api_key = Some(spawned.api_key);
-                e.variant = Some(attempt.label);
-                e.attempt_index = next_idx;
-                e.used_mtp = use_mtp;
-                e.startup_ms = None;
-                e.warmup_ms = None;
-                e.started_at = Some(startup_started);
-                e.child = Some(spawned.child);
-            });
-            let app_handle = app.clone();
-            let id_for_thread = model_id.to_string();
-            std::thread::spawn(move || {
-                poll_until_ready(app_handle, &id_for_thread);
-            });
-        }
-        Err(e) => {
-            // Spawn itself failed — advance to the next candidate. Bounded by
-            // the attempt list length because each call advances idx or clears MTP.
-            with_state(&ai, |s| {
-                s.attempt_index = next_idx;
-                s.used_mtp = use_mtp;
-                s.error = Some(e);
-            });
-            attempt_retry(app, model_id);
+        let model_path = match catalog::model_file_path(app, model) {
+            Ok(path) => path,
+            Err(e) => {
+                with_state(&ai, |s| {
+                    s.status = STATUS_FAILED.to_string();
+                    s.used_mtp = false;
+                    s.error = Some(e);
+                });
+                return;
+            }
+        };
+        let ctx = ctx_opt.unwrap_or_else(|| resolve_ctx(model, None));
+        with_state(&ai, kill_child);
+
+        let startup_started = Instant::now();
+        match spawn_engine(app, model, &model_path, ctx, attempt, use_mtp) {
+            Ok(spawned) => {
+                with_state(&ai, |e| {
+                    e.status = STATUS_STARTING.to_string();
+                    e.error = None;
+                    e.port = Some(spawned.port);
+                    e.api_key = Some(spawned.api_key);
+                    e.variant = Some(attempt.label);
+                    e.attempt_index = next_idx;
+                    e.used_mtp = use_mtp;
+                    e.startup_ms = None;
+                    e.warmup_ms = None;
+                    e.started_at = Some(startup_started);
+                    e.child = Some(spawned.child);
+                });
+                let app_handle = app.clone();
+                let id_for_thread = model_id.to_string();
+                std::thread::spawn(move || {
+                    poll_until_ready(app_handle, &id_for_thread);
+                });
+                return;
+            }
+            Err(e) => {
+                // Spawn itself failed — advance to the next candidate in this loop.
+                with_state(&ai, |s| {
+                    s.attempt_index = next_idx;
+                    s.used_mtp = use_mtp;
+                    s.error = Some(e);
+                });
+            }
         }
     }
 }
@@ -597,8 +608,7 @@ fn kill_child(engine: &mut EngineState) {
     }
 }
 
-/// Stop the engine (user action or model switch).
-pub fn shutdown(app: &AppHandle) {
+fn shutdown_inner(app: &AppHandle) {
     with_app_state(app, |e| {
         kill_child(e);
         e.status = STATUS_IDLE.to_string();
@@ -612,6 +622,13 @@ pub fn shutdown(app: &AppHandle) {
         e.warmup_ms = None;
         e.started_at = None;
     });
+}
+
+/// Stop the engine (user action or model switch).
+pub fn shutdown(app: &AppHandle) {
+    let ai = app.state::<AiState>();
+    let _start_guard = lock_unpoisoned(&ai.start_lock);
+    shutdown_inner(app);
 }
 
 /// Called on RunEvent::Exit — kills the sidecar so nothing outlives the app.

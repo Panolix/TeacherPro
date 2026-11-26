@@ -1019,10 +1019,12 @@ export function SidebarMinimal() {
         : fileStem;
     const normalizedActivePath = activeFilePath?.replace(/\\/g, "/") ?? "";
     const rootSegment = node.fileType === "mindmap" ? "/Mindmaps/" : "/Lesson Plans/";
-    const isActive =
-      fileSelectionActive &&
-      normalizedActivePath.includes(rootSegment) &&
-      normalizedActivePath.endsWith(`/${node.relativePath}`);
+    const rootMarkerIndex = normalizedActivePath.lastIndexOf(rootSegment);
+    const activeRelativePath =
+      rootMarkerIndex >= 0
+        ? normalizedActivePath.slice(rootMarkerIndex + rootSegment.length)
+        : "";
+    const isActive = fileSelectionActive && activeRelativePath === node.relativePath;
     return (
       <li
         key={key}

@@ -251,7 +251,7 @@ fn grant_path_contained(path: &Path) -> bool {
 
     let mut base = path.to_path_buf();
     loop {
-        if base.exists() {
+        if std::fs::symlink_metadata(&base).is_ok() {
             break;
         }
         match (base.parent(), base.file_name()) {
@@ -281,10 +281,32 @@ fn grant_path_contained(path: &Path) -> bool {
     false
 }
 
+fn is_link_or_reparse_point(path: &Path) -> bool {
+    let Ok(meta) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    if meta.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return true;
+        }
+    }
+    false
+}
+
 /// Containment check for an existing base path against a root: prefer the
 /// canonicalized comparison, fall back to normalized string prefixes.
 fn path_below_root(base: &Path, root: &Path) -> bool {
     let Ok(resolved) = std::fs::canonicalize(base) else {
+        // Never allow string-prefix fallback for a dangling symlink/junction.
+        if is_link_or_reparse_point(base) {
+            return false;
+        }
         // The path does not exist yet. Keep the tolerant fallback, but the
         // caller has already rejected `..` components.
         return path_string_below(base, root);
@@ -307,13 +329,6 @@ fn path_below_root(base: &Path, root: &Path) -> bool {
         Ok(_) => false,
         Err(_) => path_string_below(&resolved, root),
     }
-}
-
-
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 #[tauri::command]
@@ -625,7 +640,6 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
-            greet,
             open_file_in_default_app,
             reveal_item_in_file_manager,
             register_vault_root,
@@ -686,7 +700,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        contains_parent_dir, is_openable_material, validated_existing_path, validated_pdf_path,
+        contains_parent_dir, is_openable_material, path_below_root, validated_existing_path,
+        validated_pdf_path,
     };
     use std::io::Write;
     use std::path::Path;
@@ -744,5 +759,33 @@ mod tests {
         assert!(validated_pdf_path(upper_path.to_str().unwrap()).is_ok());
         assert!(validated_pdf_path(txt_path.to_str().unwrap()).is_err());
         assert!(validated_pdf_path(dir.path().to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn dangling_links_are_not_treated_as_inside_root() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let root = dir.path().join("vault");
+        let target = dir.path().join("ephemeral-target");
+        std::fs::create_dir(&root).expect("create root");
+        std::fs::create_dir(&target).expect("create target");
+
+        let link = root.join("dangling");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target, &link).expect("create symlink");
+        #[cfg(windows)]
+        {
+            let output = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link.to_string_lossy().replace('/', "\\"))
+                .arg(target.to_string_lossy().replace('/', "\\"))
+                .output()
+                .expect("create junction");
+            assert!(output.status.success());
+        }
+
+        // Remove the target so the link becomes dangling: canonicalize fails,
+        // so path_below_root must reject it rather than using string fallback.
+        std::fs::remove_dir(&target).expect("remove target");
+        assert!(!path_below_root(&link, &root));
     }
 }

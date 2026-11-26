@@ -76,6 +76,7 @@
     moveError: "Error moving: {{error}}",
     deleteError: "Error deleting: {{error}}",
     duplicateError: "Error duplicating: {{error}}",
+    openVault: "Error opening vault: {{error}}",
   },
 
   // Native file/folder picker dialog titles.

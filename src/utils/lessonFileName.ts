@@ -1,4 +1,5 @@
 const INVALID_FILE_NAME_CHARS = /[\u0000-\u001F<>:"/\\|?*]+/g;
+const FORBIDDEN_ENTRY_NAME_CHARS = /[\u0000-\u001F<>:"/\\|?*]/;
 const RESERVED_WINDOWS_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const LEGACY_UNTITLED_STEM =
   /^(?:Lesson|Stunde)-\d{4}-\d{2}-\d{2}-[a-z0-9]+-[a-z0-9]+$/i;
@@ -42,4 +43,21 @@ export function isPlaceholderLessonFileName(fileName: string): boolean {
     LEGACY_UNTITLED_STEM.test(stem) ||
     /^Untitled-Lesson/i.test(stem)
   );
+}
+
+/**
+ * Validates a single file or folder entry name inside a vault directory,
+ * rejecting path separators, traversal segments, forbidden Windows/control
+ * characters, trailing dots, and reserved Windows device names.
+ */
+export function isValidVaultEntryName(name: string): boolean {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === "." || trimmed === "..") return false;
+  if (trimmed.endsWith(".")) return false;
+  if (FORBIDDEN_ENTRY_NAME_CHARS.test(trimmed)) return false;
+  const stemBeforeDot = trimmed.split(".")[0] ?? "";
+  if (RESERVED_WINDOWS_NAMES.test(trimmed) || RESERVED_WINDOWS_NAMES.test(stemBeforeDot)) {
+    return false;
+  }
+  return true;
 }

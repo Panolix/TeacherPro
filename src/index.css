@@ -364,13 +364,16 @@ button,
 }
 
 /* Visible focus ring for keyboard users, including buttons that
-   suppress the default outline for mouse/touch users. */
-button:focus-visible,
+   suppress the default outline for mouse/touch users. Form controls
+   with custom borders/underlines/wrappers manage their own focus state
+   so they don't get a second competing rectangular outline. */
+button:not(.tp-meta-input):focus-visible,
 [role="button"]:focus-visible,
 a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
+input:is([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):focus-visible,
+input:not(.tp-input):not(.tp-meta-input):not(.tp-topic-input):not(.outline-none):not([class*="focus:"]):focus-visible,
+select:not(.tp-input):not(.tp-meta-input):not(.outline-none):not([class*="focus:"]):focus-visible,
+textarea:not(.tp-input):not(.outline-none):not([class*="focus:"]):focus-visible {
   outline: 2px solid var(--tp-accent) !important;
   outline-offset: 2px;
 }
@@ -421,6 +424,7 @@ body::-webkit-scrollbar-thumb,
 }
 
 html[data-tp-theme="light"] {
+  color-scheme: light;
   --tp-app-bg: #eef2f7;
   --tp-panel-bg: #f8fafd;
   --tp-panel-elevated: #ffffff;
@@ -738,10 +742,17 @@ html[data-tp-lesson-paper="light"] .tp-editor-surface .tp-meta-input {
   border-bottom-color: rgba(0, 0, 0, 0.12);
 }
 
-html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger button {
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger > button {
   background-color: transparent !important;
   border-color: #d7dee8 !important;
   color: #64748b !important;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger > button:hover,
+html[data-tp-lesson-paper="light"] .tp-editor-surface .lesson-export-calendar-trigger > button[aria-expanded="true"] {
+  background-color: rgba(15, 23, 42, 0.05) !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
 }
 
 html[data-tp-lesson-paper="light"] .tp-editor-surface .ProseMirror table {
@@ -1078,8 +1089,10 @@ html[data-tp-lesson-paper="light"] .ProseMirror blockquote,
   text-align: center;
 }
 .tp-meta-input:hover,
-.tp-meta-input:focus {
+.tp-meta-input:focus,
+.tp-meta-input:focus-visible {
   border-bottom-color: var(--tp-accent);
+  outline: none;
 }
 
 /* Lesson topic: a plain heading-like line that replaces the old static
@@ -1095,9 +1108,62 @@ html[data-tp-lesson-paper="light"] .ProseMirror blockquote,
   outline: none;
   width: 100%;
 }
+.tp-topic-input:focus,
+.tp-topic-input:focus-visible {
+  outline: none;
+}
 .tp-topic-input::placeholder {
   color: var(--tp-paper-ink-3);
   opacity: 0.75;
+}
+
+/* Prevent WebView2/Chromium autofill from painting a dark-scheme grey box
+   and white text over transparent lesson header/topic inputs. */
+.tp-editor-surface input:-webkit-autofill,
+.tp-editor-surface input:-webkit-autofill:hover,
+.tp-editor-surface input:-webkit-autofill:focus,
+.tp-editor-surface select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--tp-paper-bg) inset !important;
+  box-shadow: 0 0 0 1000px var(--tp-paper-bg) inset !important;
+  transition: background-color 999999s ease-in-out 0s, color 999999s ease-in-out 0s;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface input:-webkit-autofill,
+html[data-tp-lesson-paper="light"] .tp-editor-surface input:-webkit-autofill:hover,
+html[data-tp-lesson-paper="light"] .tp-editor-surface input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a;
+}
+
+html[data-tp-lesson-paper="dark"] .tp-editor-surface input:-webkit-autofill,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface input:-webkit-autofill:hover,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1e1e1e inset !important;
+  box-shadow: 0 0 0 1000px #1e1e1e inset !important;
+  -webkit-text-fill-color: #f3f4f6 !important;
+  caret-color: #f3f4f6;
+}
+
+/* Native <select> popups inherit the document color-scheme (:root = dark).
+   Match the paper/theme so options never turn dark-on-black or washed out. */
+html[data-tp-theme="dark"] select option,
+html[data-tp-lesson-paper="dark"] .tp-editor-surface select option {
+  background-color: #1e1e1e;
+  color: #f3f4f6;
+}
+
+html[data-tp-theme="light"] select option,
+html[data-tp-lesson-paper="light"] .tp-editor-surface select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+html[data-tp-lesson-paper="light"] .tp-editor-surface select {
+  color-scheme: light;
+}
+
+html[data-tp-lesson-paper="dark"] .tp-editor-surface select {
+  color-scheme: dark;
 }
 html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-topic-input,
 html[data-tp-lesson-paper="dark"] .tp-editor-surface .tp-topic-label {
@@ -1826,8 +1892,10 @@ button:where(:active):not(:disabled) {
   width: 100%;
 }
 
-.tp-input:focus {
+.tp-input:focus,
+.tp-input:focus-visible {
   border-color: var(--tp-accent);
+  outline: none;
 }
 
 .tp-input::placeholder {

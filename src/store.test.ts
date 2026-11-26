@@ -95,6 +95,26 @@ describe("vault switching", () => {
     expect(useAppStore.getState().vaultPath).toBe("/vaultA");
     expect(useAppStore.getState().activeFilePath).toBe(pathA);
     expect(mocks.settings.get("vault")).toBeUndefined();
+    expect(globalThis.alert).toHaveBeenCalledOnce();
+  });
+
+  it("still applies saved uiSettings in initVault when saved vault registration fails", async () => {
+    useAppStore.setState({ vaultPath: null, activeFilePath: null, activeFileContent: null });
+    mocks.settings.set("vault", { path: "/missingVault" });
+    mocks.settings.set("uiSettings", { themeMode: "light", language: "de" });
+    mocks.invoke.mockImplementation(async (cmd: string, args?: { path?: string }) => {
+      if (cmd === "register_vault_root" && args?.path === "/missingVault") {
+        throw new Error("Vault folder does not exist");
+      }
+      return undefined;
+    });
+
+    await useAppStore.getState().initVault();
+    const state = useAppStore.getState();
+    expect(state.isInitialized).toBe(true);
+    expect(state.themeMode).toBe("light");
+    expect(state.language).toBe("de");
+    expect(state.vaultPath).toBeNull();
   });
 
   it("clears old mindmaps, knowledge selection, indexes, and recent entries", async () => {
@@ -298,6 +318,26 @@ describe("lesson file naming", () => {
     await useAppStore.getState().openLesson("A.json");
     await useAppStore.getState().renameLesson("A.json", "Renamed");
     expect(useAppStore.getState().recents[0]?.relativePath).toBe("Renamed.json");
+  });
+
+  it("preserves subfolders and .JSON casing in renameLesson", async () => {
+    const nestedPath = "/vaultA/Lesson Plans/Math/Algebra.JSON";
+    mocks.files.set(nestedPath, JSON.stringify(lesson));
+    await useAppStore.getState().openLesson("Math/Algebra.JSON");
+    await useAppStore.getState().renameLesson("Math/Algebra.JSON", "Quadratics");
+    expect(mocks.files.has("/vaultA/Lesson Plans/Math/Quadratics.json")).toBe(true);
+    expect(mocks.files.has(nestedPath)).toBe(false);
+    expect(useAppStore.getState().activeFilePath).toBe("/vaultA/Lesson Plans/Math/Quadratics.json");
+    await useAppStore.getState().renameLesson("Math/Quadratics.json", "Quadratics.JSON");
+    expect(mocks.files.has("/vaultA/Lesson Plans/Math/Quadratics.JSON")).toBe(true);
+  });
+
+  it("rejects invalid vault entry names when creating folders or renaming lessons", async () => {
+    await useAppStore.getState().createVaultFolder("CON");
+    await useAppStore.getState().createVaultFolder("..");
+    await useAppStore.getState().renameLesson("A.json", "bad:name");
+    expect(mocks.files.has(pathA)).toBe(true);
+    expect(globalThis.alert).toHaveBeenCalledTimes(3);
   });
 });
 

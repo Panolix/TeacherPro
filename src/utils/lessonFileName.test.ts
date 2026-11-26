@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isPlaceholderLessonFileName,
+  isValidVaultEntryName,
   lessonFileStem,
   sanitizeLessonFileStem,
 } from "./lessonFileName";
@@ -71,5 +72,41 @@ describe("isPlaceholderLessonFileName", () => {
 describe("lessonFileStem", () => {
   it("strips the JSON extension and surrounding whitespace", () => {
     expect(lessonFileStem("  Bruchrechnung.JSON ")).toBe("Bruchrechnung");
+  });
+});
+
+describe("isValidVaultEntryName", () => {
+  it("accepts normal lesson and folder names", () => {
+    for (const name of [
+      "Math",
+      "Bruchrechnung - Einstieg",
+      "Lesson.json",
+      "console.json",
+      "1.Halbjahr",
+    ]) {
+      expect(isValidVaultEntryName(name), name).toBe(true);
+    }
+  });
+
+  it("rejects traversal, separators, forbidden characters, trailing dots, and reserved Windows names", () => {
+    for (const name of [
+      "",
+      "   ",
+      ".",
+      "..",
+      "a/b",
+      "a\\b",
+      "foo:bar",
+      "foo?bar",
+      "foo*bar",
+      "trailing.",
+      "CON",
+      "con.json",
+      "nul.pdf",
+      "LPT1",
+      "bad\u0000name",
+    ]) {
+      expect(isValidVaultEntryName(name), name).toBe(false);
+    }
   });
 });

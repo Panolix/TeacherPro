@@ -20,6 +20,7 @@ import {
   format as formatDateFn,
   isSameDay,
   isSameMonth,
+  isToday,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -71,6 +72,8 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 
 interface SlashMenuState {
@@ -173,6 +176,7 @@ export function Editor() {
   } | null>(null);
   const [draftDialogOpen, setDraftDialogOpen] = useState(false);
   const [plannedCalendarOpen, setPlannedCalendarOpen] = useState(false);
+  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [methodBankOpen, setMethodBankOpen] = useState(false);
@@ -324,9 +328,12 @@ export function Editor() {
   const activeStreamIdRef = useRef<string | null>(null);
   const chatBusyRef = useRef(false);
   const chatMountedRef = useRef(true);
+  const chatCancelledRef = useRef(false);
+  const chatAttemptIdRef = useRef(0);
   const activeChatCleanupRef = useRef<(() => void) | null>(null);
 
   const stopAiStreaming = useCallback(async () => {
+    chatCancelledRef.current = true;
     const id = activeStreamIdRef.current;
     if (!id) return;
     try {
@@ -355,6 +362,7 @@ export function Editor() {
   }, [setActiveChatDb, setActiveChatGrade, setActiveChatTopic, setActiveChatFile]);
   const editorSurfaceRef = useRef<HTMLDivElement | null>(null);
   const plannedCalendarRef = useRef<HTMLDivElement | null>(null);
+  const subjectDropdownRef = useRef<HTMLDivElement | null>(null);
   const lastSavedSnapshotRef = useRef<string>("");
 
   // -- Autosave machinery (ref-based, so typing no longer re-renders the tree) --
@@ -537,6 +545,7 @@ export function Editor() {
         setTableContextMenu(null);
         setSlashMenu(null);
         setPlannedCalendarOpen(false);
+        setSubjectDropdownOpen(false);
         closeEditorSidePanels();
       }
     };
@@ -551,20 +560,24 @@ export function Editor() {
   }, [closeEditorSidePanels]);
 
   useEffect(() => {
-    if (!plannedCalendarOpen) {
+    if (!plannedCalendarOpen && !subjectDropdownOpen) {
       return;
     }
 
     const closeOnOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (!plannedCalendarRef.current?.contains(target)) {
+      if (plannedCalendarOpen && !plannedCalendarRef.current?.contains(target)) {
         setPlannedCalendarOpen(false);
+      }
+      if (subjectDropdownOpen && !subjectDropdownRef.current?.contains(target)) {
+        setSubjectDropdownOpen(false);
       }
     };
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setPlannedCalendarOpen(false);
+        setSubjectDropdownOpen(false);
       }
     };
 
@@ -575,7 +588,7 @@ export function Editor() {
       window.removeEventListener("mousedown", closeOnOutside);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [plannedCalendarOpen]);
+  }, [plannedCalendarOpen, subjectDropdownOpen]);
 
 
   const editor = useEditor({
@@ -858,7 +871,16 @@ export function Editor() {
   const flushPendingAutosave = useCallback((): Promise<boolean> => {
     clearAutosaveTimer();
 
-    const outgoingPath = autosavePathRef.current;
+    const storeState = useAppStore.getState();
+    const storeDocId = storeState.activeFileContent?.id ?? storeState.activeFilePath;
+    // After a same-document auto-rename, the store's activeFilePath updates
+    // immediately while autosavePathRef may still reflect the previous render.
+    const outgoingPath =
+      storeState.activeFilePath &&
+      autosaveDocIdRef.current !== null &&
+      autosaveDocIdRef.current === storeDocId
+        ? storeState.activeFilePath
+        : autosavePathRef.current;
     if (!outgoingPath) {
       return Promise.resolve(true);
     }
@@ -1002,14 +1024,13 @@ export function Editor() {
     editor.commands.setContent(activeFileContent.content, { emitUpdate: false });
   }, [editor, activeFilePath, clearAutosaveTimer]);
 
-  // Flush the outgoing lesson's pending edits when switching lessons or
-  // unmounting. Effect cleanup runs before the incoming lesson's content is
-  // loaded, so the editor still holds the outgoing document here.
+  // Flush the outgoing lesson's pending edits on unmount (document switches
+  // remount via MainContent's document key; save-driven renames stay mounted).
   useEffect(() => {
     return () => {
       flushPendingAutosave();
     };
-  }, [editor, activeFilePath, flushPendingAutosave]);
+  }, [editor, flushPendingAutosave]);
 
   useEffect(() => {
     if (!editor) {
@@ -1597,6 +1618,14 @@ export function Editor() {
       return;
     }
     chatBusyRef.current = true;
+    chatCancelledRef.current = false;
+    const attemptId = ++chatAttemptIdRef.current;
+    const isAttemptCancelled = () =>
+      !chatMountedRef.current || chatCancelledRef.current || chatAttemptIdRef.current !== attemptId;
+    const assistantId = `assistant-${Date.now()}`;
+    let assistantMessageAdded = false;
+    let streamText = "";
+    let streamThinking = "";
 
     const userMessage: AiChatMessage = {
       id: `user-${Date.now()}`,
@@ -1630,6 +1659,7 @@ export function Editor() {
       } catch {
         /* fall back to conservative defaults */
       }
+      if (isAttemptCancelled()) throw new Error("cancelled");
 
       // Thinking mode needs room for reasoning plus the answer. Reserve at
       // most 40% of the window for output and keep the server's 8192 cap.
@@ -1764,6 +1794,7 @@ export function Editor() {
         }
       }
 
+      if (isAttemptCancelled()) throw new Error("cancelled");
       // Knowledge-base state is attached to the final user turn so the stable
       // lesson/history prefix stays cache-friendly across follow-up messages.
       const retrievalBlock =
@@ -1816,6 +1847,7 @@ export function Editor() {
       } catch {
         /* engine idle � estimates are fine for the bar */
       }
+      if (isAttemptCancelled()) throw new Error("cancelled");
       const countExact = (index: number, str: string) =>
         exactCounts && exactCounts[index] !== undefined ? exactCounts[index] : estimateTokens(str);
 
@@ -1858,12 +1890,8 @@ export function Editor() {
       );
 
       const requestId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      if (!chatMountedRef.current) return;
+      if (isAttemptCancelled()) throw new Error("cancelled");
       activeStreamIdRef.current = requestId;
-
-      const assistantId = `assistant-${Date.now()}`;
-      let streamText = "";
-      let streamThinking = "";
 
       // Dedupe chunk hits into per-source/per-page citation chips for the answer.
       const ragCitations = Array.from(
@@ -1872,6 +1900,7 @@ export function Editor() {
         ).values(),
       );
 
+      assistantMessageAdded = true;
       setChatMessages((previous) => [
         ...previous,
         {
@@ -1931,7 +1960,7 @@ export function Editor() {
           }
         })
           .then((unlisten) => {
-            if (!chatMountedRef.current) {
+            if (isAttemptCancelled()) {
               unlisten();
               reject(new Error("cancelled"));
               return;
@@ -1968,17 +1997,34 @@ export function Editor() {
       setAiStatusMessage(t("editor.chat.done"));
     } catch (error) {
       if (!chatMountedRef.current) return;
+      const wasCancelled =
+        isAttemptCancelled() || (error instanceof Error && error.message === "cancelled");
+      if (wasCancelled) {
+        if (assistantMessageAdded && !streamText.trim()) {
+          setChatMessages((previous) => previous.filter((m) => m.id !== assistantId));
+        }
+        setAiStatusMessage("");
+        return;
+      }
       console.error("AI chat failed:", error);
+      const errorText = t("editor.errors.aiRewriteFailed", { error: String(error) });
       setAiStatusMessage(t("editor.chat.failed", { error: String(error) }));
-      setChatMessages((previous) => [
-        ...previous,
-        {
-          id: `assistant-error-${Date.now()}`,
-          role: "assistant",
-          text: t("editor.errors.aiRewriteFailed", { error: String(error) }),
-          timestamp: Date.now(),
-        },
-      ]);
+      setChatMessages((previous) => {
+        if (assistantMessageAdded && !streamText.trim()) {
+          return previous.map((m) =>
+            m.id === assistantId ? { ...m, text: errorText } : m,
+          );
+        }
+        return [
+          ...previous,
+          {
+            id: `assistant-error-${Date.now()}`,
+            role: "assistant",
+            text: errorText,
+            timestamp: Date.now(),
+          },
+        ];
+      });
     } finally {
       activeStreamIdRef.current = null;
       chatBusyRef.current = false;
@@ -2990,6 +3036,7 @@ export function Editor() {
     closeTransientUi: () => {
       setTableContextMenu(null);
       setPlannedCalendarOpen(false);
+      setSubjectDropdownOpen(false);
     },
   });
 
@@ -3109,6 +3156,7 @@ export function Editor() {
                     onChange={(e) => setClassName(e.target.value)}
                     placeholder={t("editor.meta.egClass")}
                     aria-label={t("editor.meta.className")}
+                    autoComplete="off"
                     maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
@@ -3122,6 +3170,7 @@ export function Editor() {
                     onChange={(e) => setPeriod(e.target.value)}
                     placeholder={t("editor.meta.egPeriod")}
                     aria-label={t("editor.meta.period")}
+                    autoComplete="off"
                     maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
@@ -3135,6 +3184,7 @@ export function Editor() {
                     onChange={(e) => setRoom(e.target.value)}
                     placeholder={t("editor.meta.egRoom")}
                     aria-label={t("editor.meta.room")}
+                    autoComplete="off"
                     maxLength={40}
                     className="tp-meta-input lesson-export-input w-full"
                   />
@@ -3150,18 +3200,22 @@ export function Editor() {
                     onChange={(event) => setPlannedForInput(event.target.value)}
                     placeholder={t("editor.meta.dateFormat")}
                     aria-label={t("editor.meta.plannedFor")}
+                    autoComplete="off"
                     className="tp-meta-input lesson-export-input lesson-export-planned-input flex-1 min-w-0 text-center"
                   />
                   <div className="relative lesson-export-calendar-trigger print:hidden" ref={plannedCalendarRef}>
                     <button
                       type="button"
                       onClick={() => {
+                        setSubjectDropdownOpen(false);
                         if (!plannedCalendarOpen) {
                           setPlannedCalendarMonth(selectedPlannedDate || new Date());
                         }
                         setPlannedCalendarOpen((previous) => !previous);
                       }}
-                      className="h-7 w-7 inline-flex items-center justify-center rounded transition-colors hover:opacity-70 print:hidden"
+                      aria-expanded={plannedCalendarOpen}
+                      aria-label={t("editor.pdf.pickPlannedDate")}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded cursor-pointer transition-colors print:hidden"
                       style={{ color: "var(--tp-paper-ink-3)", border: "1px solid var(--tp-paper-line)" }}
                       title={t("editor.pdf.pickPlannedDate")}
                     >
@@ -3169,54 +3223,76 @@ export function Editor() {
                     </button>
 
                     {plannedCalendarOpen && (
-                      <div className="absolute top-12 left-0 z-[72] w-[250px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3 shadow-2xl print:hidden lesson-export-calendar-popover">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="text-sm font-semibold text-gray-200">
+                      <div className="tp-menu-surface absolute top-full mt-2 right-0 z-[72] w-[252px] rounded-lg border border-[#333] bg-[#1b1b1b] p-3.5 shadow-2xl print:hidden lesson-export-calendar-popover">
+                        <div className="mb-2.5 flex items-center justify-between">
+                          <span
+                            className="text-sm font-semibold tracking-[-0.01em]"
+                            style={{ color: "var(--tp-text-primary)" }}
+                          >
                             {formatDateFn(plannedCalendarMonth, "MMM yyyy", { locale: language === "de" ? deLocale : undefined })}
                           </span>
                           <div className="flex items-center gap-1">
                             <button
                               type="button"
                               onClick={() => setPlannedCalendarMonth((prev) => subMonths(prev, 1))}
-                              className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                              className="tp-mini-cal-nav h-7 w-7 inline-flex items-center justify-center rounded"
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
                             <button
                               type="button"
                               onClick={() => setPlannedCalendarMonth((prev) => addMonths(prev, 1))}
-                              className="p-1 rounded text-gray-400 hover:text-[var(--tp-t-1)] hover:bg-[var(--tp-bg-4)]"
+                              className="tp-mini-cal-nav h-7 w-7 inline-flex items-center justify-center rounded"
                             >
                               <ChevronRight className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
 
-                        <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] text-gray-500">
+                        <div className="mb-1.5 grid grid-cols-7 gap-[3px] text-center">
                           {Array.from({ length: 7 }, (_, i) => t(`calendar.dayHeader${i}`)).map((day) => (
-                            <span key={day}>{day}</span>
+                            <span
+                              key={day}
+                              className="text-[11px] font-semibold uppercase tracking-[0.04em] py-1"
+                              style={{ color: "var(--tp-text-soft)" }}
+                            >
+                              {day}
+                            </span>
                           ))}
                         </div>
 
-                        <div className="grid grid-cols-7 gap-1 text-[12.5px]">
+                        <div className="grid grid-cols-7 gap-[3px] text-[12.5px]">
                           {calendarDays.map((day) => {
                             const inCurrentMonth = isSameMonth(day, monthStart);
                             const isSelected = !!selectedPlannedDate && isSameDay(day, selectedPlannedDate);
+                            const isCurrentDay = isToday(day);
 
                             return (
                               <button
                                 key={day.toISOString()}
                                 type="button"
+                                aria-current={isCurrentDay ? "date" : undefined}
                                 onClick={() => {
                                   setPlannedForInput(formatDateFn(day, language === "de" ? "dd.MM.yyyy" : "dd/MM/yyyy"));
                                   setPlannedCalendarOpen(false);
                                 }}
-                                className={`h-7 rounded text-center transition-colors hover:brightness-110 ${
-                                  inCurrentMonth
-                                    ? "text-gray-200 hover:bg-[var(--tp-bg-4)]"
-                                    : "text-gray-600 hover:bg-[#242424]"
-                                } ${isSelected ? "text-white font-semibold" : ""}`}
-                                style={isSelected ? { backgroundColor: "var(--tp-accent)" } : undefined}
+                                className={`box-border inline-flex aspect-square items-center justify-center rounded-[var(--tp-radius-control)] border tabular-nums transition-colors cursor-pointer ${
+                                  isSelected ? "" : "hover:bg-[#2d2d2d]"
+                                }`}
+                                style={{
+                                  color: isSelected
+                                    ? "var(--tp-accent)"
+                                    : inCurrentMonth
+                                      ? "var(--tp-text-primary)"
+                                      : "var(--tp-text-soft)",
+                                  borderColor: isSelected
+                                    ? "var(--tp-accent)"
+                                    : isCurrentDay
+                                      ? "var(--tp-border-soft)"
+                                      : "transparent",
+                                  backgroundColor: isSelected ? "var(--tp-accent-tint)" : "transparent",
+                                  fontWeight: isSelected ? 600 : 400,
+                                }}
                               >
                                 {formatDateFn(day, "d")}
                               </button>
@@ -3234,24 +3310,100 @@ export function Editor() {
                 <div className="flex flex-col gap-0.5 min-w-0">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.06em] lesson-export-label" style={{ color: "var(--tp-paper-ink-3)" }}>{t("editor.meta.subject")}</span>
                   {subjects.length > 0 ? (
-                    <div className="flex items-center gap-1.5 lesson-export-subject-picker w-full">
-                      {selectedSubjectColor && (
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: selectedSubjectColor }}
-                        />
-                      )}
-                      <select
-                        value={subject}
-                        onChange={(e) => setSubject(e.target.value)}
+                    <div
+                      className="relative flex items-center justify-center lesson-export-subject-picker w-full"
+                      ref={subjectDropdownRef}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlannedCalendarOpen(false);
+                          setSubjectDropdownOpen((previous) => !previous);
+                        }}
+                        aria-haspopup="listbox"
+                        aria-expanded={subjectDropdownOpen}
                         aria-label={t("editor.meta.subject")}
-                        className="tp-meta-input lesson-export-input flex-1 min-w-0"
+                        className={`tp-meta-input lesson-export-input flex items-center justify-center gap-1.5 w-full min-w-0 cursor-pointer ${
+                          subjectDropdownOpen ? "!border-b-[var(--tp-accent)]" : ""
+                        }`}
                       >
-                        <option value="">{t("editor.meta.none")}</option>
-                        {subjects.map((s) => (
-                          <option key={s.name} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
+                        <span className="inline-flex items-center justify-center gap-1.5 min-w-0">
+                          {selectedSubjectColor && (
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0 border border-black/15"
+                              style={{ backgroundColor: selectedSubjectColor }}
+                            />
+                          )}
+                          <span className="truncate">
+                            {subject.trim()
+                              ? (selectedSubjectConfig?.name ?? subject)
+                              : t("editor.meta.none")}
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 shrink-0 opacity-60 transition-transform ${
+                            subjectDropdownOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                      </button>
+
+                      {subjectDropdownOpen && (
+                        <div
+                          role="listbox"
+                          aria-label={t("editor.meta.subject")}
+                          className="tp-menu-surface absolute top-full mt-2 left-1/2 -translate-x-1/2 z-[72] min-w-[180px] max-w-[240px] max-h-[240px] overflow-y-auto rounded-lg border border-[#333] bg-[#1b1b1b] p-1 shadow-2xl print:hidden text-left text-[var(--tp-text-primary)]"
+                        >
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={!subject.trim()}
+                            onClick={() => {
+                              setSubject("");
+                              setSubjectDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors hover:bg-[#2d2d2d] ${
+                              !subject.trim() ? "font-semibold" : "text-[var(--tp-text-muted)]"
+                            }`}
+                          >
+                            <span className="truncate">{t("editor.meta.none")}</span>
+                            {!subject.trim() && (
+                              <Check className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
+                            )}
+                          </button>
+
+                          {subjects.map((s) => {
+                            const dotColor = normalizeColorForPicker(s.color, "#9ca3af");
+                            const isSelected =
+                              selectedSubjectConfig?.name === s.name || subject === s.name;
+                            return (
+                              <button
+                                key={s.name}
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => {
+                                  setSubject(s.name);
+                                  setSubjectDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors hover:bg-[#2d2d2d] ${
+                                  isSelected ? "font-semibold" : ""
+                                }`}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/15"
+                                    style={{ backgroundColor: dotColor }}
+                                  />
+                                  <span className="truncate">{s.name}</span>
+                                </span>
+                                {isSelected && (
+                                  <Check className="w-3.5 h-3.5 shrink-0 text-[var(--tp-accent)]" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <input
@@ -3260,6 +3412,7 @@ export function Editor() {
                       onChange={(e) => setSubject(e.target.value)}
                       placeholder={t("editor.meta.egMathematics")}
                       aria-label={t("editor.meta.subject")}
+                      autoComplete="off"
                       className="tp-meta-input lesson-export-input w-full"
                     />
                   )}
@@ -3284,6 +3437,7 @@ export function Editor() {
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
               aria-label={t("editor.meta.topic")}
+              autoComplete="off"
               maxLength={120}
               className="tp-topic-input lesson-export-input flex-1 min-w-0"
             />

@@ -19,6 +19,8 @@ use engine::EngineState;
 /// Tauri-managed state for the whole AI stack.
 pub struct AiState {
     pub engine: Mutex<EngineState>,
+    /// Serializes engine start/retry/shutdown transitions without being held during readiness waits.
+    pub start_lock: Mutex<()>,
     pub downloads: Mutex<HashMap<String, DownloadJob>>,
     pub stream_cancels: Mutex<HashMap<String, Arc<stream::Cancellation>>>,
     /// User-chosen default model ("Use" in settings); session-scoped until P2 persists it.
@@ -29,6 +31,7 @@ impl AiState {
     pub fn new() -> Self {
         Self {
             engine: Mutex::new(EngineState::new()),
+            start_lock: Mutex::new(()),
             downloads: Mutex::new(HashMap::new()),
             stream_cancels: Mutex::new(HashMap::new()),
             selected_model: Mutex::new(None),

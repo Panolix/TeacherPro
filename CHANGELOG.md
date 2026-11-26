@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.13.5] - 2026-11-26
+
+### Changed
+- Replaced the lesson header's native subject `<select>` with a cross-platform TeacherPro dropdown popover showing each subject's configured color circle both in the list and inline beside the selected subject name.
+- Styled the lesson header's planned-date calendar button and popover to match the sidebar mini-calendar, adding button hover feedback, day hover states, a today indicator, and an accent selection highlight.
+
+### Fixed
+- Auto-renaming a lesson on save no longer flushes against the old deleted path or triggers a false save error state.
+- Cancelling AI chat now aborts preflight steps cleanly, avoids blank/duplicate error bubbles, and prevents pre-token errors from stranding an empty assistant bubble.
+- Startup now applies saved UI settings even if the previously saved vault path is unavailable, and vault-open failures surface an alert to the user.
+- Manual lesson and mindmap renames preserve subfolder paths and case-insensitive `.json` extensions; invalid file/folder names (path separators, traversal segments, forbidden characters, trailing dots, Windows reserved names) are rejected across lessons, mindmaps, materials, folders, and Subject DB folders.
+- Sidebar active-file highlighting now matches exact root-relative paths so files with matching names in different folders are not both highlighted.
+- Serialized local AI engine start/retry/shutdown state transitions cleanly and removed recursive retry re-entry.
+- Model/engine-pack downloads now retry transient HTTP/transport/read errors with resume, validate completed `.part` files on HTTP `416`, and cancel active pack downloads / stop the engine before removing the CUDA pack.
+- Filesystem scope containment now inspects symlink metadata and rejects dangling symlinks/Windows junctions instead of falling back to string matching; `subject_db_list` reuses a single read-only SQLite connection per scan.
+- Removed doubled `:focus-visible` outlines on custom-styled text inputs/textareas/selects, prevented dark-scheme WebView2 autofill styling on lesson header/topic inputs, fixed native `<select>` dark-on-black contrast, and scoped light-paper calendar button rules to the trigger button only.
+
 ## [2.13.4] - 2026-11-25
 
 ### Fixed
